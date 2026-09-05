@@ -3,32 +3,40 @@ const mongoose = require('mongoose');
 const resourceSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: true,
+    required: [true, 'Resource title is required'],
     trim: true,
   },
   type: {
     type: String,
-    required: true,
+    required: [true, 'Resource type is required'],
+    enum: {
+      values: ['note', 'pdf', 'image', 'link'],
+      message: 'Resource type must be note, pdf, image, or link',
+    },
+    lowercase: true,
     trim: true,
   },
   description: {
     type: String,
     trim: true,
+    default: '',
   },
   url: {
     type: String,
-    required: true,
+    required: [true, 'Resource URL or file reference is required'],
     trim: true,
   },
   topic: {
     type: String,
-    required: true,
+    required: [true, 'Topic is required'],
     trim: true,
+    index: true,
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: [true, 'Creator reference is required'],
+    index: true,
   },
   createdAt: {
     type: Date,
@@ -36,4 +44,4 @@ const resourceSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model('Resource', resourceSchema);
+module.exports = mongoose.models.Resource || mongoose.model('Resource', resourceSchema);

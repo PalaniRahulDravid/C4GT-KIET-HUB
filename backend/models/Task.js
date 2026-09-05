@@ -3,27 +3,38 @@ const mongoose = require('mongoose');
 const taskSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: true,
+    required: [true, 'Task title is required'],
     trim: true,
   },
   description: {
     type: String,
-    required: true,
+    required: [true, 'Task description is required'],
     trim: true,
+  },
+  topic: {
+    type: String,
+    trim: true,
+    default: '',
   },
   targetGroup: {
     type: String,
-    required: true,
-    trim: true,
+    required: [true, 'Target group is required'],
+    enum: {
+      values: ['junior_developers', 'developer_interns', 'both', 'individual'],
+      message: 'Target group must be junior_developers, developer_interns, both, or individual',
+    },
+    default: 'both',
   },
   deadline: {
     type: Date,
-    required: true,
+    required: [true, 'Deadline is required'],
+    index: true,
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: [true, 'Creator reference is required'],
+    index: true,
   },
   createdAt: {
     type: Date,
@@ -31,4 +42,4 @@ const taskSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model('Task', taskSchema);
+module.exports = mongoose.models.Task || mongoose.model('Task', taskSchema);
