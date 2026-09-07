@@ -36,9 +36,27 @@ app.use(errorHandler);
 const PORT = config.port;
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
   });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use by another process.`);
+    } else {
+      console.error('Server error:', err);
+    }
+  });
+
+  const gracefulShutdown = () => {
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGUSR2', gracefulShutdown);
 }
 
 module.exports = app;
