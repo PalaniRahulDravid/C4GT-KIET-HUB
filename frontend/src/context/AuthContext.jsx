@@ -57,17 +57,28 @@ export function AuthProvider({ children }) {
 
         if (response.ok) {
           const data = await response.json();
-          // Always use the LIVE user data from DB (picks up role changes made in Atlas)
-          setUser(data.user);
-          setToken(storedToken);
+          if (data.success && data.user) {
+            // Live user verified directly from MongoDB Atlas
+            setUser(data.user);
+            setToken(storedToken);
+          } else {
+            // Invalid user or DB issue -> clear storage immediately
+            localStorage.removeItem('c4gt_token');
+            setToken(null);
+            setUser(null);
+          }
         } else {
-          // Token is invalid or expired
+          // Token is invalid, expired, or database rejected it
           localStorage.removeItem('c4gt_token');
           setToken(null);
           setUser(null);
         }
       } catch (error) {
-        console.error('Failed to verify session token:', error);
+        // Database / Backend is unreachable: DO NOT pretend user is logged in!
+        console.error('Database unreachable during auth verification:', error);
+        localStorage.removeItem('c4gt_token');
+        setToken(null);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -76,47 +87,31 @@ export function AuthProvider({ children }) {
     initAuth();
   }, []);
 
-  // Google Sign-In handler
-  const loginWithGoogle = async (credential, fallbackPayload = {}) => {
-    const payload = credential ? { credential } : fallbackPayload;
+  // Strict Google Sign-In: requires real Google ID credential and saves strictly to MongoDB Atlas
+  const loginWithGoogle = async (credential) => {
+    if (!credential) {
+      throw new Error('Google credential is required. Real Google OAuth is mandatory.');
+    }
 
     const response = await fetch(`${API_BASE_URL}/auth/google`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ credential }),
     });
 
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      throw new Error(data.message || 'Google authentication failed');
+      // CLEAR any stored token immediately on database failure
+      localStorage.removeItem('c4gt_token');
+      setToken(null);
+      setUser(null);
+      throw new Error(data.message || 'Database error: Failed to authenticate or save user in MongoDB Atlas');
     }
 
-    localStorage.setItem('c4gt_token', data.token);
-    setToken(data.token);
-    setUser(data.user);
-
-    return data.user;
-  };
-
-  // Development login helper (for fast local role preview)
-  const devLogin = async (role, email, name) => {
-    const response = await fetch(`${API_BASE_URL}/auth/dev-login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ role, email, name }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || 'Development login failed');
-    }
-
+    // Strictly store ONLY the session token in localStorage (NO cached user objects)
     localStorage.setItem('c4gt_token', data.token);
     setToken(data.token);
     setUser(data.user);
@@ -130,7 +125,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  // Refresh user data (e.g. after an admin update)
+  // Refresh user data directly from MongoDB Atlas (e.g. after role assignment)
   const refreshUser = async () => {
     const currentToken = token || localStorage.getItem('c4gt_token');
     if (!currentToken) return;
@@ -143,10 +138,16 @@ export function AuthProvider({ children }) {
       });
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user);
+        if (data.success && data.user) {
+          setUser(data.user);
+        }
+      } else {
+        localStorage.removeItem('c4gt_token');
+        setToken(null);
+        setUser(null);
       }
     } catch (err) {
-      console.error('Error refreshing user:', err);
+      console.error('Error refreshing user from database:', err);
     }
   };
 
@@ -157,7 +158,6 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(user && token),
     role: user?.role || null,
     loginWithGoogle,
-    devLogin,
     logout,
     refreshUser,
     getRoleName,
