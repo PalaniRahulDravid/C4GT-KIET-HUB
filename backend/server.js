@@ -10,7 +10,18 @@ const app = express();
 
 connectDB();
 
-app.use(cors());
+const corsOptions = {
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://localhunt-khubteam2.vercel.app',
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.use('/api', routes);
@@ -20,8 +31,10 @@ app.use(errorHandler);
 
 const PORT = config.port;
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+}
 
 module.exports = app;

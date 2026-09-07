@@ -38,14 +38,28 @@ const userSchema = new mongoose.Schema({
     },
     default: null,
   },
+  googleId: {
+    type: String,
+    sparse: true,
+    unique: true,
+  },
+  avatar: {
+    type: String,
+    default: '',
+  },
   role: {
     type: String,
     required: [true, 'Role is required'],
     enum: {
-      values: ['admin', 'team_lead', 'student'],
-      message: 'Role must be admin, team_lead, or student',
+      values: ['user', 'teamlead', 'admin', 'student', 'team_lead'],
+      message: 'Role must be user, teamlead, or admin',
     },
-    default: 'student',
+    default: 'user',
+    set: (val) => {
+      if (val === 'student') return 'user';
+      if (val === 'team_lead') return 'teamlead';
+      return val;
+    },
     index: true,
   },
   teamId: {
@@ -68,6 +82,13 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+});
+
+// Normalize role before saving
+userSchema.pre('save', function (next) {
+  if (this.role === 'student') this.role = 'user';
+  if (this.role === 'team_lead') this.role = 'teamlead';
+  next();
 });
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);

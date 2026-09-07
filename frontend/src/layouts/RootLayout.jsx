@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { useAuth, getRoleName, getDashboardPath } from '../context/AuthContext';
 
 export default function RootLayout() {
+  const { user, isAuthenticated, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -20,10 +22,35 @@ export default function RootLayout() {
     };
   }, []);
 
-  const handleRoleSelect = (path) => {
+  const handleLogout = () => {
     setDropdownOpen(false);
     setMobileMenuOpen(false);
-    navigate(path);
+    logout();
+    navigate('/login');
+  };
+
+  const getRoleBadgeStyle = (role) => {
+    switch (role) {
+      case 'admin':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'teamlead':
+      case 'team_lead':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'user':
+      case 'student':
+      default:
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+    }
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
   };
 
   return (
@@ -37,9 +64,11 @@ export default function RootLayout() {
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center space-x-8">
+          <nav className="hidden md:flex items-center space-x-6">
+            {/* Home is the only top-nav link — dashboards are in the profile dropdown only */}
             <NavLink
               to="/"
+              end
               className={({ isActive }) =>
                 `text-sm font-medium transition-colors hover:text-blue-600 ${
                   isActive ? 'text-blue-600' : 'text-gray-600'
@@ -49,46 +78,132 @@ export default function RootLayout() {
               Home
             </NavLink>
 
-            {/* Login Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setDropdownOpen((prev) => !prev)}
-                className="cursor-pointer flex items-center gap-1"
-                aria-expanded={dropdownOpen}
-                aria-haspopup="true"
-              >
-                <span>Login</span>
-                <svg
-                  className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </Button>
 
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-                  <button
-                    type="button"
-                    onClick={() => handleRoleSelect('/team-lead')}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 cursor-pointer block"
+            {/* If NOT Authenticated: Direct Login link without role dropdown */}
+            {!isAuthenticated ? (
+              <Link to="/login">
+                <Button variant="default" size="sm" className="cursor-pointer">
+                  Sign In
+                </Button>
+              </Link>
+            ) : (
+              /* User Profile Menu */
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setDropdownOpen((prev) => !prev)}
+                  className="flex items-center gap-2.5 p-1.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer focus:outline-none"
+                  aria-expanded={dropdownOpen}
+                  aria-haspopup="true"
+                >
+                  {user?.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold text-xs shadow-sm">
+                      {getInitials(user?.name)}
+                    </div>
+                  )}
+
+                  <div className="text-left hidden lg:block pr-1">
+                    <p className="text-xs font-semibold text-gray-800 leading-tight">
+                      {user?.name || 'User'}
+                    </p>
+                    <p className="text-[10px] text-gray-500 font-medium">
+                      {getRoleName(user?.role)}
+                    </p>
+                  </div>
+
+                  <svg
+                    className={`w-4 h-4 text-gray-500 transition-transform ${
+                      dropdownOpen ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    Team Lead Login
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRoleSelect('/student')}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 cursor-pointer block"
-                  >
-                    Student Login
-                  </button>
-                </div>
-              )}
-            </div>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1.5 z-50 animate-in fade-in slide-in-from-top-1">
+                    {/* User Identity Header */}
+                    <div className="px-4 py-2.5 border-b border-gray-100">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {user?.name || 'Account'}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                      <div className="mt-1.5">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${getRoleBadgeStyle(
+                            user?.role
+                          )}`}
+                        >
+                          Role: {getRoleName(user?.role)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Navigation Items based strictly on user role */}
+                    <div className="py-1">
+                      {user?.role === 'admin' && (
+                        <Link
+                          to="/admin"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
+                        >
+                          <svg className="w-4 h-4 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          Admin Dashboard
+                        </Link>
+                      )}
+
+                      {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                        <Link
+                          to="/team-lead"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                        >
+                          <svg className="w-4 h-4 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          Team Lead Dashboard
+                        </Link>
+                      )}
+
+                      {(user?.role === 'user' || user?.role === 'student' || !user?.role) && (
+                        <Link
+                          to="/student"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                        >
+                          <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                          </svg>
+                          Student Dashboard
+                        </Link>
+                      )}
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium cursor-pointer"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
 
           {/* Mobile Menu Toggle Button */}
@@ -120,25 +235,40 @@ export default function RootLayout() {
             >
               Home
             </Link>
-            <div className="pt-2 border-t border-gray-100">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Portal Access
-              </p>
-              <button
-                type="button"
-                onClick={() => handleRoleSelect('/team-lead')}
-                className="w-full text-left py-2 text-sm text-gray-700 hover:text-blue-600 block"
-              >
-                Team Lead Login
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRoleSelect('/student')}
-                className="w-full text-left py-2 text-sm text-gray-700 hover:text-blue-600 block"
-              >
-                Student Login
-              </button>
-            </div>
+
+            {!isAuthenticated ? (
+              <div className="pt-2 border-t border-gray-100">
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block w-full py-2 text-sm font-medium text-blue-600 text-center bg-blue-50 rounded-md"
+                >
+                  Sign In
+                </Link>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-gray-100 space-y-2">
+                <div className="py-2 border-b border-gray-100">
+                  <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
+                  <p className="text-xs text-gray-500">{user?.email}</p>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-semibold border ${getRoleBadgeStyle(
+                      user?.role
+                    )}`}
+                  >
+                    Role: {getRoleName(user?.role)}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full text-left py-2 text-sm text-red-600 hover:text-red-700 font-medium"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         )}
       </header>
