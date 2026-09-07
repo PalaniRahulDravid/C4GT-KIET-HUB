@@ -9,7 +9,10 @@ const config = require('../config/env');
 const protect = async (req, res, next) => {
   let token;
 
-  if (
+  // Extract from HTTP-only cookie first, then fallback to Authorization header
+  if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  } else if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer ')
   ) {
@@ -19,7 +22,7 @@ const protect = async (req, res, next) => {
   if (!token) {
     return res.status(401).json({
       success: false,
-      message: 'Access denied. No authorization token provided.',
+      message: 'Access denied. No authentication cookie or authorization token provided.',
     });
   }
 

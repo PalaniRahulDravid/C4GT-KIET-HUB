@@ -138,6 +138,15 @@ const googleAuth = async (req, res, next) => {
     // 4. Generate JWT linked to verified MongoDB Atlas user document
     const token = generateToken(user);
 
+    // 5. Store token in HTTP-only Cookie (NOT localStorage)
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Authentication successful with MongoDB Atlas',
@@ -187,8 +196,30 @@ const getMe = async (req, res) => {
   });
 };
 
+/**
+ * @desc    Clear authentication cookie
+ * @route   POST /api/auth/logout
+ * @access  Public
+ */
+const logout = async (req, res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('token', '', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    expires: new Date(0),
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Logged out successfully. Cookie cleared.',
+  });
+};
+
 module.exports = {
   googleAuth,
   getMe,
+  logout,
 };
+
 

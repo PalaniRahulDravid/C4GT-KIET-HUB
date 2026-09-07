@@ -17,7 +17,8 @@ export default function TeamOverview() {
       setLoading(true);
       // Fetch teams
       const teamsRes = await fetch(`${apiBaseUrl}/admin/teams`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const teamsData = await teamsRes.json();
       if (teamsData.success) {
@@ -26,7 +27,8 @@ export default function TeamOverview() {
 
       // Fetch users to populate team leads dropdown
       const usersRes = await fetch(`${apiBaseUrl}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const usersData = await usersRes.json();
       if (usersData.success && usersData.users) {
@@ -41,10 +43,8 @@ export default function TeamOverview() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchData();
-    }
-  }, [token]);
+    fetchData();
+  }, []);
 
   const handleAssignLead = async (teamId, leadId) => {
     try {
@@ -53,9 +53,10 @@ export default function TeamOverview() {
 
       const res = await fetch(`${apiBaseUrl}/admin/teams/${teamId}/lead`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ teamLeadId: leadId || null }),
       });

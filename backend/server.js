@@ -6,6 +6,8 @@ const routes = require('./routes');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 
+const cookieParser = require('cookie-parser');
+
 const app = express();
 
 connectDB();
@@ -23,6 +25,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(cookieParser());
+
 
 app.use('/api', routes);
 

@@ -36,23 +36,24 @@ export const getDashboardPath = (role) => {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem('c4gt_token'));
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch LIVE user from MongoDB Atlas on every page load to pick up role changes
+  // Clear any legacy localStorage token on mount to ensure pure cookie-based auth
+  useEffect(() => {
+    try {
+      localStorage.removeItem('c4gt_token');
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  // Fetch LIVE user from MongoDB Atlas via HTTP-only session cookie
   useEffect(() => {
     const initAuth = async () => {
-      const storedToken = localStorage.getItem('c4gt_token');
-      if (!storedToken) {
-        setLoading(false);
-        return;
-      }
-
       try {
         const response = await fetch(`${API_BASE_URL}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${storedToken}`,
-          },
+          credentials: 'include', // Automatically sends HTTP cookie
         });
 
         if (response.ok) {
@@ -60,24 +61,16 @@ export function AuthProvider({ children }) {
           if (data.success && data.user) {
             // Live user verified directly from MongoDB Atlas
             setUser(data.user);
-            setToken(storedToken);
           } else {
-            // Invalid user or DB issue -> clear storage immediately
-            localStorage.removeItem('c4gt_token');
-            setToken(null);
             setUser(null);
           }
         } else {
-          // Token is invalid, expired, or database rejected it
-          localStorage.removeItem('c4gt_token');
-          setToken(null);
+          // Cookie expired, invalid, or database rejected it
           setUser(null);
         }
       } catch (error) {
         // Database / Backend is unreachable: DO NOT pretend user is logged in!
-        console.error('Database unreachable during auth verification:', error);
-        localStorage.removeItem('c4gt_token');
-        setToken(null);
+        console.error('Database unreachable during cookie auth verification:', error);
         setUser(null);
       } finally {
         setLoading(false);
@@ -87,7 +80,7 @@ export function AuthProvider({ children }) {
     initAuth();
   }, []);
 
-  // Strict Google Sign-In: requires real Google ID credential and saves strictly to MongoDB Atlas
+  // Strict Google Sign-In: requires real Google ID credential and sets HTTP-only Cookie
   const loginWithGoogle = async (credential) => {
     if (!credential) {
       throw new Error('Google credential is required. Real Google OAuth is mandatory.');
@@ -98,43 +91,46 @@ export function AuthProvider({ children }) {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include', // Instructs browser to accept and store the HTTP cookie
       body: JSON.stringify({ credential }),
     });
 
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      // CLEAR any stored token immediately on database failure
-      localStorage.removeItem('c4gt_token');
-      setToken(null);
       setUser(null);
+      setToken(null);
       throw new Error(data.message || 'Database error: Failed to authenticate or save user in MongoDB Atlas');
     }
 
-    // Strictly store ONLY the session token in localStorage (NO cached user objects)
-    localStorage.setItem('c4gt_token', data.token);
-    setToken(data.token);
+    // Token is stored in HTTP-only Cookie by backend. User object set in React memory only.
     setUser(data.user);
+    if (data.token) {
+      setToken(data.token);
+    }
 
     return data.user;
   };
 
-  const logout = () => {
-    localStorage.removeItem('c4gt_token');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include', // Tells backend to clear the cookie
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setUser(null);
+      setToken(null);
+    }
   };
 
-  // Refresh user data directly from MongoDB Atlas (e.g. after role assignment)
+  // Refresh user data directly from MongoDB Atlas via session cookie
   const refreshUser = async () => {
-    const currentToken = token || localStorage.getItem('c4gt_token');
-    if (!currentToken) return;
-
     try {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${currentToken}`,
-        },
+        credentials: 'include',
       });
       if (response.ok) {
         const data = await response.json();
@@ -142,8 +138,6 @@ export function AuthProvider({ children }) {
           setUser(data.user);
         }
       } else {
-        localStorage.removeItem('c4gt_token');
-        setToken(null);
         setUser(null);
       }
     } catch (err) {
@@ -155,7 +149,7 @@ export function AuthProvider({ children }) {
     user,
     token,
     loading,
-    isAuthenticated: Boolean(user && token),
+    isAuthenticated: Boolean(user),
     role: user?.role || null,
     loginWithGoogle,
     logout,

@@ -21,7 +21,8 @@ export default function AdminOverview() {
       setLoading(true);
       // Fetch stats
       const statsRes = await fetch(`${apiBaseUrl}/admin/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const statsData = await statsRes.json();
       if (statsData.success && statsData.stats) {
@@ -30,7 +31,8 @@ export default function AdminOverview() {
 
       // Fetch users for recent list
       const usersRes = await fetch(`${apiBaseUrl}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const usersData = await usersRes.json();
       if (usersData.success && usersData.users) {
@@ -44,10 +46,8 @@ export default function AdminOverview() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchOverviewData();
-    }
-  }, [token]);
+    fetchOverviewData();
+  }, []);
 
   const getRoleBadgeStyle = (role) => {
     switch (role) {

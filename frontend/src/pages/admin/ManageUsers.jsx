@@ -16,9 +16,8 @@ export default function ManageUsers() {
     try {
       setLoading(true);
       const res = await fetch(`${apiBaseUrl}/admin/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
       if (data.success) {
@@ -32,10 +31,8 @@ export default function ManageUsers() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchUsers();
-    }
-  }, [token]);
+    fetchUsers();
+  }, []);
 
   const handleRoleChange = async (userId, newRole) => {
     try {
@@ -44,9 +41,10 @@ export default function ManageUsers() {
 
       const res = await fetch(`${apiBaseUrl}/admin/users/${userId}/role`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ role: newRole }),
       });

@@ -25,7 +25,8 @@ export default function TeamTasks() {
     try {
       setLoading(true);
       const res = await fetch(`${apiBaseUrl}/admin/tasks`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
       if (data.success) {
@@ -39,10 +40,8 @@ export default function TeamTasks() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchTasks();
-    }
-  }, [token]);
+    fetchTasks();
+  }, []);
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
@@ -60,9 +59,10 @@ export default function TeamTasks() {
 
       const res = await fetch(`${apiBaseUrl}/admin/tasks`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(form),
       });
@@ -105,7 +105,8 @@ export default function TeamTasks() {
     try {
       const res = await fetch(`${apiBaseUrl}/admin/tasks/${taskId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       const data = await res.json();
