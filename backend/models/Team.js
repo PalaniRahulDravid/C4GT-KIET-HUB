@@ -18,8 +18,8 @@ const teamSchema = new mongoose.Schema({
   teamLeadId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Team lead is required'],
-    unique: true,
+    default: null,
+    sparse: true,
   },
   members: [
     {

@@ -1,11 +1,15 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute, { PublicRoute } from './components/ProtectedRoute';
 import RootLayout from './layouts/RootLayout';
 import Home from './pages/Home';
 import Login from './pages/Login';
-import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminOverview from './pages/admin/AdminOverview';
+import ManageUsers from './pages/admin/ManageUsers';
+import TeamOverview from './pages/admin/TeamOverview';
+import TeamTasks from './pages/admin/TeamTasks';
 import TeamLeadDashboard from './pages/teamlead/TeamLeadDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
 import NotFound from './pages/NotFound';
@@ -15,6 +19,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Main Website / Public & Common Routes with standard Header */}
           <Route path="/" element={<RootLayout />}>
             {/* Home - public, accessible to everyone */}
             <Route index element={<Home />} />
@@ -51,20 +56,32 @@ export default function App() {
               }
             />
 
-            {/* Admin Dashboard: strictly Admin only */}
-            <Route
-              path="admin"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-
             <Route path="*" element={<NotFound />} />
+          </Route>
+
+          {/* Dedicated Admin Portal: HIDES the public header, uses dedicated AdminLayout & sidebar */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            {/* /admin - Overview */}
+            <Route index element={<AdminOverview />} />
+            {/* /admin/overview alias */}
+            <Route path="overview" element={<AdminOverview />} />
+            {/* /admin/users - User Management & RBAC */}
+            <Route path="users" element={<ManageUsers />} />
+            {/* /admin/teams - Overview of Teams */}
+            <Route path="teams" element={<TeamOverview />} />
+            {/* /admin/tasks - Next Tasks for Teams */}
+            <Route path="tasks" element={<TeamTasks />} />
           </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>
   );
 }
+
