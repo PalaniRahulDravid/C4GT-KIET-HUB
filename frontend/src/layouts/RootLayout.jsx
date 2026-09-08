@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, Link, useLocation, Navigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { useAuth, getRoleName, getDashboardPath } from '../context/AuthContext';
+import { useAuth, getRoleName, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
 
 export default function RootLayout() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, loading, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -25,16 +25,25 @@ export default function RootLayout() {
     };
   }, []);
 
-  if (isHomePage) {
-    return <Outlet />;
-  }
-
   const handleLogout = () => {
     setDropdownOpen(false);
     setMobileMenuOpen(false);
     logout();
     navigate('/login');
   };
+
+  const isProfileComplete = isStudentProfileComplete(user);
+  const isOnboarding = isAuthenticated && !isProfileComplete;
+
+  // Strict Onboarding Rule: If authenticated but student details are incomplete,
+  // do not open any page — force redirect immediately to /complete-profile.
+  if (!loading && isOnboarding && location.pathname !== '/complete-profile') {
+    return <Navigate to="/complete-profile" replace />;
+  }
+
+  if (isHomePage) {
+    return <Outlet />;
+  }
 
   const getRoleBadgeStyle = (role) => {
     switch (role) {
@@ -64,36 +73,51 @@ export default function RootLayout() {
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center space-x-3">
+          <Link to={isOnboarding ? '/complete-profile' : '/'} className="flex items-center space-x-3">
             <span className="text-xl font-bold text-gray-900 tracking-tight">C4GT KIET HUB</span>
             <span className="text-xs text-gray-500 uppercase tracking-wider border-l border-gray-200 pl-3 hidden sm:inline">
               LMS Platform
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center space-x-6">
-            {/* Home is the only top-nav link — dashboards are in the profile dropdown only */}
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                `text-sm font-medium transition-colors hover:text-blue-600 ${
-                  isActive ? 'text-blue-600' : 'text-gray-600'
-                }`
-              }
-            >
-              Home
-            </NavLink>
+          {/* If onboarding: only show Sign Out button in header */}
+          {isOnboarding ? (
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline-flex text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                Step: Student Information Required
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="text-xs cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              >
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <nav className="hidden md:flex items-center space-x-6">
+              {/* Home is the only top-nav link — dashboards are in the profile dropdown only */}
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) =>
+                  `text-sm font-medium transition-colors hover:text-blue-600 ${
+                    isActive ? 'text-blue-600' : 'text-gray-600'
+                  }`
+                }
+              >
+                Home
+              </NavLink>
 
-
-            {/* If NOT Authenticated: Direct Login link without role dropdown */}
-            {!isAuthenticated ? (
-              <Link to="/login">
-                <Button variant="default" size="sm" className="cursor-pointer">
-                  Sign In
-                </Button>
-              </Link>
-            ) : (
+              {/* If NOT Authenticated: Direct Login link without role dropdown */}
+              {!isAuthenticated ? (
+                <Link to="/login">
+                  <Button variant="default" size="sm" className="cursor-pointer">
+                    Sign In
+                  </Button>
+                </Link>
+              ) : (
               /* User Profile Menu */
               <div className="relative" ref={dropdownRef}>
                 <button
@@ -184,17 +208,29 @@ export default function RootLayout() {
                       )}
 
                       {(user?.role === 'user' || user?.role === 'student' || !user?.role) && (
-                        <Link
-                          to="/student"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
-                        >
-                          <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                          </svg>
-                          Student Dashboard
-                        </Link>
+                        <>
+                          <Link
+                            to="/student"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                          >
+                            <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                            </svg>
+                            Student Dashboard
+                          </Link>
+                          <Link
+                            to="/complete-profile"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Update Profile
+                          </Link>
+                        </>
                       )}
                     </div>
 
@@ -212,24 +248,27 @@ export default function RootLayout() {
               </div>
             )}
           </nav>
+        )}
 
           {/* Mobile Menu Toggle Button */}
-          <div className="md:hidden flex items-center">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
-              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none"
-              aria-label="Toggle Navigation"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
-          </div>
+          {!isOnboarding && (
+            <div className="md:hidden flex items-center">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none"
+                aria-label="Toggle Navigation"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {mobileMenuOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Mobile Navigation Menu */}

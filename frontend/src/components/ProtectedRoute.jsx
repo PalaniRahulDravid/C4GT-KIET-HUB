@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth, getDashboardPath } from '../context/AuthContext';
+import { useAuth, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, isAuthenticated, loading } = useAuth();
@@ -19,6 +19,12 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Strict Onboarding Rule: If student details are incomplete and user is not on /complete-profile,
+  // block access to all pages and redirect to /complete-profile.
+  if (!isStudentProfileComplete(user) && location.pathname !== '/complete-profile') {
+    return <Navigate to="/complete-profile" replace />;
   }
 
   // Normalize current role for comparison (student -> user, team_lead -> teamlead)
@@ -42,7 +48,8 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 /**
  * PublicRoute (Guest-Only Route):
  * If a user is already logged in, they CANNOT access the auth/login page.
- * Redirects them immediately to their assigned dashboard.
+ * If their student profile is incomplete, redirect immediately to /complete-profile.
+ * Otherwise, redirect to their assigned dashboard.
  */
 export function PublicRoute({ children }) {
   const { user, isAuthenticated, loading } = useAuth();
@@ -60,6 +67,9 @@ export function PublicRoute({ children }) {
   }
 
   if (isAuthenticated && user) {
+    if (!isStudentProfileComplete(user)) {
+      return <Navigate to="/complete-profile" replace />;
+    }
     const dest = location.state?.from?.pathname || getDashboardPath(user.role);
     return <Navigate to={dest} replace />;
   }

@@ -266,6 +266,9 @@ export default function ManageUsers() {
                       Status
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600 uppercase text-xs">
+                      Student Info
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600 uppercase text-xs">
                       Current Role
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600 uppercase text-xs">
@@ -323,6 +326,39 @@ export default function ManageUsers() {
                           >
                             {u.status}
                           </span>
+                        </td>
+
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {u.rollNumber ? (
+                            <div className="space-y-0.5">
+                              <p className="font-mono text-xs font-semibold text-gray-900">
+                                {u.rollNumber}
+                              </p>
+                              <p className="text-[11px] text-gray-500 truncate max-w-[160px]" title={u.branch}>
+                                {u.branch || 'Branch N/A'}
+                              </p>
+                              <div className="flex items-center gap-1.5 pt-0.5">
+                                {u.year && (
+                                  <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.2 rounded font-medium">
+                                    Yr {u.year}
+                                  </span>
+                                )}
+                                {u.memberType && (
+                                  <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded font-medium">
+                                    {u.memberType === 'junior_developer'
+                                      ? 'Jr Dev (JD)'
+                                      : u.memberType === 'senior_developer'
+                                      ? 'Sr Dev'
+                                      : 'Intern'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              Pending Setup
+                            </span>
+                          )}
                         </td>
 
                         <td className="px-4 py-3 whitespace-nowrap">
