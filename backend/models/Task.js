@@ -30,6 +30,22 @@ const taskSchema = new mongoose.Schema({
     required: [true, 'Deadline is required'],
     index: true,
   },
+  priority: {
+    type: String,
+    default: 'Normal',
+  },
+  assignedTeams: {
+    type: [Number],
+    default: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  },
+  deliverables: {
+    type: [String],
+    default: ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+  },
+  status: {
+    type: String,
+    default: 'Published',
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

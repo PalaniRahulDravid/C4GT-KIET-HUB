@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Team = require('../models/Team');
 const Task = require('../models/Task');
@@ -161,7 +162,17 @@ const getTeams = async (req, res) => {
 const assignTeamLead = async (req, res) => {
   try {
     const { teamLeadId } = req.body;
-    const team = await Team.findById(req.params.id);
+    let team = null;
+
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      team = await Team.findById(req.params.id);
+    }
+    if (!team) {
+      const match = String(req.params.id).match(/\d+/);
+      if (match) {
+        team = await Team.findOne({ teamNumber: parseInt(match[0], 10) });
+      }
+    }
 
     if (!team) {
       return res.status(404).json({
@@ -171,7 +182,13 @@ const assignTeamLead = async (req, res) => {
     }
 
     if (teamLeadId) {
-      const user = await User.findById(teamLeadId);
+      let user = null;
+      if (mongoose.Types.ObjectId.isValid(teamLeadId)) {
+        user = await User.findById(teamLeadId);
+      }
+      if (!user) {
+        user = await User.findOne({ email: teamLeadId });
+      }
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -199,6 +216,17 @@ const assignTeamLead = async (req, res) => {
       user.teamId = team._id;
       await user.save();
     } else {
+      if (team.teamLeadId) {
+        try {
+          const prevLead = await User.findById(team.teamLeadId);
+          if (prevLead && prevLead.teamId && prevLead.teamId.toString() === team._id.toString()) {
+            prevLead.teamId = null;
+            await prevLead.save();
+          }
+        } catch (e) {
+          // ignore cleanup error
+        }
+      }
       team.teamLeadId = null;
     }
 
@@ -210,7 +238,7 @@ const assignTeamLead = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Team Lead assigned successfully for ${team.name}`,
+      message: `Team Lead ${teamLeadId ? 'assigned' : 'unassigned'} successfully for ${team.name}`,
       team: updatedTeam,
     });
   } catch (error) {
@@ -228,9 +256,30 @@ const assignTeamLead = async (req, res) => {
  */
 const getTasks = async (req, res) => {
   try {
-    const tasks = await Task.find()
+    let tasks = await Task.find()
       .sort({ createdAt: -1 })
       .populate('createdBy', 'name email avatar');
+
+    // Auto-seed default task if none exist
+    if (tasks.length === 0) {
+      const adminUser = (await User.findOne({ role: 'admin' })) || (await User.findOne());
+      if (adminUser) {
+        const defaultTask = await Task.create({
+          title: 'Build Authentication Flow & Role Guards (Google SSO + RBAC)',
+          description:
+            'Connect Google OAuth 2.0 authentication with MongoDB Atlas users collection. Ensure Team Lead role gating and Admin privilege verification before granting workspace access. Provide unit tests and a live deployment preview link.',
+          topic: 'Full-Stack Web Dev / Security & RBAC / MongoDB Atlas',
+          targetGroup: 'both',
+          deadline: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000), // 6 days from now
+          priority: 'Normal',
+          assignedTeams: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+          deliverables: ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+          status: 'Published',
+          createdBy: adminUser._id,
+        });
+        tasks = [await Task.findById(defaultTask._id).populate('createdBy', 'name email avatar')];
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -252,7 +301,16 @@ const getTasks = async (req, res) => {
  */
 const createTask = async (req, res) => {
   try {
-    const { title, description, topic, targetGroup, deadline } = req.body;
+    const {
+      title,
+      description,
+      topic,
+      targetGroup,
+      deadline,
+      priority,
+      assignedTeams,
+      deliverables,
+    } = req.body;
 
     if (!title || !description || !deadline) {
       return res.status(400).json({
@@ -267,6 +325,16 @@ const createTask = async (req, res) => {
       topic: topic ? topic.trim() : '',
       targetGroup: targetGroup || 'both',
       deadline: new Date(deadline),
+      priority: priority || 'Normal',
+      assignedTeams:
+        Array.isArray(assignedTeams) && assignedTeams.length > 0
+          ? assignedTeams
+          : [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      deliverables:
+        Array.isArray(deliverables) && deliverables.length > 0
+          ? deliverables
+          : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+      status: 'Published',
       createdBy: req.user._id,
     });
 
@@ -274,13 +342,67 @@ const createTask = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Task created successfully',
+      message: 'Task published successfully',
       task: populatedTask,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to create task',
+    });
+  }
+};
+
+/**
+ * @desc    Update a task
+ * @route   PATCH /api/admin/tasks/:id
+ * @access  Private/Admin
+ */
+const updateTask = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    const {
+      title,
+      description,
+      topic,
+      targetGroup,
+      deadline,
+      priority,
+      assignedTeams,
+      deliverables,
+      status,
+    } = req.body;
+
+    if (title) task.title = title.trim();
+    if (description) task.description = description.trim();
+    if (topic !== undefined) task.topic = topic.trim();
+    if (targetGroup) task.targetGroup = targetGroup;
+    if (deadline) task.deadline = new Date(deadline);
+    if (priority) task.priority = priority;
+    if (assignedTeams) task.assignedTeams = assignedTeams;
+    if (deliverables) task.deliverables = deliverables;
+    if (status) task.status = status;
+
+    await task.save();
+
+    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
+
+    res.status(200).json({
+      success: true,
+      message: 'Task updated successfully',
+      task: populatedTask,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update task',
     });
   }
 };
@@ -301,7 +423,7 @@ const deleteTask = async (req, res) => {
       });
     }
 
-    await Task.findByIdAndDelete(req.params.id);
+    await task.deleteOne();
 
     res.status(200).json({
       success: true,
@@ -323,5 +445,6 @@ module.exports = {
   assignTeamLead,
   getTasks,
   createTask,
+  updateTask,
   deleteTask,
 };
