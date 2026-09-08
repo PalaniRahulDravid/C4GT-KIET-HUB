@@ -11,7 +11,7 @@ export default function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isHomePage = location.pathname === '/' || location.pathname === '/home';
+  const isFullBleedPage = location.pathname === '/' || location.pathname === '/home' || location.pathname === '/login';
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -41,7 +41,7 @@ export default function RootLayout() {
     return <Navigate to="/complete-profile" replace />;
   }
 
-  if (isHomePage) {
+  if (isFullBleedPage) {
     return <Outlet />;
   }
 

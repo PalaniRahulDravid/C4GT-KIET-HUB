@@ -7,6 +7,7 @@ const {
   assignTeamLead,
   getTasks,
   createTask,
+  updateTask,
   deleteTask,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
@@ -24,6 +25,7 @@ router.get('/teams', getTeams);
 router.patch('/teams/:id/lead', assignTeamLead);
 router.get('/tasks', getTasks);
 router.post('/tasks', createTask);
+router.patch('/tasks/:id', updateTask);
 router.delete('/tasks/:id', deleteTask);
 
 module.exports = router;

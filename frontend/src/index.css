@@ -5,13 +5,35 @@
   --color-navy-surface: #0B1220;
   --color-navy-card: #0D1527;
   --color-navy-border: rgba(255, 255, 255, 0.12);
+  --color-navy-950: #070D1A;
+  --color-navy-900: #0B1220;
+  --color-navy-800: #111D33;
+  --color-navy-700: #1B2A47;
   --color-brand-indigo: #4F46E5;
   --color-brand-indigo-hover: #4338CA;
   --color-brand-indigo-light: #6366F1;
   --color-brand-mint: #10B981;
 
-  --font-sans: "Geist", "Inter", sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Geist", "Inter", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+}
+
+@layer utilities {
+  .tech-grid {
+    background-size: 32px 32px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  }
+  .radial-glow {
+    background: radial-gradient(circle 480px at 45% 60%, rgba(99, 102, 241, 0.15), rgba(124, 58, 237, 0.05) 50%, transparent 80%);
+  }
+  .grid-pattern {
+    background-size: 24px 24px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  }
 }
 
 @layer base {
