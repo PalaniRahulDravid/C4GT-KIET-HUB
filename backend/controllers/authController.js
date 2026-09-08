@@ -151,14 +151,7 @@ const googleAuth = async (req, res, next) => {
       success: true,
       message: 'Authentication successful with MongoDB Atlas',
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatar: user.avatar,
-        status: user.status,
-      },
+      user: formatUserResponse(user),
     });
   } catch (error) {
     console.error('Google Auth Error:', error.message);
@@ -167,6 +160,33 @@ const googleAuth = async (req, res, next) => {
       message: error.message || 'Database error: Failed to authenticate user with MongoDB Atlas',
     });
   }
+};
+
+/**
+ * Format user data returned to client with full student details
+ */
+const formatUserResponse = (user) => {
+  const hasStudentDetails = Boolean(
+    user.rollNumber &&
+    user.branch &&
+    user.year &&
+    user.memberType
+  );
+
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    avatar: user.avatar,
+    status: user.status,
+    rollNumber: user.rollNumber || null,
+    branch: user.branch || null,
+    year: user.year || null,
+    memberType: user.memberType || null,
+    teamId: user.teamId || null,
+    isProfileComplete: user.role === 'admin' ? true : hasStudentDetails,
+  };
 };
 
 /**
@@ -185,15 +205,89 @@ const getMe = async (req, res) => {
 
   res.status(200).json({
     success: true,
-    user: {
-      id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role,
-      avatar: req.user.avatar,
-      status: req.user.status,
-    },
+    user: formatUserResponse(req.user),
   });
+};
+
+/**
+ * @desc    Update authenticated user student profile details
+ * @route   PUT /api/auth/profile
+ * @access  Private
+ */
+const updateProfile = async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'MongoDB Atlas is currently unavailable. Cannot update profile.',
+      });
+    }
+
+    const { name, rollNumber, branch, year, memberType } = req.body;
+
+    // Validate mandatory fields
+    if (!rollNumber || typeof rollNumber !== 'string' || !rollNumber.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'University Roll Number is required.',
+      });
+    }
+
+    if (!branch || typeof branch !== 'string' || !branch.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Branch / Department is required.',
+      });
+    }
+
+    const parsedYear = Number(year);
+    if (!parsedYear || parsedYear < 1 || parsedYear > 4) {
+      return res.status(400).json({
+        success: false,
+        message: 'Academic Year must be between 1 and 4.',
+      });
+    }
+
+    const validMemberTypes = ['junior_developer', 'senior_developer', 'developer_intern'];
+    if (!memberType || !validMemberTypes.includes(memberType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Member type must be either Junior Developer (junior_developer) or Senior Developer (senior_developer).',
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found in database.',
+      });
+    }
+
+    if (name && typeof name === 'string' && name.trim()) {
+      user.name = name.trim();
+    }
+
+    user.rollNumber = rollNumber.trim();
+    user.branch = branch.trim();
+    user.year = parsedYear;
+    user.memberType = memberType;
+
+    await user.save();
+    console.log(`Updated student profile in MongoDB Atlas for: ${user.email} (Roll: ${user.rollNumber})`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Student profile details updated successfully.',
+      user: formatUserResponse(user),
+    });
+  } catch (error) {
+    console.error('Update Profile Error:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update student profile.',
+    });
+  }
 };
 
 /**
@@ -219,6 +313,7 @@ const logout = async (req, res) => {
 module.exports = {
   googleAuth,
   getMe,
+  updateProfile,
   logout,
 };
 

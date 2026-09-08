@@ -33,8 +33,8 @@ const userSchema = new mongoose.Schema({
   memberType: {
     type: String,
     enum: {
-      values: ['junior_developer', 'developer_intern'],
-      message: 'Member type must be junior_developer or developer_intern',
+      values: ['junior_developer', 'senior_developer', 'developer_intern'],
+      message: 'Member type must be junior_developer, senior_developer, or developer_intern',
     },
     default: null,
   },

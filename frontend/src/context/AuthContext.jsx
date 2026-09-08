@@ -34,6 +34,22 @@ export const getDashboardPath = (role) => {
   }
 };
 
+export const isStudentProfileComplete = (user) => {
+  if (!user) return false;
+  // Admin role does not require student details
+  if (user.role === 'admin') return true;
+  return Boolean(
+    user.rollNumber &&
+      typeof user.rollNumber === 'string' &&
+      user.rollNumber.trim() &&
+      user.branch &&
+      typeof user.branch === 'string' &&
+      user.branch.trim() &&
+      user.year &&
+      user.memberType
+  );
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -145,15 +161,43 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Update student profile directly in MongoDB Atlas
+  const updateProfile = async (profileData) => {
+    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify(profileData),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to update student profile in MongoDB Atlas');
+    }
+
+    if (data.user) {
+      setUser(data.user);
+    }
+    return data.user;
+  };
+
+  const isProfileComplete = isStudentProfileComplete(user);
+
   const value = {
     user,
     token,
     loading,
     isAuthenticated: Boolean(user),
+    isProfileComplete,
     role: user?.role || null,
     loginWithGoogle,
     logout,
     refreshUser,
+    updateProfile,
     getRoleName,
     getDashboardPath,
     apiBaseUrl: API_BASE_URL,

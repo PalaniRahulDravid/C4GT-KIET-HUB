@@ -12,6 +12,7 @@ import TeamOverview from './pages/admin/TeamOverview';
 import TeamTasks from './pages/admin/TeamTasks';
 import TeamLeadDashboard from './pages/teamlead/TeamLeadDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
+import CompleteProfile from './pages/CompleteProfile';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -33,6 +34,16 @@ export default function App() {
                 <PublicRoute>
                   <Login />
                 </PublicRoute>
+              }
+            />
+
+            {/* Complete Profile / Mandatory Student Information Onboarding */}
+            <Route
+              path="complete-profile"
+              element={
+                <ProtectedRoute>
+                  <CompleteProfile />
+                </ProtectedRoute>
               }
             />
 
