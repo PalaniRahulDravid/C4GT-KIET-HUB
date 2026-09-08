@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { useAuth, getRoleName, getDashboardPath } from '../context/AuthContext';
 
@@ -9,6 +9,9 @@ export default function RootLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isHomePage = location.pathname === '/' || location.pathname === '/home';
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -21,6 +24,10 @@ export default function RootLayout() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  if (isHomePage) {
+    return <Outlet />;
+  }
 
   const handleLogout = () => {
     setDropdownOpen(false);
