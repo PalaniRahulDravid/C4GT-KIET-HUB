@@ -1,18 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth, getDashboardPath } from '../context/AuthContext';
+import { useAuth, getDashboardPath, getRoleName } from '../context/AuthContext';
 
 export default function Home() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('trend');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const scrollToSection = (id) => {
     setMobileMenuOpen(false);
     const element = document.getElementById(id);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const getDashboardLabel = (role) => {
+    switch (role) {
+      case 'admin':
+        return 'Admin Dashboard';
+      case 'teamlead':
+      case 'team_lead':
+        return 'Team Lead Dashboard';
+      case 'user':
+      case 'student':
+      default:
+        return 'Student Dashboard';
     }
   };
 
@@ -106,21 +134,60 @@ export default function Home() {
                 </Link>
               </>
             ) : (
-              <>
+              <div className="relative flex items-center" ref={dropdownRef}>
                 <button
-                  onClick={handleGetStarted}
-                  className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md shadow-indigo-600/30 hover:shadow-indigo-500/40 active:translate-y-0.5 cursor-pointer"
+                  onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                  className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-tr from-indigo-600 to-violet-500 border border-white/20 flex items-center justify-center cursor-pointer text-white font-semibold text-sm shadow-md hover:ring-2 hover:ring-indigo-400 transition-all"
+                  title={user?.name || 'Account'}
+                  aria-label="Account menu"
                 >
-                  Dashboard
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt={user.name || 'User'} className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{user?.name ? user.name.charAt(0).toUpperCase() : 'U'}</span>
+                  )}
                 </button>
-                <button
-                  onClick={handleGetStarted}
-                  className="w-8 h-8 rounded-full bg-indigo-600 border border-white/20 flex items-center justify-center cursor-pointer text-white font-semibold text-xs shadow-md"
-                  title={user?.name || 'Dashboard'}
-                >
-                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                </button>
-              </>
+
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 top-11 w-64 bg-[#0D1527] border border-white/10 rounded-xl shadow-2xl p-2 z-50">
+                    <div className="px-3 py-2 border-b border-white/[0.08]">
+                      <p className="text-sm font-semibold text-white truncate">
+                        {user?.name || 'User'}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email}</p>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+                          {getRoleName(user?.role)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="py-1 space-y-1">
+                      <button
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          navigate(getDashboardPath(user?.role));
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-200 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors text-left cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-indigo-400">space_dashboard</span>
+                        <span>{getDashboardLabel(user?.role)}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          logout();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors text-left cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">logout</span>
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Mobile menu toggle */}
@@ -164,22 +231,48 @@ export default function Home() {
               Performance Analytics
             </button>
             <div className="pt-3 border-t border-white/10 flex items-center justify-between">
-              <Link
-                to="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-slate-300 hover:text-white text-sm font-medium"
-              >
-                Login
-              </Link>
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleGetStarted();
-                }}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
-              >
-                Get Started
-              </button>
+              {!isAuthenticated ? (
+                <>
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="text-slate-300 hover:text-white text-sm font-medium"
+                  >
+                    Login
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      handleGetStarted();
+                    }}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                  >
+                    Get Started
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      handleGetStarted();
+                    }}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">space_dashboard</span>
+                    <span>{getDashboardLabel(user?.role)}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      logout();
+                    }}
+                    className="text-rose-400 hover:text-rose-300 text-sm font-medium"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -228,7 +321,7 @@ export default function Home() {
                     onClick={handleGetStarted}
                     className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/40 active:translate-y-0.5 cursor-pointer"
                   >
-                    <span>Get Started</span>
+                    <span>{isAuthenticated ? getDashboardLabel(user?.role) : 'Get Started'}</span>
                     <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                   </button>
                   <button
@@ -1323,7 +1416,7 @@ export default function Home() {
                   onClick={handleGetStarted}
                   className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/40 active:translate-y-0.5 cursor-pointer"
                 >
-                  <span>Get Started</span>
+                  <span>{isAuthenticated ? getDashboardLabel(user?.role) : 'Get Started'}</span>
                 </button>
                 <button
                   onClick={() => scrollToSection('features')}

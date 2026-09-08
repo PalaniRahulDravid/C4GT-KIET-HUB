@@ -70,8 +70,7 @@ export function PublicRoute({ children }) {
     if (!isStudentProfileComplete(user)) {
       return <Navigate to="/complete-profile" replace />;
     }
-    const dest = location.state?.from?.pathname || getDashboardPath(user.role);
-    return <Navigate to={dest} replace />;
+    return <Navigate to="/" replace />;
   }
 
   return children;
