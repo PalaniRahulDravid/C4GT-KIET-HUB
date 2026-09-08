@@ -1,1 +1,29 @@
 @import "tailwindcss";
+
+@theme {
+  --color-navy-bg: #070D1A;
+  --color-navy-surface: #0B1220;
+  --color-navy-card: #0D1527;
+  --color-navy-border: rgba(255, 255, 255, 0.12);
+  --color-brand-indigo: #4F46E5;
+  --color-brand-indigo-hover: #4338CA;
+  --color-brand-indigo-light: #6366F1;
+  --color-brand-mint: #10B981;
+
+  --font-sans: "Geist", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
