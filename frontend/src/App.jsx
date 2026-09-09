@@ -9,6 +9,7 @@ import AdminLayout from './pages/admin/AdminLayout';
 import AdminOverview from './pages/admin/AdminOverview';
 import ManageUsers from './pages/admin/ManageUsers';
 import TeamOverview from './pages/admin/TeamOverview';
+import Batches from './pages/admin/Batches';
 import TeamTasks from './pages/admin/TeamTasks';
 import TeamLeadDashboard from './pages/teamlead/TeamLeadDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -85,8 +86,12 @@ export default function App() {
             <Route path="overview" element={<AdminOverview />} />
             {/* /admin/users - User Management & RBAC */}
             <Route path="users" element={<ManageUsers />} />
-            {/* /admin/teams - Overview of Teams */}
-            <Route path="teams" element={<TeamOverview />} />
+            {/* /admin/batches - Batches Module & sub-routes */}
+            <Route path="batches" element={<Batches />} />
+            <Route path="batches/:batchId" element={<Batches />} />
+            <Route path="batches/:batchId/team/:teamId" element={<Batches />} />
+            {/* Redirect legacy /admin/teams to /admin/batches */}
+            <Route path="teams" element={<Navigate to="/admin/batches" replace />} />
             {/* /admin/tasks - Next Tasks for Teams */}
             <Route path="tasks" element={<TeamTasks />} />
           </Route>

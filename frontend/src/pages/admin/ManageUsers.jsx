@@ -6,6 +6,7 @@ export default function ManageUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRole, setSelectedRole] = useState('all'); // 'all' | 'student' | 'teamLead' | 'admin'
   const [updatingId, setUpdatingId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -136,21 +137,77 @@ export default function ManageUsers() {
     }
   };
 
-  // Counts
-  const totalCount = users.length || 7;
-  const studentCount = users.filter((u) => u.role === 'user' || u.role === 'student').length;
-  const teamLeadCount = users.filter((u) => u.role === 'teamlead' || u.role === 'team_lead').length;
-  const adminCount = users.filter((u) => u.role === 'admin').length;
+  const getNormalizedRoleKey = (role) => {
+    if (role === 'admin') return 'admin';
+    if (role === 'teamlead' || role === 'team_lead') return 'teamLead';
+    return 'student';
+  };
 
-  // Filter users based on search
+  // Dynamic counts derived from users array
+  const totalCount = users.length;
+  const studentCount = users.filter((u) => getNormalizedRoleKey(u.role) === 'student').length;
+  const teamLeadCount = users.filter((u) => getNormalizedRoleKey(u.role) === 'teamLead').length;
+  const adminCount = users.filter((u) => getNormalizedRoleKey(u.role) === 'admin').length;
+
+  // Filter users based on selected card + search query
   const filteredUsers = users.filter((u) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      (u.name && u.name.toLowerCase().includes(q)) ||
-      (u.email && u.email.toLowerCase().includes(q))
-    );
+    if (selectedRole !== 'all' && getNormalizedRoleKey(u.role) !== selectedRole) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const nameMatch = u.name && u.name.toLowerCase().includes(q);
+      const emailMatch = u.email && u.email.toLowerCase().includes(q);
+      if (!nameMatch && !emailMatch) return false;
+    }
+    return true;
   });
+
+  const getTableTitle = () => {
+    switch (selectedRole) {
+      case 'student':
+        return 'Registered Students';
+      case 'teamLead':
+        return 'Registered Team Leads';
+      case 'admin':
+        return 'Registered Administrators';
+      case 'all':
+      default:
+        return 'Registered Users';
+    }
+  };
+
+  const getEmptyStateTitle = (role, query) => {
+    if (query.trim()) return 'No Matching Users Found';
+    switch (role) {
+      case 'student':
+        return 'No Students Found';
+      case 'teamLead':
+        return 'No Team Leads Found';
+      case 'admin':
+        return 'No Administrators Found';
+      case 'all':
+      default:
+        return 'No Users Found';
+    }
+  };
+
+  const getEmptyStateDescription = (role, query) => {
+    if (query.trim()) {
+      return `No accounts matching "${query}" were found in this section.`;
+    }
+    switch (role) {
+      case 'student':
+        return 'There are currently no users assigned to the Student role.';
+      case 'teamLead':
+        return 'There are currently no users assigned to the Team Lead role.';
+      case 'admin':
+        return 'There are currently no users assigned to the Administrator role.';
+      case 'all':
+      default:
+        return 'There are currently no registered users on the platform.';
+    }
+  };
 
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -176,14 +233,15 @@ export default function ManageUsers() {
   };
 
   const getRoleBadge = (role) => {
-    if (role === 'admin') {
+    const norm = getNormalizedRoleKey(role);
+    if (norm === 'admin') {
       return (
         <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
           Admin
         </span>
       );
     }
-    if (role === 'teamlead' || role === 'team_lead') {
+    if (norm === 'teamLead') {
       return (
         <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
           Team Lead
@@ -238,22 +296,59 @@ export default function ManageUsers() {
           </div>
         </div>
 
-        {/* 4 Summary Stat Cards */}
+        {/* 4 Interactive Summary Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: ALL USERS (Selected State) */}
-          <div className="bg-slate-900 text-white rounded-xl p-4 shadow-sm border border-slate-800 relative overflow-hidden flex items-center justify-between">
+          {/* Card 1: ALL USERS */}
+          <div
+            onClick={() => setSelectedRole('all')}
+            className={`rounded-xl p-4 transition-all duration-200 cursor-pointer flex items-center justify-between relative overflow-hidden select-none ${
+              selectedRole === 'all'
+                ? 'bg-slate-900 text-white shadow-md border border-slate-800 ring-2 ring-slate-900/10'
+                : 'bg-white text-slate-900 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
             <div className="space-y-1">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">All Users</span>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  selectedRole === 'all' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                ALL USERS
+              </span>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-white">{totalCount}</span>
-                <span className="text-[10px] text-emerald-400 font-medium bg-emerald-950/60 border border-emerald-700/50 px-1.5 py-0.2 rounded-full">
+                <span
+                  className={`text-2xl font-black ${
+                    selectedRole === 'all' ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {totalCount}
+                </span>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                    selectedRole === 'all'
+                      ? 'text-emerald-400 bg-emerald-950/60 border border-emerald-700/50'
+                      : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                  }`}
+                >
                   100% Synced
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">Registered accounts</p>
+              <p
+                className={`text-[11px] ${
+                  selectedRole === 'all' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                Registered accounts
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300">
-              <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedRole === 'all'
+                  ? 'bg-slate-800 text-indigo-400'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path
                   d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
                   strokeLinecap="round"
@@ -264,18 +359,55 @@ export default function ManageUsers() {
           </div>
 
           {/* Card 2: STUDENTS */}
-          <div className="bg-white text-slate-900 rounded-xl p-4 shadow-xs border border-slate-200 flex items-center justify-between">
+          <div
+            onClick={() => setSelectedRole('student')}
+            className={`rounded-xl p-4 transition-all duration-200 cursor-pointer flex items-center justify-between relative overflow-hidden select-none ${
+              selectedRole === 'student'
+                ? 'bg-slate-900 text-white shadow-md border border-slate-800 ring-2 ring-slate-900/10'
+                : 'bg-white text-slate-900 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
             <div className="space-y-1">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-500">Students</span>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  selectedRole === 'student' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                STUDENTS
+              </span>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-indigo-600">{studentCount}</span>
-                <span className="text-[10px] text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded-full">
+                <span
+                  className={`text-2xl font-black ${
+                    selectedRole === 'student' ? 'text-white' : 'text-indigo-600'
+                  }`}
+                >
+                  {studentCount}
+                </span>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                    selectedRole === 'student'
+                      ? 'text-indigo-300 bg-indigo-950/60 border border-indigo-700/50'
+                      : 'text-indigo-600 bg-indigo-50 border border-indigo-100'
+                  }`}
+                >
                   Enrolled
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Learners &amp; builders</p>
+              <p
+                className={`text-[11px] ${
+                  selectedRole === 'student' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                Learners &amp; builders
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedRole === 'student'
+                  ? 'bg-slate-800 text-indigo-400'
+                  : 'bg-indigo-50 text-indigo-600'
+              }`}
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path
                   d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-5.25 6.557q.156.402.327.795"
@@ -287,24 +419,67 @@ export default function ManageUsers() {
           </div>
 
           {/* Card 3: TEAM LEADS */}
-          <div className="bg-white text-slate-900 rounded-xl p-4 shadow-xs border border-slate-200 flex items-center justify-between">
+          <div
+            onClick={() => setSelectedRole('teamLead')}
+            className={`rounded-xl p-4 transition-all duration-200 cursor-pointer flex items-center justify-between relative overflow-hidden select-none ${
+              selectedRole === 'teamLead'
+                ? 'bg-slate-900 text-white shadow-md border border-slate-800 ring-2 ring-slate-900/10'
+                : 'bg-white text-slate-900 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
             <div className="space-y-1">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-500">Team Leads</span>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  selectedRole === 'teamLead' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                TEAM LEADS
+              </span>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-emerald-600">{teamLeadCount}</span>
+                <span
+                  className={`text-2xl font-black ${
+                    selectedRole === 'teamLead' ? 'text-white' : 'text-emerald-600'
+                  }`}
+                >
+                  {teamLeadCount}
+                </span>
                 {teamLeadCount === 0 ? (
-                  <span className="text-[10px] text-amber-700 font-medium bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-full">
+                  <span
+                    className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                      selectedRole === 'teamLead'
+                        ? 'text-amber-300 bg-amber-950/60 border border-amber-700/50'
+                        : 'text-amber-700 bg-amber-50 border border-amber-200'
+                    }`}
+                  >
                     Assign below
                   </span>
                 ) : (
-                  <span className="text-[10px] text-emerald-700 font-medium bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
+                  <span
+                    className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                      selectedRole === 'teamLead'
+                        ? 'text-emerald-300 bg-emerald-950/60 border border-emerald-700/50'
+                        : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                    }`}
+                  >
                     Active leads
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500">Sprint reviewers</p>
+              <p
+                className={`text-[11px] ${
+                  selectedRole === 'teamLead' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                Sprint reviewers
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedRole === 'teamLead'
+                  ? 'bg-slate-800 text-emerald-400'
+                  : 'bg-emerald-50 text-emerald-600'
+              }`}
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" strokeLinecap="round" strokeLinejoin="round"></path>
               </svg>
@@ -312,18 +487,55 @@ export default function ManageUsers() {
           </div>
 
           {/* Card 4: ADMINISTRATORS */}
-          <div className="bg-white text-slate-900 rounded-xl p-4 shadow-xs border border-slate-200 flex items-center justify-between">
+          <div
+            onClick={() => setSelectedRole('admin')}
+            className={`rounded-xl p-4 transition-all duration-200 cursor-pointer flex items-center justify-between relative overflow-hidden select-none ${
+              selectedRole === 'admin'
+                ? 'bg-slate-900 text-white shadow-md border border-slate-800 ring-2 ring-slate-900/10'
+                : 'bg-white text-slate-900 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
             <div className="space-y-1">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-500">Administrators</span>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  selectedRole === 'admin' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                ADMINISTRATORS
+              </span>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-purple-600">{adminCount}</span>
-                <span className="text-[10px] text-purple-700 font-medium bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded-full">
+                <span
+                  className={`text-2xl font-black ${
+                    selectedRole === 'admin' ? 'text-white' : 'text-purple-600'
+                  }`}
+                >
+                  {adminCount}
+                </span>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                    selectedRole === 'admin'
+                      ? 'text-purple-300 bg-purple-950/60 border border-purple-700/50'
+                      : 'text-purple-700 bg-purple-50 border border-purple-200'
+                  }`}
+                >
                   Full RBAC
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Workspace managers</p>
+              <p
+                className={`text-[11px] ${
+                  selectedRole === 'admin' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                Workspace managers
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedRole === 'admin'
+                  ? 'bg-slate-800 text-purple-400'
+                  : 'bg-purple-50 text-purple-600'
+              }`}
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path
                   d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
@@ -342,7 +554,7 @@ export default function ManageUsers() {
         <div className="px-6 py-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white shrink-0">
           <div>
             <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-bold text-slate-900">Registered Users</h3>
+              <h3 className="text-sm font-bold text-slate-900">{getTableTitle()}</h3>
               <span className="px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-600 rounded-full">
                 {filteredUsers.length}
               </span>
@@ -372,142 +584,154 @@ export default function ManageUsers() {
           </div>
         </div>
 
-        {/* Table Structure Container */}
-        <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[460px]">
-          <table className="w-full text-left border-collapse min-w-[700px]">
-            {/* Table Header */}
-            <thead className="bg-slate-50/80 sticky top-0 z-10 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-6 w-[280px]" scope="col">
-                  User Profile
-                </th>
-                <th className="py-3 px-6 w-[320px]" scope="col">
-                  Email
-                </th>
-                <th className="py-3 px-6 w-[120px] text-center" scope="col">
-                  Status
-                </th>
-                <th className="py-3 px-6 w-[160px]" scope="col">
-                  Current Role
-                </th>
-                <th className="py-3 px-6 w-[210px]" scope="col">
-                  Assign Role
-                </th>
-              </tr>
-            </thead>
-            {/* Table Body */}
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
-              {filteredUsers.map((u, idx) => {
-                const isSelf = currentUser && (currentUser._id === u._id || currentUser.email === u.email);
-                const isUpdating = updatingId === u._id;
-                const normalizedRole = u.role === 'team_lead' ? 'teamlead' : u.role === 'student' ? 'user' : u.role || 'user';
-
-                return (
-                  <tr
-                    key={u._id || idx}
-                    className={`transition-colors h-[64px] ${
-                      isSelf ? 'bg-violet-50/30 hover:bg-violet-50/60' : 'hover:bg-slate-50/60'
-                    }`}
-                  >
-                    {/* User Profile */}
-                    <td className="py-2.5 px-6">
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shadow-xs flex-shrink-0 ${
-                            isSelf
-                              ? 'bg-indigo-600 text-white ring-2 ring-violet-500/20'
-                              : getAvatarBg(idx)
-                          }`}
-                        >
-                          {getInitials(u.name)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="font-semibold text-slate-900 block leading-tight truncate">
-                              {u.name || 'User'}
-                            </span>
-                            {isSelf && (
-                              <span className="px-1.5 py-0.2 text-[9px] font-bold bg-violet-600 text-white rounded">
-                                You
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-slate-400">Google Account</span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Email */}
-                    <td className="py-2.5 px-6 text-slate-600 font-mono text-[11px] truncate">
-                      {u.email}
-                    </td>
-
-                    {/* Status */}
-                    <td className="py-2.5 px-6 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
-                        active
-                      </span>
-                    </td>
-
-                    {/* Current Role */}
-                    <td className="py-2.5 px-6">
-                      {getRoleBadge(normalizedRole)}
-                    </td>
-
-                    {/* Assign Role Dropdown */}
-                    <td className="py-2.5 px-6">
-                      {isSelf ? (
-                        <div className="relative flex items-center" title="You cannot change your own role to prevent accidental lockout">
-                          <select
-                            disabled
-                            value="admin"
-                            className="w-full py-1.5 pl-2.5 pr-7 text-xs rounded-lg border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed font-medium appearance-none"
-                          >
-                            <option value="admin">Admin (admin)</option>
-                          </select>
-                          <svg
-                            className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            ></path>
-                          </svg>
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          <select
-                            value={normalizedRole}
-                            disabled={isUpdating}
-                            onChange={(e) => handleRoleChange(u._id, e.target.value)}
-                            className="w-full py-1.5 px-2.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shadow-2xs transition hover:border-slate-300 disabled:opacity-50"
-                          >
-                            <option value="user">Student (user)</option>
-                            <option value="teamlead">Team Lead (mentor)</option>
-                            <option value="admin">Admin (admin)</option>
-                          </select>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {filteredUsers.length === 0 && (
+        {/* Table Structure Container / Empty State */}
+        <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[460px] flex flex-col">
+          {filteredUsers.length === 0 ? (
+            <div className="flex-1 py-16 px-4 text-center flex flex-col items-center justify-center bg-slate-50/30">
+              <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-400 mb-3 shadow-xs">
+                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path
+                    d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  ></path>
+                </svg>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 mb-1">
+                {getEmptyStateTitle(selectedRole, searchQuery)}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-sm">
+                {getEmptyStateDescription(selectedRole, searchQuery)}
+              </p>
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse min-w-[700px]">
+              {/* Table Header */}
+              <thead className="bg-slate-50/80 sticky top-0 z-10 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <td colSpan="5" className="py-10 text-center text-slate-400 text-xs">
-                    No users found matching "{searchQuery}".
-                  </td>
+                  <th className="py-3 px-6 w-[280px]" scope="col">
+                    User Profile
+                  </th>
+                  <th className="py-3 px-6 w-[320px]" scope="col">
+                    Email
+                  </th>
+                  <th className="py-3 px-6 w-[120px] text-center" scope="col">
+                    Status
+                  </th>
+                  <th className="py-3 px-6 w-[160px]" scope="col">
+                    Current Role
+                  </th>
+                  <th className="py-3 px-6 w-[210px]" scope="col">
+                    Assign Role
+                  </th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              {/* Table Body */}
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
+                {filteredUsers.map((u, idx) => {
+                  const isSelf = currentUser && (currentUser._id === u._id || currentUser.email === u.email);
+                  const isUpdating = updatingId === u._id;
+                  const normalizedRole = getNormalizedRoleKey(u.role) === 'teamLead' ? 'teamlead' : getNormalizedRoleKey(u.role) === 'admin' ? 'admin' : 'user';
+
+                  return (
+                    <tr
+                      key={u._id || idx}
+                      className={`transition-colors h-[64px] ${
+                        isSelf ? 'bg-violet-50/30 hover:bg-violet-50/60' : 'hover:bg-slate-50/60'
+                      }`}
+                    >
+                      {/* User Profile */}
+                      <td className="py-2.5 px-6">
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shadow-xs flex-shrink-0 ${
+                              isSelf
+                                ? 'bg-indigo-600 text-white ring-2 ring-violet-500/20'
+                                : getAvatarBg(idx)
+                            }`}
+                          >
+                            {getInitials(u.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-semibold text-slate-900 block leading-tight truncate">
+                                {u.name || 'User'}
+                              </span>
+                              {isSelf && (
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold bg-violet-600 text-white rounded">
+                                  You
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400">Google Account</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Email */}
+                      <td className="py-2.5 px-6 text-slate-600 font-mono text-[11px] truncate">
+                        {u.email}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-2.5 px-6 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                          active
+                        </span>
+                      </td>
+
+                      {/* Current Role */}
+                      <td className="py-2.5 px-6">
+                        {getRoleBadge(u.role)}
+                      </td>
+
+                      {/* Assign Role Dropdown */}
+                      <td className="py-2.5 px-6">
+                        {isSelf ? (
+                          <div className="relative flex items-center" title="You cannot change your own role to prevent accidental lockout">
+                            <select
+                              disabled
+                              value="admin"
+                              className="w-full py-1.5 pl-2.5 pr-7 text-xs rounded-lg border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed font-medium appearance-none"
+                            >
+                              <option value="admin">Admin (admin)</option>
+                            </select>
+                            <svg
+                              className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 pointer-events-none"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              ></path>
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <select
+                              value={normalizedRole}
+                              disabled={isUpdating}
+                              onChange={(e) => handleRoleChange(u._id, e.target.value)}
+                              className="w-full py-1.5 px-2.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer shadow-2xs transition hover:border-slate-300 disabled:opacity-50"
+                            >
+                              <option value="user">Student (user)</option>
+                              <option value="teamlead">Team Lead (mentor)</option>
+                              <option value="admin">Admin (admin)</option>
+                            </select>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Table Footer / Status Summary bar */}
@@ -541,3 +765,4 @@ export default function ManageUsers() {
     </div>
   );
 }
+

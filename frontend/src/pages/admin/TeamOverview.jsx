@@ -6,6 +6,7 @@ export default function TeamOverview() {
   const [teams, setTeams] = useState([]);
   const [eligibleUsers, setEligibleUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedFilter, setSelectedFilter] = useState('all'); // 'all' | 'assigned' | 'pending'
   const [selectedLeads, setSelectedLeads] = useState({});
   const [assigningId, setAssigningId] = useState(null);
   const [toast, setToast] = useState({
@@ -320,8 +321,25 @@ export default function TeamOverview() {
     return name.slice(0, 2).toUpperCase();
   };
 
-  const assignedCount = teams.filter((t) => t.teamLeadId).length;
+  const assignedCount = teams.filter((t) => Boolean(t.teamLeadId)).length;
   const pendingCount = teams.length - assignedCount;
+
+  // Filter teams based on selected summary card
+  const displayedTeams = useMemo(() => {
+    if (selectedFilter === 'assigned') {
+      return teams.filter((t) => Boolean(t.teamLeadId));
+    }
+    if (selectedFilter === 'pending') {
+      return teams.filter((t) => !t.teamLeadId);
+    }
+    return teams;
+  }, [teams, selectedFilter]);
+
+  const getSectionTitle = () => {
+    if (selectedFilter === 'assigned') return 'Teams With Assigned Leads';
+    if (selectedFilter === 'pending') return 'Teams Awaiting Lead Assignment';
+    return 'Overview of Cohort Teams';
+  };
 
   // Filter users for directory search modal
   const filteredModalUsers = useMemo(() => {
@@ -344,7 +362,12 @@ export default function TeamOverview() {
         {/* Section Heading & Refresh Teams Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Overview of Cohort Teams</h2>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base font-bold text-slate-900">{getSectionTitle()}</h2>
+              <span className="px-2 py-0.5 text-xs font-semibold bg-slate-100 text-slate-600 rounded-full">
+                {displayedTeams.length}
+              </span>
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Track and configure the 9 cohort teams, assign designated Team Leads, and manage cohort readiness.
             </p>
@@ -384,19 +407,56 @@ export default function TeamOverview() {
         {/* 3 Summary Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Card 1: Total Cohorts */}
-          <div className="bg-slate-900 text-white rounded-xl p-4 shadow-sm border border-slate-800 relative overflow-hidden flex items-center justify-between">
+          <div
+            onClick={() => setSelectedFilter('all')}
+            className={`rounded-xl p-4 transition-all duration-200 cursor-pointer flex items-center justify-between relative overflow-hidden select-none ${
+              selectedFilter === 'all'
+                ? 'bg-slate-900 text-white shadow-md border border-slate-800 ring-2 ring-slate-900/10'
+                : 'bg-white text-slate-900 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
             <div className="space-y-1">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">Total Cohorts</span>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  selectedFilter === 'all' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                TOTAL COHORTS
+              </span>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-white">{teams.length || 9}</span>
-                <span className="text-[10px] text-violet-300 font-medium bg-violet-600/30 border border-violet-500/30 px-1.5 py-0.2 rounded-full">
+                <span
+                  className={`text-2xl font-black ${
+                    selectedFilter === 'all' ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {teams.length || 9}
+                </span>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                    selectedFilter === 'all'
+                      ? 'text-violet-300 bg-violet-950/60 border border-violet-700/50'
+                      : 'text-violet-700 bg-violet-50 border border-violet-200'
+                  }`}
+                >
                   Team 1 to Team 9
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">All cohorts structured &amp; monitored</p>
+              <p
+                className={`text-[11px] ${
+                  selectedFilter === 'all' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                All cohorts structured &amp; monitored
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300">
-              <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedFilter === 'all'
+                  ? 'bg-slate-800 text-indigo-400'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path
                   d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
                   strokeLinecap="round"
@@ -407,20 +467,56 @@ export default function TeamOverview() {
           </div>
 
           {/* Card 2: Leads Assigned */}
-          <div className="bg-white text-slate-900 rounded-xl p-4 shadow-xs border border-slate-200 flex items-center justify-between">
+          <div
+            onClick={() => setSelectedFilter('assigned')}
+            className={`rounded-xl p-4 transition-all duration-200 cursor-pointer flex items-center justify-between relative overflow-hidden select-none ${
+              selectedFilter === 'assigned'
+                ? 'bg-slate-900 text-white shadow-md border border-slate-800 ring-2 ring-slate-900/10'
+                : 'bg-white text-slate-900 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
             <div className="space-y-1">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-500">Leads Assigned</span>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  selectedFilter === 'assigned' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                LEADS ASSIGNED
+              </span>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-emerald-600" id="count-leads-assigned">
+                <span
+                  className={`text-2xl font-black ${
+                    selectedFilter === 'assigned' ? 'text-white' : 'text-emerald-600'
+                  }`}
+                  id="count-leads-assigned"
+                >
                   {assignedCount}
                 </span>
-                <span className="text-[10px] text-emerald-700 font-medium bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                    selectedFilter === 'assigned'
+                      ? 'text-emerald-300 bg-emerald-950/60 border border-emerald-700/50'
+                      : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                  }`}
+                >
                   Ready for task distribution
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Designated cohort leads active</p>
+              <p
+                className={`text-[11px] ${
+                  selectedFilter === 'assigned' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                Designated cohort leads active
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedFilter === 'assigned'
+                  ? 'bg-slate-800 text-emerald-400'
+                  : 'bg-emerald-50 text-emerald-600'
+              }`}
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" strokeLinecap="round" strokeLinejoin="round"></path>
               </svg>
@@ -428,20 +524,56 @@ export default function TeamOverview() {
           </div>
 
           {/* Card 3: Pending Leads */}
-          <div className="bg-white text-slate-900 rounded-xl p-4 shadow-xs border border-slate-200 flex items-center justify-between">
+          <div
+            onClick={() => setSelectedFilter('pending')}
+            className={`rounded-xl p-4 transition-all duration-200 cursor-pointer flex items-center justify-between relative overflow-hidden select-none ${
+              selectedFilter === 'pending'
+                ? 'bg-slate-900 text-white shadow-md border border-slate-800 ring-2 ring-slate-900/10'
+                : 'bg-white text-slate-900 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
             <div className="space-y-1">
-              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-500">Pending Leads</span>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  selectedFilter === 'pending' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                PENDING LEADS
+              </span>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-amber-500" id="count-pending-leads">
+                <span
+                  className={`text-2xl font-black ${
+                    selectedFilter === 'pending' ? 'text-white' : 'text-amber-500'
+                  }`}
+                  id="count-pending-leads"
+                >
                   {pendingCount}
                 </span>
-                <span className="text-[10px] text-amber-700 font-medium bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-full">
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.2 rounded-full ${
+                    selectedFilter === 'pending'
+                      ? 'text-amber-300 bg-amber-950/60 border border-amber-700/50'
+                      : 'text-amber-700 bg-amber-50 border border-amber-200'
+                  }`}
+                >
                   Awaiting lead designation
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Assign sprint reviewer below</p>
+              <p
+                className={`text-[11px] ${
+                  selectedFilter === 'pending' ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                Assign sprint reviewer below
+              </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-amber-500">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedFilter === 'pending'
+                  ? 'bg-slate-800 text-amber-400'
+                  : 'bg-amber-50 text-amber-500'
+              }`}
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                 <path d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" strokeLinecap="round" strokeLinejoin="round"></path>
               </svg>
@@ -450,31 +582,51 @@ export default function TeamOverview() {
         </div>
       </div>
 
-      {/* BEGIN: Cohort Teams Grid */}
+      {/* BEGIN: Cohort Teams Grid / Empty Filter State */}
       <div className="flex-1 overflow-y-auto max-h-[520px] pr-1 pb-2">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {teams.map((team, idx) => {
-            const teamNum = team.teamNumber || idx + 1;
-            const lead = team.teamLeadId;
-            const track = team.track || trackNames[teamNum] || 'Engineering Cohort Track';
-            const hasLead = Boolean(lead);
-            const readinessPct = hasLead ? 75 : defaultReadiness[teamNum] || 25;
-            const isAssigning = assigningId === team._id;
-            const selectedVal = selectedLeads[team._id] || '';
-            const selectedCandidate = eligibleUsers.find((u) => u._id === selectedVal);
+        {displayedTeams.length === 0 ? (
+          <div className="py-16 px-4 bg-white rounded-xl border border-slate-200 text-center flex flex-col items-center justify-center space-y-2">
+            <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 mb-1 shadow-xs">
+              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold text-slate-900">
+              {selectedFilter === 'pending'
+                ? 'All Teams Have Assigned Leads!'
+                : selectedFilter === 'assigned'
+                ? 'No Teams With Assigned Leads'
+                : 'No Cohort Teams Available'}
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm">
+              {selectedFilter === 'pending'
+                ? 'Every cohort team currently has an active designated Team Lead assigned.'
+                : selectedFilter === 'assigned'
+                ? 'There are currently no cohort teams with assigned Team Leads.'
+                : 'No cohort teams are currently loaded.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {displayedTeams.map((team, idx) => {
+              const teamNum = team.teamNumber || idx + 1;
+              const lead = team.teamLeadId;
+              const track = team.track || trackNames[teamNum] || 'Engineering Cohort Track';
+              const hasLead = Boolean(lead);
+              const readinessPct = hasLead ? 75 : defaultReadiness[teamNum] || 25;
+              const isAssigning = assigningId === team._id;
+              const selectedVal = selectedLeads[team._id] || '';
+              const selectedCandidate = eligibleUsers.find((u) => u._id === selectedVal);
 
-            return (
-              <div
-                key={team._id || idx}
-                id={`team-card-${teamNum}`}
-                className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 flex flex-col justify-between hover:border-slate-300 transition"
-              >
-                <div>
+              return (
+                <div
+                  key={team._id || idx}
+                  id={`team-card-${teamNum}`}
+                  className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 flex flex-col justify-between hover:border-slate-300 transition"
+                >
+                  <div>
                   {/* Top Bar with Cohort Badge & Status */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 tracking-wide">
-                      COHORT #{teamNum}
-                    </span>
+                  <div className="flex items-center justify-end mb-2">
                     {hasLead ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
@@ -685,7 +837,8 @@ export default function TeamOverview() {
             );
           })}
         </div>
-      </div>
+      )}
+    </div>
 
       {/* Bottom sync status bar */}
       <div className="px-4 py-2 border border-slate-200 bg-white rounded-xl flex items-center justify-between text-[11px] text-slate-500 shadow-2xs shrink-0 mt-2">
@@ -708,9 +861,6 @@ export default function TeamOverview() {
             <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700">
-                    COHORT #{searchModalTeam.teamNumber}
-                  </span>
                   <h3 className="text-sm font-bold text-slate-900">
                     Assign Lead to {searchModalTeam.name}
                   </h3>
@@ -878,10 +1028,7 @@ export default function TeamOverview() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between">
               <div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                  COHORT #{changeModalTeam.teamNumber}
-                </span>
-                <h3 className="text-base font-bold text-slate-900 mt-1">
+                <h3 className="text-base font-bold text-slate-900">
                   Manage Team Lead
                 </h3>
                 <p className="text-xs text-slate-500">
