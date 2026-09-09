@@ -19,12 +19,8 @@ export default function Login() {
     if (!isStudentProfileComplete(user) && user.role !== 'admin') {
       return <Navigate to="/complete-profile" replace />;
     }
-<<<<<<< HEAD
-    return <Navigate to="/" replace />;
-=======
     const targetPath = location.state?.from?.pathname || getDashboardPath(user.role);
     return <Navigate to={targetPath} replace />;
->>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
   }
 
   // Initialize official Google Identity Services (GIS) button
@@ -48,12 +44,8 @@ export default function Login() {
                   if (!isStudentProfileComplete(loggedInUser) && loggedInUser.role !== 'admin') {
                     navigate('/complete-profile', { replace: true });
                   } else {
-<<<<<<< HEAD
-                    navigate('/', { replace: true });
-=======
                     const dest = location.state?.from?.pathname || getDashboardPath(loggedInUser.role);
                     navigate(dest, { replace: true });
->>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
                   }
                 } catch (err) {
                   setError(err.message || 'Google authentication failed');
