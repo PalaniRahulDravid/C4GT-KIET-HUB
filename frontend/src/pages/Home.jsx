@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, getDashboardPath, getRoleName } from '../context/AuthContext';
@@ -21,6 +22,17 @@ export default function Home() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+=======
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth, getDashboardPath } from '../context/AuthContext';
+
+export default function Home() {
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('trend');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+>>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
 
   const scrollToSection = (id) => {
     setMobileMenuOpen(false);
@@ -30,6 +42,7 @@ export default function Home() {
     }
   };
 
+<<<<<<< HEAD
   const getDashboardLabel = (role) => {
     switch (role) {
       case 'admin':
@@ -44,6 +57,8 @@ export default function Home() {
     }
   };
 
+=======
+>>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
   const handleGetStarted = () => {
     if (isAuthenticated) {
       navigate(getDashboardPath(user?.role));
@@ -134,6 +149,7 @@ export default function Home() {
                 </Link>
               </>
             ) : (
+<<<<<<< HEAD
               <div className="relative flex items-center" ref={dropdownRef}>
                 <button
                   onClick={() => setProfileDropdownOpen((prev) => !prev)}
@@ -188,6 +204,23 @@ export default function Home() {
                   </div>
                 )}
               </div>
+=======
+              <>
+                <button
+                  onClick={handleGetStarted}
+                  className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md shadow-indigo-600/30 hover:shadow-indigo-500/40 active:translate-y-0.5 cursor-pointer"
+                >
+                  Dashboard
+                </button>
+                <button
+                  onClick={handleGetStarted}
+                  className="w-8 h-8 rounded-full bg-indigo-600 border border-white/20 flex items-center justify-center cursor-pointer text-white font-semibold text-xs shadow-md"
+                  title={user?.name || 'Dashboard'}
+                >
+                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </button>
+              </>
+>>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
             )}
 
             {/* Mobile menu toggle */}
@@ -231,6 +264,7 @@ export default function Home() {
               Performance Analytics
             </button>
             <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+<<<<<<< HEAD
               {!isAuthenticated ? (
                 <>
                   <Link
@@ -273,6 +307,24 @@ export default function Home() {
                   </button>
                 </>
               )}
+=======
+              <Link
+                to="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-slate-300 hover:text-white text-sm font-medium"
+              >
+                Login
+              </Link>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleGetStarted();
+                }}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              >
+                Get Started
+              </button>
+>>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
             </div>
           </div>
         )}
@@ -321,7 +373,11 @@ export default function Home() {
                     onClick={handleGetStarted}
                     className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/40 active:translate-y-0.5 cursor-pointer"
                   >
+<<<<<<< HEAD
                     <span>{isAuthenticated ? getDashboardLabel(user?.role) : 'Get Started'}</span>
+=======
+                    <span>Get Started</span>
+>>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
                     <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                   </button>
                   <button
@@ -1416,7 +1472,11 @@ export default function Home() {
                   onClick={handleGetStarted}
                   className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/40 active:translate-y-0.5 cursor-pointer"
                 >
+<<<<<<< HEAD
                   <span>{isAuthenticated ? getDashboardLabel(user?.role) : 'Get Started'}</span>
+=======
+                  <span>Get Started</span>
+>>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
                 </button>
                 <button
                   onClick={() => scrollToSection('features')}

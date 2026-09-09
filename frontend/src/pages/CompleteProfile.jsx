@@ -152,7 +152,12 @@ export default function CompleteProfile() {
       });
 
       // Successful persistence directly to MongoDB Atlas
+<<<<<<< HEAD
       navigate('/', { replace: true });
+=======
+      const targetPath = getDashboardPath(updatedUser?.role || user?.role);
+      navigate(targetPath, { replace: true });
+>>>>>>> 17540aa55c6b225de4fa15112d148e7917359705
     } catch (err) {
       setErrorMessage(err.message || 'Failed to save student details. Please try again.');
     } finally {
