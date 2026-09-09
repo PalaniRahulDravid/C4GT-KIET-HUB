@@ -151,7 +151,6 @@ export default function CompleteProfile() {
         memberType,
       });
 
-      // Successful persistence directly to MongoDB Atlas
       const targetPath = getDashboardPath(updatedUser?.role || user?.role);
       navigate(targetPath, { replace: true });
     } catch (err) {
