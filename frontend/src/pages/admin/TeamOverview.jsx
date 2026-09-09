@@ -489,7 +489,9 @@ export default function TeamOverview() {
                   </div>
 
                   {/* Team Title & Track */}
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">Team {teamNum}</h3>
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                    {hasLead ? `Team ${teamNum} - ${lead.name}` : `Team ${teamNum}`}
+                  </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">{track}</p>
 
                   {/* Middle Lead Box */}

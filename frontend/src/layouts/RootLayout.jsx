@@ -2,16 +2,22 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, Link, useLocation, Navigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { useAuth, getRoleName, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
+import ProfileDetailsModal from '../components/ProfileDetailsModal';
 
 export default function RootLayout() {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isFullBleedPage = location.pathname === '/' || location.pathname === '/home' || location.pathname === '/login';
+  const isFullBleedPage =
+    location.pathname === '/' ||
+    location.pathname === '/home' ||
+    location.pathname === '/login' ||
+    location.pathname.startsWith('/student');
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -161,13 +167,24 @@ export default function RootLayout() {
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1.5 z-50 animate-in fade-in slide-in-from-top-1">
-                    {/* User Identity Header */}
+                  <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 z-50 animate-in fade-in slide-in-from-top-1">
+                    {/* User Identity Header: Click user's name to open Profile Details */}
                     <div className="px-4 py-2.5 border-b border-gray-100">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {user?.name || 'Account'}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          setShowProfileModal(true);
+                        }}
+                        className="w-full text-left group cursor-pointer"
+                        title="Click to view & edit Profile Details"
+                      >
+                        <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 truncate flex items-center justify-between">
+                          <span>{user?.name || 'Account'}</span>
+                          <span className="text-[10px] text-blue-600 font-semibold underline">Profile Details</span>
+                        </p>
+                        <p className="text-xs text-gray-500 truncate mt-0.5">{user?.email}</p>
+                      </button>
                       <div className="mt-1.5">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${getRoleBadgeStyle(
@@ -208,29 +225,17 @@ export default function RootLayout() {
                       )}
 
                       {(user?.role === 'user' || user?.role === 'student' || !user?.role) && (
-                        <>
-                          <Link
-                            to="/student"
-                            onClick={() => setDropdownOpen(false)}
-                            className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
-                          >
-                            <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                            </svg>
-                            Student Dashboard
-                          </Link>
-                          <Link
-                            to="/complete-profile"
-                            onClick={() => setDropdownOpen(false)}
-                            className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                          >
-                            <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Update Profile
-                          </Link>
-                        </>
+                        <Link
+                          to="/student"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                        >
+                          <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                          </svg>
+                          Student Dashboard
+                        </Link>
                       )}
                     </div>
 
@@ -328,6 +333,12 @@ export default function RootLayout() {
           C4GT KIET HUB Learning & Performance Management System.
         </div>
       </footer>
+
+      {/* Global Profile Details Modal - Opened by clicking user name in top right dropdown */}
+      <ProfileDetailsModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+      />
     </div>
   );
 }

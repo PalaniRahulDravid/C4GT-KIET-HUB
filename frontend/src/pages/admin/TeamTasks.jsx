@@ -23,17 +23,29 @@ export default function TeamTasks() {
   const [editingTask, setEditingTask] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
-  const cohortList = [
-    { num: 1, label: 'T1 ML', full: 'Team 1 - Machine Learning & AI Track' },
-    { num: 2, label: 'T2 DSA', full: 'Team 2 - DSA & Problem Solving Track' },
-    { num: 3, label: 'T3 Web', full: 'Team 3 - Full Stack Web Development Track' },
-    { num: 4, label: 'T4 Web3', full: 'Team 4 - Web3 & Smart Contracts Track' },
-    { num: 5, label: 'T5 Cloud', full: 'Team 5 - Cloud & DevOps Automation Track' },
-    { num: 6, label: 'T6 OSS', full: 'Team 6 - Open Source Contributions Track' },
-    { num: 7, label: 'T7 Mobile', full: 'Team 7 - Mobile Application Development Track' },
-    { num: 8, label: 'T8 Cyber', full: 'Team 8 - Cybersecurity & Network Defense Track' },
-    { num: 9, label: 'T9 Data', full: 'Team 9 - Data Engineering & Analytics Track' },
+  const [teamLeadsMap, setTeamLeadsMap] = useState({});
+
+  const cohortListBase = [
+    { num: 1, baseLabel: 'Team 1', full: 'Team 1 - Machine Learning & AI Track' },
+    { num: 2, baseLabel: 'Team 2', full: 'Team 2 - DSA & Problem Solving Track' },
+    { num: 3, baseLabel: 'Team 3', full: 'Team 3 - Full Stack Web Development Track' },
+    { num: 4, baseLabel: 'Team 4', full: 'Team 4 - Web3 & Smart Contracts Track' },
+    { num: 5, baseLabel: 'Team 5', full: 'Team 5 - Cloud & DevOps Automation Track' },
+    { num: 6, baseLabel: 'Team 6', full: 'Team 6 - Open Source Contributions Track' },
+    { num: 7, baseLabel: 'Team 7', full: 'Team 7 - Mobile Application Development Track' },
+    { num: 8, baseLabel: 'Team 8', full: 'Team 8 - Cybersecurity & Network Defense Track' },
+    { num: 9, baseLabel: 'Team 9', full: 'Team 9 - Data Engineering & Analytics Track' },
   ];
+
+  const cohortList = useMemo(() => {
+    return cohortListBase.map((c) => {
+      const leadName = teamLeadsMap[c.num];
+      return {
+        ...c,
+        label: leadName ? `${c.baseLabel} - ${leadName}` : c.baseLabel,
+      };
+    });
+  }, [teamLeadsMap]);
 
   const defaultDeliverables = [
     'Source Code Repo',
@@ -56,6 +68,7 @@ export default function TeamTasks() {
   };
 
   const [form, setForm] = useState(initialForm);
+  const [teamSelectionMode, setTeamSelectionMode] = useState('all'); // 'all' | 'individual'
   const [customDeliverableInput, setCustomDeliverableInput] = useState('');
   const [showAddDeliverable, setShowAddDeliverable] = useState(false);
 
@@ -101,13 +114,38 @@ export default function TeamTasks() {
     }
   };
 
+  const fetchTeamsData = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/teams`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.teams)) {
+          const map = {};
+          data.teams.forEach((t) => {
+            const leadName = t.teamLeadId && typeof t.teamLeadId === 'object' ? t.teamLeadId.name : null;
+            if (t.teamNumber) {
+              map[t.teamNumber] = leadName;
+            }
+          });
+          setTeamLeadsMap(map);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch teams:', err);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
+    fetchTeamsData();
   }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchTasks();
+    await Promise.all([fetchTasks(), fetchTeamsData()]);
     setTimeout(() => {
       setIsRefreshing(false);
     }, 600);
@@ -124,15 +162,18 @@ export default function TeamTasks() {
     });
   };
 
-  // Toggle all 9 teams
-  const handleToggleAllTeams = () => {
-    setForm((prev) => {
-      const allSelected = prev.assignedTeams.length === 9;
-      return {
-        ...prev,
-        assignedTeams: allSelected ? [] : [1, 2, 3, 4, 5, 6, 7, 8, 9],
-      };
-    });
+  // Select all teams mode handler
+  const handleSelectAllTeamsMode = () => {
+    setTeamSelectionMode('all');
+    setForm((prev) => ({
+      ...prev,
+      assignedTeams: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    }));
+  };
+
+  // Select individual teams mode handler
+  const handleSelectIndividualTeamsMode = () => {
+    setTeamSelectionMode('individual');
   };
 
   // Toggle deliverable checkbox
@@ -596,7 +637,7 @@ export default function TeamTasks() {
 
                 {/* Assigned Cohort Teams (Col 8) */}
                 <div className="md:col-span-8">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-semibold text-slate-800">
                       Assigned Cohort Teams
                     </label>
@@ -607,47 +648,102 @@ export default function TeamTasks() {
                     </span>
                   </div>
 
-                  {/* Checkbox selection pills */}
-                  <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl">
-                    <label
-                      onClick={handleToggleAllTeams}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer shadow-xs transition select-none ${
-                        form.assignedTeams.length === 9
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-white border border-slate-300 text-slate-700'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.assignedTeams.length === 9}
-                        onChange={handleToggleAllTeams}
-                        className="rounded text-purple-600 focus:ring-0 w-3 h-3 accent-purple-800"
-                      />
-                      <span>All Teams (1-9)</span>
-                    </label>
+                  {/* Mode Selector - 2 Primary Options */}
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100/90 border border-slate-200/80 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllTeamsMode}
+                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          teamSelectionMode === 'all'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                        }`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 0a6 6 0 0 0-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span>Select All Teams</span>
+                      </button>
 
-                    {cohortList.map((cohort) => {
-                      const isChecked = form.assignedTeams.includes(cohort.num);
-                      return (
-                        <label
-                          key={cohort.num}
-                          onClick={() => handleToggleTeam(cohort.num)}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer select-none ${
-                            isChecked
-                              ? 'bg-purple-50 text-purple-800 border border-purple-300'
-                              : 'bg-white border border-slate-200 text-slate-600'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handleToggleTeam(cohort.num)}
-                            className="w-3 h-3 accent-purple-600 rounded"
-                          />
-                          <span>{cohort.label}</span>
-                        </label>
-                      );
-                    })}
+                      <button
+                        type="button"
+                        onClick={handleSelectIndividualTeamsMode}
+                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          teamSelectionMode === 'individual'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                        }`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.75 6.75h.007v.008H3.75V6.75Zm0 5.25h.007v.008H3.75V12Zm0 5.25h.007v.008H3.75v-.008Z" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span>Select Individual Teams</span>
+                      </button>
+                    </div>
+
+                    {/* All Teams Active Banner */}
+                    {teamSelectionMode === 'all' && (
+                      <div className="flex items-center justify-between px-3 py-2 bg-purple-50/80 border border-purple-200/80 rounded-xl text-[11px] text-purple-900 font-medium">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-purple-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <span>All 9 cohort teams (Team 1 through Team 9) are assigned to this task.</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Individual Teams selection panel - Displayed when 'Select Individual Teams' is clicked */}
+                    {teamSelectionMode === 'individual' && (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 animate-in fade-in duration-200">
+                        <div className="flex items-center justify-between px-0.5 text-[11px] font-medium text-slate-500">
+                          <span>Select specific teams to assign:</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setForm((prev) => ({ ...prev, assignedTeams: [1, 2, 3, 4, 5, 6, 7, 8, 9] }))}
+                              className="text-purple-600 hover:text-purple-800 font-semibold cursor-pointer"
+                            >
+                              Select All
+                            </button>
+                            <span className="text-slate-300">•</span>
+                            <button
+                              type="button"
+                              onClick={() => setForm((prev) => ({ ...prev, assignedTeams: [] }))}
+                              className="text-slate-500 hover:text-slate-700 font-semibold cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                          {cohortList.map((cohort) => {
+                            const isChecked = form.assignedTeams.includes(cohort.num);
+                            return (
+                              <label
+                                key={cohort.num}
+                                onClick={() => handleToggleTeam(cohort.num)}
+                                className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer select-none border ${
+                                  isChecked
+                                    ? 'bg-purple-50 text-purple-800 border-purple-300 shadow-2xs'
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleToggleTeam(cohort.num)}
+                                  className="w-3.5 h-3.5 accent-purple-600 rounded"
+                                />
+                                <span>{cohort.baseLabel}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
