@@ -197,8 +197,8 @@ export default function Batches() {
   }, [teamId, selectedBatch, teams]);
 
   // Helper to fetch members of a team safely (4 Junior Devs, 4 Senior Devs, 1 Team Lead)
-  const getTeamMembers = (teamObjId, teamNum) => {
-    return [
+  const getTeamMembers = (teamObj) => {
+    const baseMembers = [
       { id: 'm-lead', name: 'Harsha Vardhan', email: 'harsha.v@kiet.edu', role: 'team_lead', roleTitle: 'Team Lead (Senior Dev)', pct: '96%', avatar: '' },
       { id: 'm-sr-1', name: 'Ishita Patel', email: 'ishita.patel@kiet.edu', role: 'senior_developer', roleTitle: 'Senior Developer', pct: '91%', avatar: '' },
       { id: 'm-sr-2', name: 'Kabir Singh', email: 'kabir.singh@kiet.edu', role: 'senior_developer', roleTitle: 'Senior Developer', pct: '87%', avatar: '' },
@@ -209,6 +209,42 @@ export default function Batches() {
       { id: 'm-jr-3', name: 'Rohan Verma', email: 'rohan.verma@kiet.edu', role: 'junior_developer', roleTitle: 'Junior Developer', pct: '84%', avatar: '' },
       { id: 'm-jr-4', name: 'Priya Joshi', email: 'priya.joshi@kiet.edu', role: 'junior_developer', roleTitle: 'Junior Developer', pct: '80%', avatar: '' },
     ];
+
+    if (!teamObj) return baseMembers;
+
+    if (teamObj.teamLeadId && typeof teamObj.teamLeadId === 'object' && teamObj.teamLeadId.name) {
+      baseMembers[0] = {
+        id: teamObj.teamLeadId._id || 'm-lead',
+        name: teamObj.teamLeadId.name,
+        email: teamObj.teamLeadId.email || 'lead@kiet.edu',
+        role: 'team_lead',
+        roleTitle: 'Team Lead (Senior Dev)',
+        pct: '96%',
+        avatar: teamObj.teamLeadId.avatar || '',
+      };
+    }
+
+    if (Array.isArray(teamObj.members) && teamObj.members.length > 0) {
+      teamObj.members.forEach((m, idx) => {
+        if (typeof m === 'object' && m.name) {
+          const exists = baseMembers.some((bm) => bm.email === m.email || bm.id === m._id);
+          if (!exists) {
+            const isSenior = m.year === 4 || m.memberType === 'senior_developer';
+            baseMembers.push({
+              id: m._id || `db-mem-${idx}`,
+              name: m.name,
+              email: m.email,
+              role: isSenior ? 'senior_developer' : 'junior_developer',
+              roleTitle: isSenior ? 'Senior Developer' : 'Junior Developer',
+              pct: '85%',
+              avatar: m.avatar || '',
+            });
+          }
+        }
+      });
+    }
+
+    return baseMembers;
   };
 
   const handleAssignLead = async (targetTeamId, newLeadUserId) => {
@@ -247,7 +283,7 @@ export default function Batches() {
 
   // SAFELY GUARDED Current Team details data
   const currentTeamNum = selectedTeam?.teamNumber || 1;
-  const currentTeamMembers = getTeamMembers(selectedTeam?._id, currentTeamNum) || [];
+  const currentTeamMembers = getTeamMembers(selectedTeam) || [];
   const team1JuniorDevs = (currentTeamMembers || []).filter((m) => m.role === 'junior_developer');
   const team1SeniorDevs = (currentTeamMembers || [])
     .filter((m) => m.role === 'senior_developer' || m.role === 'team_lead')
