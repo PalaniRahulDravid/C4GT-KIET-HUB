@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { useAuth, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
+import C4GTLogo from '../components/C4GTLogo';
 
 export default function Login() {
   const { user, isAuthenticated, loginWithGoogle, loading } = useAuth();
@@ -120,14 +121,15 @@ export default function Login() {
 
         {/* Center Login Box */}
         <div className="w-full max-w-[400px] mx-auto my-auto py-6 sm:py-8 flex-shrink-0">
-          <div className="mb-6 sm:mb-8 text-center">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-sm">
-              <span className="material-symbols-outlined text-indigo-600 text-[24px] sm:text-[26px]">hub</span>
+          <div className="mb-6 sm:mb-8 text-center flex flex-col items-center">
+            {/* Official Logo above Authentication Card */}
+            <div className="mb-3.5 p-2 rounded-2xl bg-white shadow-xs border border-slate-200 inline-block">
+              <C4GTLogo showText={false} imgClassName="h-16 sm:h-20" />
             </div>
-            <h2 className="text-2xl sm:text-[28px] lg:text-3xl font-bold tracking-tight text-slate-900">
-              Welcome to C4GT HUB
+            <h2 className="text-2xl sm:text-[28px] lg:text-3xl font-bold tracking-tight text-slate-900 font-serif">
+              C4GT KIET HUB
             </h2>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1 sm:mt-1.5">
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
               Sign in to continue to your engineering dashboard
             </p>
           </div>
@@ -267,17 +269,9 @@ export default function Login() {
 
         {/* Top Left: Logo & Cohort Indicator */}
         <div className="relative z-10 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-400/30 flex items-center justify-center shadow-lg shadow-black/50">
-              <span className="material-symbols-outlined text-indigo-400 text-[20px] sm:text-[22px]">hub</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-base sm:text-lg font-bold tracking-tight text-white">C4GT KIET HUB</span>
-              <span className="px-2 py-0.5 text-[10px] font-mono tracking-wider text-indigo-300 bg-indigo-950/70 border border-indigo-500/30 rounded uppercase font-semibold">
-                HUB
-              </span>
-            </div>
-          </div>
+          <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+            <C4GTLogo className="h-10" variant="dark" />
+          </Link>
           {/* Live telemetry pill */}
           <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-[#070D1A]/80 border border-[#1B2A47]/80 text-[11px] sm:text-xs text-slate-400 font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>

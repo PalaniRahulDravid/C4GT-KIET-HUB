@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../..
 import { Button } from '../../components/ui/button';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
+import C4GTLogo from '../../components/C4GTLogo';
 import {
   Calendar,
   BookOpen,
@@ -369,22 +370,11 @@ export default function StudentDashboard() {
         <div className="p-6 overflow-y-auto">
           {/* C4GT Brand Logo */}
           <div className="flex items-center justify-between mb-8">
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] flex items-center justify-center shadow-lg shadow-indigo-950/50 border border-white/10 group-hover:scale-105 transition-transform">
-                <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="16 18 22 12 16 6"></polyline>
-                  <polyline points="8 6 2 12 8 18"></polyline>
-                </svg>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-[17px] tracking-tight text-white group-hover:text-indigo-300 transition-colors">C4GT Hub</span>
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-wider rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    STUDENT
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 font-medium">KIET Group of Institutions</p>
-              </div>
+            <Link to="/" className="flex items-center gap-2 group">
+              <C4GTLogo className="h-10" variant="dark" />
+              <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-wider rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                STUDENT
+              </span>
             </Link>
 
             {/* Mobile close button */}
