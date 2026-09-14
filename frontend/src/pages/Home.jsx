@@ -111,18 +111,7 @@ export default function Home() {
 
           <div className="relative max-w-[1340px] mx-auto px-6 sm:px-10 flex flex-col items-center text-center">
             
-            {/* Tagline Pill */}
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 border border-black/10 shadow-2xs mb-8"
-            >
-              <span className="w-2 h-2 rounded-full bg-[#1C1B1A]" />
-              <span className="text-xs font-mono font-medium uppercase tracking-wider text-[#4A4843]">
-                Centralized LMS Platform for Junior Devs & Interns
-              </span>
-            </motion.div>
+
 
             {/* Editorial Heading */}
             <motion.h1
