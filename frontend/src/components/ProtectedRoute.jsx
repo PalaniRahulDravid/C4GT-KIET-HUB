@@ -2,6 +2,14 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
 
+const normalizeRole = (role) => {
+  if (!role) return 'student';
+  const r = String(role).toLowerCase().trim();
+  if (r === 'admin') return 'admin';
+  if (r === 'teamlead' || r === 'team_lead') return 'teamlead';
+  return 'student';
+};
+
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, isAuthenticated, loading } = useAuth();
   const location = useLocation();
@@ -27,16 +35,13 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/complete-profile" replace />;
   }
 
-  // Normalize current role for comparison (student -> user, team_lead -> teamlead)
-  const normalizedUserRole = user.role === 'student' ? 'user' : user.role === 'team_lead' ? 'teamlead' : user.role;
+  const userRole = normalizeRole(user.role);
 
   if (allowedRoles && allowedRoles.length > 0) {
-    const normalizedAllowedRoles = allowedRoles.map((r) =>
-      r === 'student' ? 'user' : r === 'team_lead' ? 'teamlead' : r
-    );
+    const normalizedAllowedRoles = allowedRoles.map(normalizeRole);
 
-    if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
-      // Auto-redirect to the user's correct dashboard (handles DB role changes)
+    if (!normalizedAllowedRoles.includes(userRole)) {
+      // Auto-redirect to the user's correct dashboard (handles DB role changes & manual URL entry)
       const dashboardPath = getDashboardPath(user.role);
       return <Navigate to={dashboardPath} replace />;
     }
@@ -49,7 +54,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
  * PublicRoute (Guest-Only Route):
  * If a user is already logged in, they CANNOT access the auth/login page.
  * If their student profile is incomplete, redirect immediately to /complete-profile.
- * Otherwise, redirect to their assigned dashboard.
+ * Otherwise, redirect strictly to their authorized dashboard.
  */
 export function PublicRoute({ children }) {
   const { user, isAuthenticated, loading } = useAuth();
@@ -70,8 +75,23 @@ export function PublicRoute({ children }) {
     if (!isStudentProfileComplete(user)) {
       return <Navigate to="/complete-profile" replace />;
     }
-    const dest = location.state?.from?.pathname || getDashboardPath(user.role);
-    return <Navigate to={dest} replace />;
+
+    const authorizedDashboard = getDashboardPath(user.role);
+    let targetPath = authorizedDashboard;
+
+    if (location.state?.from?.pathname) {
+      const fromPath = location.state.from.pathname;
+      const userRole = normalizeRole(user.role);
+      if (
+        (userRole === 'admin' && fromPath.startsWith('/admin')) ||
+        (userRole === 'teamlead' && (fromPath.startsWith('/teamlead') || fromPath.startsWith('/team-lead'))) ||
+        (userRole === 'student' && fromPath.startsWith('/student'))
+      ) {
+        targetPath = fromPath;
+      }
+    }
+
+    return <Navigate to={targetPath} replace />;
   }
 
   return children;

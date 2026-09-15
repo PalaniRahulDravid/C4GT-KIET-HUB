@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
 import C4GTLogo from '../../components/C4GTLogo';
@@ -26,10 +24,14 @@ import {
   Video,
   LogOut,
   Home,
-  ShieldCheck,
   Menu,
   X,
   User,
+  ArrowRight,
+  Bell,
+  Activity,
+  PlayCircle,
+  Eye,
 } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -42,15 +44,57 @@ export default function StudentDashboard() {
   // Profile Details Modal State
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // Active Sidebar Navigation State: ONLY Dashboard, My Tasks, Resources, Progress
+  // Active Sidebar Navigation State: ONLY Overview, My Tasks, Resources, Progress
   const [activeNav, setActiveNav] = useState('dashboard'); // 'dashboard' | 'my-tasks' | 'resources' | 'progress'
 
   // Student Tasks & Resources State
   const [tasks, setTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [tasksError, setTasksError] = useState(null);
-  const [updatingTaskId, setUpdatingTaskId] = useState(null);
   const [expandedResources, setExpandedResources] = useState({});
+
+  // MY TASKS -> Selected Task Overview Modal State
+  const [selectedOverviewTask, setSelectedOverviewTask] = useState(null);
+
+  // RESOURCES -> Selected Task Filter State
+  const [selectedResourceTaskId, setSelectedResourceTaskId] = useState('all');
+
+  // AUTOMATIC TASK COMPLETION -> Resource Progress State (Persisted from MongoDB)
+  const [resourceProgressMap, setResourceProgressMap] = useState({});
+
+  // BELL NOTIFICATION POPOVER STATE
+  const [notificationsPopoverOpen, setNotificationsPopoverOpen] = useState(false);
+  const [notificationsList, setNotificationsList] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const notificationsRef = useRef(null);
+
+  // Active Media Viewer Modal State (Video / Document)
+  const [activeMediaResource, setActiveMediaResource] = useState(null);
+  const [videoWatchedSecs, setVideoWatchedSecs] = useState(0);
+  const [videoDurSecs, setVideoDurSecs] = useState(120);
+  const videoRef = useRef(null);
+  const lastHtml5TimeRef = useRef(0);
+  const ytPlayerRef = useRef(null);
+
+  // YouTube Helper & Time Format Utilities
+  const isYouTubeUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    return /youtube\.com|youtu\.be/.test(url);
+  };
+
+  const getYouTubeVideoId = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return match && match[2].length === 11 ? match[2] : null;
+  };
+
+  const formatTimeSecs = (secs) => {
+    const total = Math.max(0, Math.floor(Number(secs) || 0));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
   // Real 15-Minute Activity Streak State
   const [streakData, setStreakData] = useState({
@@ -77,7 +121,7 @@ export default function StudentDashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.success && Array.isArray(data.tasks)) {
+        if (data && data.success && Array.isArray(data.tasks)) {
           setTasks(data.tasks);
         } else {
           setTasks([]);
@@ -88,6 +132,7 @@ export default function StudentDashboard() {
     } catch (err) {
       console.error('Failed to load student tasks:', err);
       setTasksError('Failed to connect to task service');
+      setTasks([]);
     } finally {
       setLoadingTasks(false);
     }
@@ -101,10 +146,10 @@ export default function StudentDashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.success) {
+        if (data && data.success) {
           setStreakData({
-            currentStreak: data.currentStreak || 0,
-            todayActiveSeconds: data.todayActiveSeconds || 0,
+            currentStreak: Number(data.currentStreak) || 0,
+            todayActiveSeconds: Number(data.todayActiveSeconds) || 0,
             todayStreakCompleted: Boolean(data.todayStreakCompleted),
             weeklyActivity: Array.isArray(data.weeklyActivity) ? data.weeklyActivity : [],
           });
@@ -115,12 +160,118 @@ export default function StudentDashboard() {
     }
   };
 
+  const fetchResourceProgress = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/resource-progress`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.progress)) {
+          const pMap = {};
+          data.progress.forEach((p) => {
+            const key = `${p.taskId}_${p.resourceId}`;
+            pMap[key] = p;
+          });
+          setResourceProgressMap(pMap);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load resource progress:', err);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/notifications`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.notifications)) {
+          setNotificationsList(data.notifications);
+          setUnreadNotificationsCount(Number(data.unreadCount) || 0);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+    }
+  };
+
+  const handleMarkNotificationRead = async (notification) => {
+    if (!notification || !notification._id) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/notifications/${notification._id}/read`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotificationsList((prev) =>
+          prev.map((n) => (n._id === notification._id ? { ...n, isRead: true } : n))
+        );
+        if (data && data.unreadCount !== undefined) {
+          setUnreadNotificationsCount(data.unreadCount);
+        } else {
+          setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+
+    // Close popover and navigate/open overview modal for target task if available
+    setNotificationsPopoverOpen(false);
+    if (notification.taskId) {
+      const matchedTask = safeTasks.find(
+        (t) => t && (t._id === notification.taskId || String(t._id) === String(notification.taskId))
+      );
+      if (matchedTask) {
+        setSelectedOverviewTask(matchedTask);
+      }
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/notifications/read-all`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
+        setUnreadNotificationsCount(0);
+      }
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
+  // Close notifications popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setNotificationsPopoverOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   useEffect(() => {
     fetchStudentTasks();
     fetchStudentStreak();
+    fetchResourceProgress();
+    fetchNotifications();
   }, [user]);
 
-  // Real 15-Minute Session Heartbeat Tracking
+  // Real Session Heartbeat Tracking
   useEffect(() => {
     if (!user) return;
 
@@ -138,12 +289,12 @@ export default function StudentDashboard() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.success) {
+          if (data && data.success) {
             setStreakData((prev) => {
-              const newTodaySecs = data.activeSeconds;
+              const newTodaySecs = Number(data.activeSeconds) || 0;
               const newIsCompleted = Boolean(data.isStreakCompleted);
               const updatedWeekly = (prev.weeklyActivity || []).map((day) => {
-                if (day.isToday) {
+                if (day && day.isToday) {
                   return {
                     ...day,
                     activeSeconds: newTodaySecs,
@@ -158,7 +309,7 @@ export default function StudentDashboard() {
                 ...prev,
                 todayActiveSeconds: newTodaySecs,
                 todayStreakCompleted: newIsCompleted,
-                currentStreak: newlyCompleted ? prev.currentStreak + 1 : prev.currentStreak,
+                currentStreak: newlyCompleted ? (prev.currentStreak || 0) + 1 : (prev.currentStreak || 0),
                 weeklyActivity: updatedWeekly,
               };
             });
@@ -178,153 +329,419 @@ export default function StudentDashboard() {
     };
   }, [user, token]);
 
-  // Mark task as completed handler
-  const handleMarkCompleted = async (taskId) => {
+  // Record resource progress & trigger automatic task status updates
+  const recordResourceProgress = async ({
+    taskId,
+    resourceId,
+    resourceType,
+    watchedSeconds = 0,
+    durationSeconds = 120,
+    totalTaskResourcesCount = 4,
+  }) => {
+    if (!taskId || !resourceId) return;
     try {
-      setUpdatingTaskId(taskId);
-      const res = await fetch(`${API_BASE_URL}/student/tasks/${taskId}/status`, {
-        method: 'PATCH',
+      const res = await fetch(`${API_BASE_URL}/student/resource-progress`, {
+        method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ status: 'completed' }),
+        body: JSON.stringify({
+          taskId,
+          resourceId,
+          resourceType,
+          watchedSeconds,
+          durationSeconds,
+          totalTaskResourcesCount,
+        }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t._id === taskId
-              ? { ...t, status: 'completed', completedAt: new Date().toISOString() }
-              : t
-          )
-        );
-      } else {
-        alert(data.message || 'Failed to update task status.');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.progress) {
+          const key = `${taskId}_${resourceId}`;
+          setResourceProgressMap((prev) => ({
+            ...prev,
+            [key]: data.progress,
+          }));
+
+          // If task status was automatically updated, update local tasks state
+          if (data.taskStatus) {
+            setTasks((prev) =>
+              prev.map((t) =>
+                t && (t._id === taskId || String(t._id) === String(taskId))
+                  ? {
+                      ...t,
+                      status: data.taskStatus,
+                      completedAt: data.isTaskCompleted ? new Date().toISOString() : t.completedAt,
+                    }
+                  : t
+              )
+            );
+          }
+        }
       }
     } catch (err) {
-      console.error('Update status error:', err);
-      alert('Network error while updating task status.');
-    } finally {
-      setUpdatingTaskId(null);
+      console.error('Resource progress error:', err);
     }
+  };
+
+  // Dynamically load YouTube IFrame API script
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.YT) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      if (firstScriptTag && firstScriptTag.parentNode) {
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      } else {
+        document.head.appendChild(tag);
+      }
+    }
+  }, []);
+
+  // YouTube IFrame Player Lifecycle Management
+  useEffect(() => {
+    if (!activeMediaResource || activeMediaResource.type !== 'video') return;
+    const resUrl = activeMediaResource.url || activeMediaResource.name || '';
+    const yId = getYouTubeVideoId(resUrl);
+
+    if (!yId) return;
+
+    let player = null;
+    let interval = null;
+    let lastTime = 0;
+
+    const initYTPlayer = () => {
+      const container = document.getElementById('yt-player-iframe');
+      if (!container || !window.YT || !window.YT.Player) return;
+
+      try {
+        player = new window.YT.Player('yt-player-iframe', {
+          videoId: yId,
+          playerVars: {
+            autoplay: 1,
+            controls: 1,
+            rel: 0,
+          },
+          events: {
+            onReady: (event) => {
+              const dur = Math.floor(event.target.getDuration() || 0);
+              if (dur > 0) setVideoDurSecs(dur);
+            },
+            onStateChange: (event) => {
+              // YT.PlayerState.PLAYING === 1
+              if (event.data === 1) {
+                lastTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+                if (interval) clearInterval(interval);
+                interval = setInterval(() => {
+                  if (!player || typeof player.getCurrentTime !== 'function') return;
+                  const curr = player.getCurrentTime();
+                  const delta = curr - lastTime;
+                  // Count ONLY actual linear playback time (delta between 0 and 2.5s)
+                  if (delta > 0 && delta <= 2.5) {
+                    setVideoWatchedSecs((prev) => {
+                      const next = prev + delta;
+                      const dur = Math.floor(player.getDuration ? player.getDuration() : videoDurSecs || 180);
+                      if (Math.floor(next) % 5 === 0 || next >= 0.5 * dur) {
+                        recordResourceProgress({
+                          taskId: activeMediaResource.task._id,
+                          resourceId: activeMediaResource.resourceId,
+                          resourceType: 'video',
+                          watchedSeconds: Math.floor(next),
+                          durationSeconds: dur,
+                          totalTaskResourcesCount: activeMediaResource.totalTaskResourcesCount,
+                        });
+                      }
+                      return next;
+                    });
+                  }
+                  lastTime = curr;
+                }, 1000);
+              } else {
+                // Paused, Ended, Buffering
+                if (interval) clearInterval(interval);
+              }
+            },
+          },
+        });
+        ytPlayerRef.current = player;
+      } catch (err) {
+        console.error('Failed to initialize YT Player:', err);
+      }
+    };
+
+    const timerId = setTimeout(initYTPlayer, 150);
+
+    return () => {
+      clearTimeout(timerId);
+      if (interval) clearInterval(interval);
+      if (player && typeof player.destroy === 'function') {
+        player.destroy();
+      }
+    };
+  }, [activeMediaResource]);
+
+  // Open Media Resource Viewer Modal
+  const openMediaResource = (task, resourceItem, index) => {
+    if (!task || !resourceItem) return;
+    let nameStr = typeof resourceItem === 'string' ? resourceItem : resourceItem.name || resourceItem.title || 'Deliverable Spec';
+    let resUrl = typeof resourceItem === 'object' && resourceItem.url ? resourceItem.url : '';
+    let lower = (nameStr + ' ' + resUrl).toLowerCase();
+    let type = lower.includes('demo') || lower.includes('video') || lower.includes('youtube') || lower.includes('youtu.be') ? 'video' : lower.includes('pdf') ? 'pdf' : lower.includes('code') || lower.includes('repo') ? 'link' : 'note';
+
+    const rId = `res-${index}`;
+    const key = `${task._id}_${rId}`;
+    const existing = resourceProgressMap[key];
+
+    setActiveMediaResource({
+      task,
+      resourceId: rId,
+      name: nameStr,
+      url: resUrl,
+      type,
+      totalTaskResourcesCount: Array.isArray(task.deliverables) && task.deliverables.length > 0 ? task.deliverables.length : 4,
+    });
+
+    if (type === 'video') {
+      const initWatched = existing ? existing.watchedSeconds || 0 : 0;
+      const initDur = existing ? existing.durationSeconds || 180 : 180;
+      setVideoWatchedSecs(initWatched);
+      setVideoDurSecs(initDur);
+      lastHtml5TimeRef.current = 0;
+    } else {
+      // Document/Link: auto mark as viewed/completed immediately upon opening
+      recordResourceProgress({
+        taskId: task._id,
+        resourceId: rId,
+        resourceType: type,
+        watchedSeconds: 0,
+        durationSeconds: 0,
+        totalTaskResourcesCount: Array.isArray(task.deliverables) && task.deliverables.length > 0 ? task.deliverables.length : 4,
+      });
+    }
+  };
+
+  // Close Media Resource Viewer Modal & Save Final Progress
+  const closeMediaResource = () => {
+    if (activeMediaResource && activeMediaResource.type === 'video') {
+      recordResourceProgress({
+        taskId: activeMediaResource.task._id,
+        resourceId: activeMediaResource.resourceId,
+        resourceType: 'video',
+        watchedSeconds: Math.floor(videoWatchedSecs),
+        durationSeconds: Math.floor(videoDurSecs),
+        totalTaskResourcesCount: activeMediaResource.totalTaskResourcesCount,
+      });
+    }
+    setActiveMediaResource(null);
+  };
+
+  // Handle HTML5 Video playback progress tracking (Actual linear time only, no seeking forward)
+  const handleHtml5TimeUpdate = (e) => {
+    if (!activeMediaResource || activeMediaResource.type !== 'video') return;
+    const vid = e.target;
+    if (!vid) return;
+
+    const current = vid.currentTime;
+    const duration = Math.floor(vid.duration || videoDurSecs);
+    const delta = current - lastHtml5TimeRef.current;
+
+    // Count ONLY actual playback time: not paused, not seeking, delta between 0 and 2.5s
+    if (!vid.paused && !vid.seeking && delta > 0 && delta <= 2.5) {
+      setVideoWatchedSecs((prev) => {
+        const next = prev + delta;
+        if (duration > 0) setVideoDurSecs(duration);
+        if (Math.floor(next) % 5 === 0 || next >= 0.5 * duration) {
+          recordResourceProgress({
+            taskId: activeMediaResource.task._id,
+            resourceId: activeMediaResource.resourceId,
+            resourceType: 'video',
+            watchedSeconds: Math.floor(next),
+            durationSeconds: duration,
+            totalTaskResourcesCount: activeMediaResource.totalTaskResourcesCount,
+          });
+        }
+        return next;
+      });
+    }
+    lastHtml5TimeRef.current = current;
   };
 
   // Toggle expanded resources for a task
   const toggleTaskResources = (taskId) => {
+    if (!taskId) return;
     setExpandedResources((prev) => ({
       ...prev,
       [taskId]: !prev[taskId],
     }));
   };
 
-  // Dynamic Task & Summary Calculations
-  const totalTasks = tasks.length;
-  const completedTasksCount = tasks.filter((t) => t.status === 'completed').length;
-  const pendingTasksCount = totalTasks - completedTasksCount;
+  const safeTasks = Array.isArray(tasks) ? tasks.filter(Boolean) : [];
 
-  const incompleteTasks = tasks
-    .filter((t) => t.status !== 'completed' && t.deadline)
-    .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  // Task & Statistics Calculations (Real Data)
+  const totalTasks = safeTasks.length;
+  const completedTasksCount = safeTasks.filter((t) => t.status === 'completed').length;
+  const inProgressTasksCount = safeTasks.filter(
+    (t) => t.status === 'in_progress' || (t.status !== 'completed' && t.status !== 'not_completed')
+  ).length;
 
-  let upcomingDeadlineText = 'No upcoming deadlines';
-  if (incompleteTasks.length > 0) {
+  // Due Soon: Pending tasks with deadline within the next 5 days
+  const dueSoonTasksCount = safeTasks.filter((t) => {
+    if (t.status === 'completed' || !t.deadline) return false;
     try {
-      const d = new Date(incompleteTasks[0].deadline);
-      if (!isNaN(d.getTime())) {
-        upcomingDeadlineText = d.toLocaleDateString('en-GB', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        });
-      }
-    } catch (e) {}
-  }
+      const diffMs = new Date(t.deadline).getTime() - new Date().getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      return diffDays >= -1 && diffDays <= 5;
+    } catch {
+      return false;
+    }
+  }).length;
 
-  // Dashboard Recent Tasks (STRICT LIMIT: MAXIMUM 5 RECENT TASKS)
-  const recentTasksLimit5 = [...tasks]
-    .sort((a, b) => new Date(b.createdAt || b.deadline) - new Date(a.createdAt || a.deadline))
-    .slice(0, 5);
+  // Overall Completion Percentage
+  const overallProgressPercentage = totalTasks > 0
+    ? Math.round((completedTasksCount / totalTasks) * 100)
+    : 0;
 
-  // Today's Tasks (STRICT LIMIT: MAXIMUM 5 TASKS RELEVANT TO TODAY)
-  const todaysTasks = [...tasks]
+  // Pending / Incomplete Tasks sorted by deadline
+  const incompleteTasks = safeTasks
     .filter((t) => t.status !== 'completed')
     .sort((a, b) => {
-      const today = new Date().setHours(0, 0, 0, 0);
       const dateA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
       const dateB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-      return Math.abs(dateA - today) - Math.abs(dateB - today);
-    })
-    .slice(0, 5);
+      return (isNaN(dateA) ? Infinity : dateA) - (isNaN(dateB) ? Infinity : dateB);
+    });
 
-  const formatDate = (dateStr) => {
+  // Prominent Priority / Continue Task (Nearest incomplete task or first task)
+  const priorityTask = incompleteTasks.length > 0 ? incompleteTasks[0] : (safeTasks[0] || null);
+
+  // Recent Tasks preview list (up to 4 tasks)
+  const myTasksPreviewList = safeTasks.slice(0, 4);
+
+  // Extract all deliverables across assigned tasks for Recent Resources Preview
+  const allResources = [];
+  safeTasks.forEach((task) => {
+    const list = Array.isArray(task.deliverables) && task.deliverables.length > 0
+      ? task.deliverables
+      : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'];
+
+    list.forEach((item, idx) => {
+      let itemName = 'Deliverable Spec';
+      if (typeof item === 'string') {
+        itemName = item;
+      } else if (item && typeof item === 'object') {
+        itemName = item.name || item.title || item.label || 'Deliverable Spec';
+      }
+      allResources.push({
+        name: String(itemName),
+        taskTitle: typeof task.title === 'string' ? task.title : 'Engineering Task',
+        taskId: task._id ? String(task._id) : 'task',
+        taskObj: task,
+        resourceIndex: idx,
+      });
+    });
+  });
+  const recentResourcesPreview = allResources.slice(0, 4);
+
+  // Dynamic Subject/Domain Task Progress Breakdown (Requirement 2)
+  const subjectMap = {};
+  safeTasks.forEach((t) => {
+    const domain = t.topic && typeof t.topic === 'string' && t.topic.trim() ? t.topic.trim() : 'Engineering Track';
+    if (!subjectMap[domain]) {
+      subjectMap[domain] = { total: 0, completed: 0, inProgress: 0, pending: 0 };
+    }
+    subjectMap[domain].total += 1;
+    if (t.status === 'completed') {
+      subjectMap[domain].completed += 1;
+    } else if (t.status === 'in_progress') {
+      subjectMap[domain].inProgress += 1;
+    } else {
+      subjectMap[domain].pending += 1;
+    }
+  });
+
+  const subjectList = Object.keys(subjectMap).map((subject) => {
+    const { total, completed, inProgress, pending } = subjectMap[subject];
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { subject, total, completed, inProgress, pending, percentage };
+  });
+
+  // Derived Recent Activity Log from real student data
+  const recentActivityLog = [];
+  safeTasks.forEach((t, idx) => {
+    const tId = t._id ? String(t._id) : `t-${idx}`;
+    const titleStr = typeof t.title === 'string' ? t.title : 'Task';
+    if (t.status === 'completed' && t.completedAt) {
+      recentActivityLog.push({
+        id: `act-${tId}`,
+        title: `Completed task: ${titleStr}`,
+        time: formatDate(t.completedAt),
+        type: 'completed',
+      });
+    } else {
+      recentActivityLog.push({
+        id: `act-assign-${tId}`,
+        title: `Assigned task: ${titleStr}`,
+        time: formatDate(t.createdAt || t.deadline),
+        type: 'assigned',
+      });
+    }
+  });
+  if (streakData && streakData.currentStreak > 0) {
+    recentActivityLog.unshift({
+      id: 'act-streak',
+      title: `Achieved ${streakData.currentStreak}-day activity streak milestone 🔥`,
+      time: 'Today',
+      type: 'streak',
+    });
+  }
+  const activityLogPreview = recentActivityLog.slice(0, 4);
+
+  function formatDate(dateStr) {
     if (!dateStr) return 'N/A';
     try {
       const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
+      if (isNaN(d.getTime())) return String(dateStr);
       return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     } catch {
-      return dateStr;
+      return String(dateStr);
     }
-  };
+  }
 
-  const getInitials = (name) => {
-    if (!name) return 'ST';
+  function getInitials(name) {
+    if (!name || typeof name !== 'string') return 'ST';
     const parts = name.trim().split(' ');
     if (parts.length >= 2) {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
     return name.slice(0, 2).toUpperCase();
-  };
+  }
 
   // Exact 4 Student Sidebar Items
   const sidebarNavItems = [
     {
       id: 'dashboard',
-      name: 'Dashboard',
-      description: 'Overview & streak tracker',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-          <rect x="3" y="3" width="7" height="7"></rect>
-          <rect x="14" y="3" width="7" height="7"></rect>
-          <rect x="14" y="14" width="7" height="7"></rect>
-          <rect x="3" y="14" width="7" height="7"></rect>
-        </svg>
-      ),
+      name: 'Overview',
+      description: 'Overview & learning workspace',
+      icon: <LayoutDashboard className="w-4.5 h-4.5" />,
     },
     {
       id: 'my-tasks',
       name: 'My Tasks',
       description: 'All assigned tasks & specs',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-          <path d="m9 14 2 2 4-4"></path>
-        </svg>
-      ),
+      icon: <CheckSquare className="w-4.5 h-4.5" />,
     },
     {
       id: 'resources',
       name: 'Resources',
       description: 'Deliverables & reference links',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-        </svg>
-      ),
+      icon: <FolderKanban className="w-4.5 h-4.5" />,
     },
     {
       id: 'progress',
       name: 'Progress',
       description: 'Status & completion tracking',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-          <polyline points="17 6 23 6 23 12"></polyline>
-        </svg>
-      ),
+      icon: <TrendingUp className="w-4.5 h-4.5" />,
     },
   ];
 
@@ -338,31 +755,223 @@ export default function StudentDashboard() {
         return { breadcrumb: 'Progress', title: 'Progress & Completion Tracking' };
       case 'dashboard':
       default:
-        return { breadcrumb: 'Dashboard', title: 'Student Dashboard' };
+        return { breadcrumb: 'Overview', title: 'Student Dashboard Overview' };
     }
   };
 
   const pageInfo = getPageInfo();
 
   return (
-    <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-[#F8FAFC] font-sans antialiased text-[#0F172A] select-none overflow-hidden">
+    <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-[#F7F5EE] font-sans antialiased text-[#1C1B1A] select-none overflow-hidden">
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs lg:hidden"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
 
-      {/* ==================== PROFILE DETAILS MODAL ==================== */}
+      {/* Profile Details Modal */}
       <ProfileDetailsModal
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
       />
 
-      {/* ==================== LEFT FIXED ADMIN-STYLE SIDEBAR (w-[290px]) ==================== */}
+      {/* ==================== TASK OVERVIEW MODAL (Requirement 1) ==================== */}
+      {selectedOverviewTask && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-[700px] w-full p-6 sm:p-8 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#E0DDD0] pb-4">
+              <div className="flex items-center gap-2.5">
+                <span className={`w-3 h-3 rounded-full ${selectedOverviewTask.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#66645E]">
+                  Task Overview Specs
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOverviewTask(null)}
+                className="p-1 rounded-lg text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
+                  {selectedOverviewTask.topic || 'Engineering Track'}
+                </span>
+                {selectedOverviewTask.priority && (
+                  <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-amber-50 text-amber-900 rounded-full border border-amber-200">
+                    {selectedOverviewTask.priority} Priority
+                  </span>
+                )}
+                <span className={`px-2.5 py-0.5 text-[10px] font-mono font-bold rounded-full border ${selectedOverviewTask.status === 'completed' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                  {selectedOverviewTask.status === 'completed' ? '✓ Completed' : 'Pending / In Progress'}
+                </span>
+              </div>
+              <h2 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">
+                {selectedOverviewTask.title}
+              </h2>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-mono font-bold uppercase text-[#66645E]">Task Description:</div>
+              <p className="text-sm text-[#66645E] leading-relaxed bg-[#F4F1E8]/60 p-4 rounded-xl border border-[#E0DDD0] whitespace-pre-wrap">
+                {selectedOverviewTask.description || 'No additional specification details provided.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+              <div className="p-3 bg-white rounded-xl border border-[#E0DDD0] space-y-1">
+                <div className="text-[#66645E]">Deadline Date:</div>
+                <div className="font-bold text-[#1C1B1A] flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-[#1C1B1A]" />
+                  {formatDate(selectedOverviewTask.deadline)}
+                </div>
+              </div>
+              <div className="p-3 bg-white rounded-xl border border-[#E0DDD0] space-y-1">
+                <div className="text-[#66645E]">Assigned By:</div>
+                <div className="font-bold text-[#1C1B1A]">
+                  {selectedOverviewTask.createdBy?.name || 'Admin / Team Lead'}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-mono font-bold uppercase text-[#66645E]">Assigned Deliverables / Requirements:</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
+                  ? selectedOverviewTask.deliverables
+                  : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation']
+                ).map((deliv, dIdx) => (
+                  <div key={dIdx} className="p-3 bg-white border border-[#E0DDD0] rounded-xl flex items-center gap-2 text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-medium text-[#1C1B1A]">{typeof deliv === 'string' ? deliv : deliv.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-[#E0DDD0]">
+              <button
+                type="button"
+                onClick={() => setSelectedOverviewTask(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-[#E0DDD0] text-[#1C1B1A] hover:bg-[#F8F6F0] cursor-pointer"
+              >
+                Close Overview
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedResourceTaskId(selectedOverviewTask._id);
+                  setSelectedOverviewTask(null);
+                  setActiveNav('resources');
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-[#1C1B1A] text-white hover:bg-black transition-colors shadow-2xs flex items-center gap-2 cursor-pointer"
+              >
+                <FolderKanban className="w-4 h-4" />
+                <span>View Task Resources ({Array.isArray(selectedOverviewTask.deliverables) ? selectedOverviewTask.deliverables.length : 4})</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== ACTIVE MEDIA RESOURCE VIEWER MODAL (Requirement 3) ==================== */}
+      {activeMediaResource && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-[760px] w-full p-6 sm:p-8 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-[#E0DDD0] pb-4">
+              <div className="flex items-center gap-2.5">
+                {activeMediaResource.type === 'video' ? (
+                  <Video className="w-5 h-5 text-indigo-600" />
+                ) : (
+                  <FileText className="w-5 h-5 text-emerald-600" />
+                )}
+                <div>
+                  <h3 className="font-bold text-sm text-[#1C1B1A]">{activeMediaResource.name}</h3>
+                  <p className="text-[11px] text-[#66645E]">Task: {activeMediaResource.task.title}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveMediaResource(null)}
+                className="p-1 rounded-lg text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {activeMediaResource.type === 'video' ? (
+              <div className="space-y-4">
+                <div className="relative aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center border border-[#E0DDD0]">
+                  <video
+                    ref={videoRef}
+                    controls
+                    onTimeUpdate={handleVideoTimeUpdate}
+                    className="w-full h-full object-contain"
+                    src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                  >
+                    Your browser does not support HTML5 video playback.
+                  </video>
+                </div>
+
+                <div className="bg-[#EEECDF]/80 border border-[#E0DDD0] p-4 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="font-bold text-[#1C1B1A]">Automatic Video Completion Requirement:</span>
+                    <span className="font-bold text-[#1C1B1A]">
+                      Watched: {Math.floor(videoWatchedSecs / 60)}m {videoWatchedSecs % 60}s / {Math.floor(videoDurSecs / 60)}m {videoDurSecs % 60}s
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 ${videoWatchedSecs >= 0.5 * videoDurSecs ? 'bg-emerald-600' : 'bg-amber-500'}`}
+                      style={{ width: `${Math.min(100, Math.round((videoWatchedSecs / (videoDurSecs || 1)) * 100))}%` }}
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-[#66645E]">
+                    {videoWatchedSecs >= 0.5 * videoDurSecs
+                      ? '✓ 50%+ Watch Goal Reached! This video resource is marked completed.'
+                      : `Must watch at least 50% (${Math.ceil(0.5 * videoDurSecs)} seconds) of the total video duration to automatically mark as completed.`}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 p-6 bg-[#F4F1E8]/60 border border-[#E0DDD0] rounded-xl text-center space-y-3">
+                <FileCode className="w-10 h-10 text-[#1C1B1A] mx-auto" />
+                <h4 className="font-serif text-xl font-bold text-[#1C1B1A]">{activeMediaResource.name}</h4>
+                <p className="text-xs text-[#66645E] max-w-md mx-auto leading-relaxed">
+                  Resource spec opened and verified. Viewing this document has automatically recorded your completion progress in MongoDB Atlas.
+                </p>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Resource Verified &amp; Completed
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-[#E0DDD0]">
+              <button
+                type="button"
+                onClick={() => setActiveMediaResource(null)}
+                className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs"
+              >
+                Done Viewing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== LEFT FIXED LIGHT SIDEBAR ==================== */}
       <aside
-        className={`fixed lg:static top-0 bottom-0 left-0 z-50 w-[290px] h-full flex-shrink-0 bg-[#070D1A] text-white flex flex-col justify-between border-r border-[#1E293B]/60 transition-transform duration-200 ease-in-out ${
+        className={`fixed lg:static top-0 bottom-0 left-0 z-50 w-[290px] h-full flex-shrink-0 bg-[#F2EFE6] text-[#1C1B1A] flex flex-col justify-between border-r border-[#E0DDD0] transition-transform duration-200 ease-in-out ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
@@ -370,17 +979,21 @@ export default function StudentDashboard() {
         <div className="p-6 overflow-y-auto">
           {/* C4GT Brand Logo */}
           <div className="flex items-center justify-between mb-8">
-            <Link to="/" className="flex items-center gap-2 group">
-              <C4GTLogo className="h-10" variant="dark" />
-              <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-wider rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                STUDENT
+            <Link to="/" className="flex flex-col gap-1 group">
+              <div className="flex items-center gap-3">
+                <C4GTLogo showText={false} imgClassName="h-11" />
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded-md bg-[#1C1B1A] text-white">
+                  STUDENT
+                </span>
+              </div>
+              <span className="text-base font-bold text-[#1C1B1A] font-serif tracking-tight mt-1.5 group-hover:text-black transition-colors">
+                C4GT KIET HUB
               </span>
             </Link>
 
-            {/* Mobile close button */}
             <button
               onClick={() => setMobileSidebarOpen(false)}
-              className="lg:hidden text-slate-400 hover:text-white p-1 rounded"
+              className="lg:hidden text-[#66645E] hover:text-[#1C1B1A] p-1 rounded-lg cursor-pointer"
               aria-label="Close sidebar"
             >
               <X className="w-5 h-5" />
@@ -389,8 +1002,8 @@ export default function StudentDashboard() {
 
           {/* Navigation Section Label */}
           <div className="mb-3 px-2 flex items-center justify-between">
-            <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Student Workspace</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80"></span>
+            <span className="text-[10px] font-mono font-semibold tracking-widest text-[#66645E] uppercase">Student Workspace</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
           </div>
 
           {/* STRICT 4 STUDENT NAVIGATION ITEMS */}
@@ -405,29 +1018,32 @@ export default function StudentDashboard() {
                     setActiveNav(item.id);
                     setMobileSidebarOpen(false);
                   }}
-                  className={`w-full flex items-start gap-3 p-3 rounded-xl transition-all duration-150 border text-left cursor-pointer ${
+                  className={`relative w-full flex items-start gap-3 p-3 rounded-xl transition-all duration-150 border text-left cursor-pointer ${
                     isActive
-                      ? 'bg-gradient-to-r from-[#4F46E5] to-[#6366F1] text-white shadow-md shadow-indigo-900/40 border-indigo-400/30'
-                      : 'hover:bg-slate-800/60 text-slate-300 hover:text-white border-transparent hover:border-slate-700/50'
+                      ? 'bg-white text-[#1C1B1A] font-semibold shadow-2xs border-[#E0DDD0]'
+                      : 'hover:bg-black/5 text-[#66645E] hover:text-[#1C1B1A] border-transparent'
                   }`}
                 >
-                  <div className={`w-5 h-5 mt-0.5 flex-shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-400'}`}>
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-[#1C1B1A]" />
+                  )}
+                  <div className={`mt-0.5 flex-shrink-0 transition-colors ${isActive ? 'text-[#1C1B1A]' : 'text-[#66645E]'}`}>
                     {item.icon}
                   </div>
                   <div className="leading-tight flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <div className={`text-[14px] ${isActive ? 'font-semibold text-white' : 'font-medium'}`}>
+                      <div className={`text-[14px] ${isActive ? 'font-bold text-[#1C1B1A]' : 'font-medium'}`}>
                         {item.name}
                       </div>
                       {item.id === 'my-tasks' && (
-                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                          isActive ? 'bg-white/20 text-white' : 'bg-indigo-500/20 text-indigo-300'
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold ${
+                          isActive ? 'bg-[#EEECDF] text-[#1C1B1A]' : 'bg-black/5 text-[#66645E]'
                         }`}>
                           {totalTasks}
                         </span>
                       )}
                     </div>
-                    <div className={`text-[11px] font-normal mt-0.5 truncate ${isActive ? 'text-indigo-100/80' : 'text-slate-400'}`}>
+                    <div className={`text-[11px] font-normal mt-0.5 truncate ${isActive ? 'text-[#4A4843]' : 'text-[#88867E]'}`}>
                       {item.description}
                     </div>
                   </div>
@@ -437,42 +1053,41 @@ export default function StudentDashboard() {
           </nav>
         </div>
 
-        {/* Bottom Sidebar (Exit Link & Clickable Student Profile Card) */}
-        <div className="p-5 border-t border-slate-800/80 bg-[#0B1220]/60 space-y-3 flex-shrink-0">
+        {/* Bottom Sidebar */}
+        <div className="p-5 border-t border-[#E0DDD0] bg-[#EEECDF]/60 space-y-3 flex-shrink-0">
           <Link
             to="/"
-            className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium border border-slate-800 transition-colors group"
+            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white hover:bg-[#F8F6F0] text-[#1C1B1A] text-xs font-medium border border-[#E0DDD0] shadow-2xs transition-colors group cursor-pointer"
           >
             <span className="flex items-center gap-2.5">
-              <Home className="w-4 h-4 text-slate-400 group-hover:text-indigo-300" />
+              <Home className="w-4 h-4 text-[#66645E]" />
               Exit to Main Site
             </span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:translate-x-0.5 transition-transform" />
+            <ChevronRight className="w-3.5 h-3.5 text-[#66645E] group-hover:translate-x-0.5 transition-transform" />
           </Link>
 
-          {/* Current Student Profile Card - CLICKING OPENS PROFILE DETAILS WITH EDIT PROFILE */}
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/50 border border-slate-800">
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-[#E0DDD0] shadow-2xs">
             <button
               type="button"
               onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-3 overflow-hidden text-left hover:opacity-90 transition-opacity cursor-pointer group flex-1"
+              className="flex items-center gap-3 overflow-hidden text-left hover:opacity-90 transition-opacity cursor-pointer group flex-1 min-w-0"
               title="Click to view & edit Profile Details"
             >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 via-violet-600 to-indigo-400 flex items-center justify-center font-bold text-xs text-white shadow-inner flex-shrink-0 ring-2 ring-indigo-500/30 group-hover:ring-indigo-400">
+              <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs shadow-inner flex-shrink-0">
                 {getInitials(user?.name)}
               </div>
               <div className="truncate leading-tight min-w-0">
-                <div className="font-semibold text-xs text-white truncate group-hover:text-indigo-300 transition-colors flex items-center gap-1">
-                  <span>{user?.name || 'Student Account'}</span>
+                <div className="font-semibold text-xs text-[#1C1B1A] truncate group-hover:text-black">
+                  {user?.name || 'Student Account'}
                 </div>
-                <div className="text-[11px] text-slate-400 font-mono truncate">
+                <div className="text-[11px] text-[#66645E] font-mono truncate">
                   {user?.email || 'student@c4gt.in'}
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="inline-block px-1.5 py-0.2 text-[9px] font-bold rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  <span className="inline-block px-1.5 py-0.2 text-[9px] font-mono font-semibold rounded bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
                     STUDENT
                   </span>
-                  <span className="text-[9px] text-indigo-400 font-semibold underline">Profile Details</span>
+                  <span className="text-[9px] text-[#1C1B1A] font-semibold underline">Profile Details</span>
                 </div>
               </div>
             </button>
@@ -480,7 +1095,7 @@ export default function StudentDashboard() {
             <button
               onClick={handleLogout}
               title="Log out"
-              className="w-8 h-8 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-colors flex-shrink-0 ml-1 cursor-pointer"
+              className="w-8 h-8 rounded-lg hover:bg-black/5 text-[#66645E] hover:text-rose-600 flex items-center justify-center transition-colors flex-shrink-0 ml-1 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -490,336 +1105,428 @@ export default function StudentDashboard() {
 
       {/* ==================== MAIN CONTENT AREA ==================== */}
       <div className="flex-1 h-screen flex flex-col overflow-hidden min-w-0">
-        {/* Top Sticky Header (~84px) */}
-        <header className="h-[84px] bg-white border-b border-[#E2E8F0] px-6 sm:px-8 flex items-center justify-between flex-shrink-0 shadow-xs z-20">
+        {/* Sticky Header */}
+        <header className="h-[84px] bg-[#F9F8F3]/95 backdrop-blur-md border-b border-[#E2DDD0] px-6 sm:px-8 flex items-center justify-between flex-shrink-0 shadow-2xs z-20">
           <div className="flex items-center gap-4">
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden text-slate-600 hover:text-slate-900 p-2 rounded-lg hover:bg-slate-100 cursor-pointer"
+              className="lg:hidden p-2 rounded-xl text-[#1C1B1A] hover:bg-black/5 cursor-pointer"
+              aria-label="Open sidebar"
             >
               <Menu className="w-6 h-6" />
             </button>
 
             <div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mb-0.5">
-                <Link to="/student" className="hover:text-indigo-600 transition-colors">
+              <div className="flex items-center gap-2 text-xs text-[#66645E] font-medium mb-1">
+                <Link to="/student" className="hover:text-[#1C1B1A] transition-colors">
                   Student Workspace
                 </Link>
-                <span>/</span>
-                <span className="text-slate-800 font-semibold">{pageInfo.breadcrumb}</span>
+                <span className="text-[#9E9C94]">/</span>
+                <span className="text-[#1C1B1A] font-semibold">{pageInfo.breadcrumb}</span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+              <h1 className="font-['Instrument_Serif',serif] text-2xl sm:text-[28px] lg:text-[30px] font-semibold text-[#1C1B1A] tracking-tight leading-none">
                 {pageInfo.title}
               </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Verified Student Workspace</span>
-            </div>
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Bell Notification Popover Container */}
+            <div className="relative" ref={notificationsRef}>
+              <button
+                type="button"
+                onClick={() => setNotificationsPopoverOpen((prev) => !prev)}
+                className="relative p-2 rounded-full text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 transition-colors border border-[#E0DDD0] bg-white shadow-2xs cursor-pointer flex items-center justify-center"
+                title="Notifications & Alerts"
+              >
+                <Bell className="w-4 h-4 text-[#1C1B1A]" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-mono font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
 
-            {/* CLICKABLE STUDENT PROFILE BUTTON IN TOP HEADER (OPENS PROFILE DETAILS & EDIT PROFILE) */}
-            <button
-              type="button"
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200 bg-slate-50/50"
-              title="Click to view & edit Profile Details"
-            >
-              {user?.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                  {getInitials(user?.name)}
-                </div>
-              )}
-              <div className="text-left hidden sm:block pr-1">
-                <p className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
-                  <span>{user?.name || 'Student'}</span>
-                </p>
-                <p className="text-[10px] text-indigo-600 font-semibold">View &amp; Edit Profile</p>
-              </div>
-            </button>
-          </div>
-        </header>
-
-        {/* Scrollable Content Body */}
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
-          {/* TAB 1: DASHBOARD */}
-          {activeNav === 'dashboard' && (
-            <div className="max-w-[1100px] mx-auto space-y-6 animate-in fade-in duration-200">
-              {/* 1. STUDENT WELCOME HERO CARD (ADMIN DASHBOARD VISUAL STYLE) */}
-              <div className="relative rounded-2xl bg-gradient-to-r from-[#070D1A] via-[#0B1220] to-[#1E1B4B] border border-slate-800 p-7 text-white overflow-hidden shadow-xl shadow-slate-900/5">
-                <div className="absolute inset-0 grid-pattern opacity-40 pointer-events-none"></div>
-
-                <div className="absolute right-0 top-0 bottom-0 w-[420px] pointer-events-none overflow-hidden opacity-90 hidden sm:block">
-                  <svg className="w-full h-full" viewBox="0 0 420 220" fill="none">
-                    <defs>
-                      <radialGradient id="studentHeroGlow" cx="70%" cy="50%" r="60%">
-                        <stop offset="0%" stopColor="#6366F1" stopOpacity="0.35" />
-                        <stop offset="100%" stopColor="#070D1A" stopOpacity="0" />
-                      </radialGradient>
-                    </defs>
-                    <rect width="420" height="220" fill="url(#studentHeroGlow)" />
-                    <line x1="80" y1="40" x2="160" y2="90" stroke="#4F46E5" strokeWidth="1" strokeDasharray="3 3" />
-                    <line x1="160" y1="90" x2="260" y2="60" stroke="#7C3AED" strokeWidth="1.2" />
-                    <line x1="160" y1="90" x2="220" y2="150" stroke="#6366F1" strokeWidth="1" />
-                    <circle cx="80" cy="40" r="3.5" fill="#818CF8" />
-                    <circle cx="160" cy="90" r="5" fill="#4F46E5" />
-                    <circle cx="260" cy="60" r="4" fill="#A78BFA" />
-                    <circle cx="220" cy="150" r="4.5" fill="#38BDF8" />
-                  </svg>
-                </div>
-
-                <div className="relative z-10 max-w-[660px]">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[11px] font-bold tracking-wide uppercase mb-3">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                    Student Workspace
-                  </div>
-                  <h2 className="text-2xl font-extrabold text-white tracking-tight mb-2">
-                    Welcome back, {user?.name || 'Student'}!
-                  </h2>
-                  <p className="text-slate-300 text-[13.5px] leading-relaxed">
-                    Manage your assigned tasks, learning resources, progress, and upcoming deadlines from your workspace.
-                  </p>
-                </div>
-              </div>
-
-              {/* 2. FOUR KEY METRIC CARDS (ADMIN DASHBOARD METRIC CARD STYLE) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Total Tasks */}
-                <div className="bg-white rounded-xl p-5 border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold tracking-wider uppercase text-slate-600">Total Tasks</span>
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
-                      <ListTodo className="w-4 h-4" />
+              {/* Notification Dropdown Popover */}
+              {notificationsPopoverOpen && (
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xl z-50 overflow-hidden animate-in fade-in duration-150">
+                  <div className="p-4 border-b border-[#E0DDD0] flex items-center justify-between bg-[#F4F1E8]/70">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-[#1C1B1A]" />
+                      <span className="font-serif text-lg font-bold text-[#1C1B1A]">Notifications</span>
+                      {unreadNotificationsCount > 0 && (
+                        <span className="text-[10px] font-mono font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full border border-rose-200">
+                          {unreadNotificationsCount} Unread
+                        </span>
+                      )}
                     </div>
+                    {unreadNotificationsCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllNotificationsRead}
+                        className="text-[11px] font-mono font-semibold text-[#1C1B1A] hover:underline cursor-pointer"
+                      >
+                        Mark all read
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-extrabold text-slate-900 font-mono tracking-tight">{totalTasks}</div>
-                    <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                      Assigned
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">Sprint tasks assigned</p>
-                </div>
 
-                {/* Completed Tasks */}
-                <div className="bg-white rounded-xl p-5 border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold tracking-wider uppercase text-slate-600">Completed Tasks</span>
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                      <CheckCircle2 className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-extrabold text-slate-900 font-mono tracking-tight">{completedTasksCount}</div>
-                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                      Finished
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">Successfully completed</p>
-                </div>
-
-                {/* Pending Tasks */}
-                <div className="bg-white rounded-xl p-5 border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold tracking-wider uppercase text-slate-600">Pending Tasks</span>
-                    <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
-                      <Clock className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-extrabold text-slate-900 font-mono tracking-tight">{pendingTasksCount}</div>
-                    <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
-                      In Progress
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">Awaiting completion</p>
-                </div>
-
-                {/* Upcoming Deadline */}
-                <div className="bg-white rounded-xl p-5 border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold tracking-wider uppercase text-slate-600">Upcoming Deadline</span>
-                    <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-xs font-bold text-slate-900 truncate max-w-[120px]">
-                      {upcomingDeadlineText}
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">Nearest due date</p>
-                </div>
-              </div>
-
-              {/* UPCOMING DEADLINES & RECENT TASKS SECTIONS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Upcoming Deadlines */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                  <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/80 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-purple-600" />
-                        Upcoming Deadlines
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Incomplete tasks prioritized by nearest remaining due date.
-                      </p>
-                    </div>
-                    <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-full">
-                      {incompleteTasks.length} Pending
-                    </span>
-                  </div>
-                  <div className="p-5 space-y-2.5">
-                    {incompleteTasks.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl">
-                        No upcoming deadlines. All tasks completed! 🎉
+                  <div className="max-h-80 overflow-y-auto divide-y divide-[#E0DDD0]/60 p-2">
+                    {notificationsList.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-[#66645E]">
+                        No notifications available right now.
                       </div>
                     ) : (
-                      incompleteTasks.slice(0, 5).map((t) => (
+                      notificationsList.map((n) => (
                         <div
-                          key={t._id}
-                          className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all text-xs"
+                          key={n._id}
+                          onClick={() => handleMarkNotificationRead(n)}
+                          className={`p-3 rounded-xl transition-colors cursor-pointer text-xs space-y-1.5 ${
+                            !n.isRead ? 'bg-[#EEECDF]/80 hover:bg-[#EEECDF]' : 'hover:bg-[#F4F1E8]/60'
+                          }`}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                            <div className="truncate">
-                              <h4 className="font-bold text-slate-900 truncate">{t.title}</h4>
-                              <p className="text-[11px] text-slate-500 truncate">{t.topic || 'Engineering Task'}</p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${!n.isRead ? 'bg-rose-500' : 'bg-[#E0DDD0]'}`} />
+                              <span className="font-bold text-[#1C1B1A] truncate">{n.title}</span>
                             </div>
+                            <span className="text-[10px] font-mono text-[#66645E] shrink-0">{formatDate(n.createdAt)}</span>
                           </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                              Due {formatDate(t.deadline)}
-                            </span>
-                          </div>
+                          <p className="text-[#66645E] text-[11px] leading-relaxed pl-3.5">
+                            {n.message}
+                          </p>
+                          {n.deadline && (
+                            <div className="text-[10px] font-mono text-[#1C1B1A] pl-3.5">
+                              Due: {formatDate(n.deadline)}
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
                   </div>
                 </div>
+              )}
+            </div>
 
-                {/* Recent Tasks Section (MAXIMUM 5 TASKS) */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                  <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/80 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-blue-600" />
-                        Recent Tasks
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Showing maximum 5 recently assigned tasks.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveNav('my-tasks')}
-                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-                    >
-                      View All ({totalTasks}) <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
+            <button
+              type="button"
+              onClick={() => setShowProfileModal(true)}
+              className="flex items-center gap-2.5 p-1.5 rounded-full hover:bg-black/5 transition-colors cursor-pointer border border-[#E0DDD0] bg-white shadow-2xs"
+              title="Click to view & edit Profile Details"
+            >
+              {user?.avatar ? (
+                <img src={user.avatar} alt={user.name || 'User'} className="w-8 h-8 rounded-full object-cover border border-[#E0DDD0]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[#1C1B1A] text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                  {getInitials(user?.name)}
+                </div>
+              )}
+              <div className="text-left hidden sm:block pr-2">
+                <p className="text-xs font-bold text-[#1C1B1A] leading-tight">
+                  {user?.name || 'Student'}
+                </p>
+                <p className="text-[10px] text-[#66645E] font-semibold hover:underline">View Profile</p>
+              </div>
+            </button>
+          </div>
+        </header>
+
+        {/* Scrollable Main Content */}
+        <main className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-8">
+          {/* TAB 1: DASHBOARD OVERVIEW */}
+          {activeNav === 'dashboard' && (
+            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
+              
+              {/* 1. GREETING HERO BANNER */}
+              <div className="relative rounded-2xl bg-gradient-to-r from-[#EBF3EA]/60 via-[#F8F6F0] to-[#FCEEE9]/50 border border-[#E0DDD0] p-8 text-[#1C1B1A] overflow-hidden shadow-2xs">
+                <div className="relative z-10 max-w-[680px] space-y-3">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-black/10 text-[11px] font-mono font-semibold tracking-wider uppercase shadow-2xs text-[#1C1B1A]">
+                    <Sparkles className="w-3.5 h-3.5 text-[#1C1B1A]" />
+                    Learning Platform Workspace
                   </div>
-                  <div className="p-5 space-y-2.5">
-                    {loadingTasks ? (
-                      <div className="p-6 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                        <span>Loading recent tasks...</span>
-                      </div>
-                    ) : recentTasksLimit5.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-xl">
-                        No tasks assigned yet.
-                      </div>
-                    ) : (
-                      recentTasksLimit5.map((t) => {
-                        const isDone = t.status === 'completed';
-                        return (
-                          <div
-                            key={t._id}
-                            className="p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all flex items-center justify-between gap-3 text-xs"
-                          >
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`w-2 h-2 rounded-full shrink-0 ${isDone ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                <h4 className="font-bold text-slate-900 truncate">{t.title}</h4>
-                              </div>
-                              <p className="text-[11px] text-slate-500 truncate">{t.topic || 'Engineering Sprint'}</p>
-                            </div>
+                  <h2 className="font-['Instrument_Serif',serif] text-3xl sm:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
+                    Welcome back, {user?.name || 'Student'}!
+                  </h2>
+                  <p className="text-[#66645E] text-sm leading-relaxed">
+                    Here is your task-focused learning overview. Track admin-assigned tasks, upcoming deadlines, sprint deliverables, and your activity progress.
+                  </p>
+                </div>
+              </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                  isDone
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-amber-50 text-amber-800 border-amber-200'
-                                }`}
-                              >
-                                {isDone ? 'Completed' : 'Pending'}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
+              {/* 2. STATS CARDS GRID */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                {/* Total Tasks */}
+                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Total Tasks</span>
+                    <div className="w-8 h-8 rounded-xl bg-[#1C1B1A] text-white flex items-center justify-center shadow-2xs">
+                      <ListTodo className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{totalTasks}</div>
+                    <span className="text-[11px] font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
+                      Assigned
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#66645E] mt-1">Admin deliverables</p>
+                </div>
+
+                {/* Completed */}
+                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Completed</span>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center border border-emerald-200">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{completedTasksCount}</div>
+                    <span className="text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Finished
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#66645E] mt-1">Successfully completed</p>
+                </div>
+
+                {/* In Progress */}
+                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">In Progress</span>
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center border border-amber-200">
+                      <Clock className="w-4 h-4 text-amber-700" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{inProgressTasksCount}</div>
+                    <span className="text-[11px] font-mono font-medium text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                      Active
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#66645E] mt-1">Tasks underway</p>
+                </div>
+
+                {/* Due Soon */}
+                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Due Soon</span>
+                    <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-800 flex items-center justify-center border border-rose-200">
+                      <Calendar className="w-4 h-4 text-rose-700" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{dueSoonTasksCount}</div>
+                    <span className="text-[11px] font-mono font-medium text-rose-800 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                      Urgent
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#66645E] mt-1">Next 5 days deadline</p>
+                </div>
+
+                {/* COMPACT ACTIVITY STREAK CARD */}
+                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Activity Streak</span>
+                    <div className="w-8 h-8 rounded-xl bg-[#1C1B1A] text-amber-400 flex items-center justify-center shadow-2xs">
+                      <Flame className="w-4 h-4 fill-amber-400" />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{streakData?.currentStreak || 0}</div>
+                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
+                      <Flame className="w-3 h-3 fill-amber-500 text-amber-500" /> Days
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-[#E0DDD0]">
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, idx) => {
+                      const dayObj = streakData?.weeklyActivity && streakData.weeklyActivity[idx];
+                      const isDone = dayObj && dayObj.isStreakCompleted;
+                      const isToday = dayObj && dayObj.isToday;
+                      return (
+                        <div key={idx} className="flex flex-col items-center gap-0.5" title={d}>
+                          <span className="text-[9px] font-mono text-[#66645E]">{d}</span>
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              isDone
+                                ? 'bg-emerald-600'
+                                : isToday
+                                ? 'bg-amber-500 animate-pulse'
+                                : 'bg-[#E0DDD0]'
+                            }`}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
 
-              {/* TODAY'S TASKS SECTION (MAXIMUM 5 TASKS) */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/80 flex items-center justify-between">
+              {/* 3. PROMINENT CONTINUE / PRIORITY TASK CARD */}
+              {priorityTask && (
+                <div className="bg-[#FDFCF9] rounded-2xl border-2 border-[#1C1B1A]/20 p-6 sm:p-8 shadow-2xs space-y-5 relative overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E0DDD0] pb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-[#1C1B1A] text-white">
+                            Priority Action Item
+                          </span>
+                          {priorityTask.priority && typeof priorityTask.priority === 'string' && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0]">
+                              {priorityTask.priority} Priority
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-['Instrument_Serif',serif] text-2xl sm:text-3xl font-semibold text-[#1C1B1A] mt-1">
+                          {typeof priorityTask.title === 'string' ? priorityTask.title : 'Engineering Sprint Task'}
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-auto font-mono text-xs text-[#66645E] bg-[#EEECDF]/80 px-3 py-1.5 rounded-xl border border-[#E0DDD0]">
+                      <Calendar className="w-4 h-4 text-[#1C1B1A]" />
+                      <span>Due: {formatDate(priorityTask.deadline)}</span>
+                    </div>
+                  </div>
+
+                  {priorityTask.description && (
+                    <p className="text-sm text-[#66645E] leading-relaxed max-w-[850px] line-clamp-3">
+                      {typeof priorityTask.description === 'string' ? priorityTask.description : String(priorityTask.description)}
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono font-semibold text-[#1C1B1A]">Task Milestone Progress</span>
+                      <span className="font-mono font-bold text-[#1C1B1A]">
+                        {priorityTask.status === 'completed' ? '100%' : priorityTask.status === 'in_progress' ? '50%' : '0%'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-[#E0DDD0] h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          priorityTask.status === 'completed' ? 'bg-emerald-600 w-full' : priorityTask.status === 'in_progress' ? 'bg-amber-500 w-1/2' : 'bg-[#1C1B1A] w-1/12'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                    <div className="flex items-center gap-3 text-xs text-[#66645E] flex-wrap">
+                      <span className="bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-1 rounded-md text-[11px] font-mono font-medium border border-[#E0DDD0]">
+                        Track: {priorityTask.topic || 'Engineering Track'}
+                      </span>
+                      <span>Assigned by: <strong className="text-[#1C1B1A]">{priorityTask.createdBy?.name || 'Admin'}</strong></span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {priorityTask.status === 'completed' ? (
+                        <span className="px-4 py-2 rounded-xl text-xs font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Task Finished
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOverviewTask(priorityTask)}
+                          className="bg-[#1C1B1A] hover:bg-black text-white font-semibold text-xs rounded-xl px-5 py-2.5 flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                          Open Task Specs
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedResourceTaskId(priorityTask._id);
+                          setActiveNav('resources');
+                        }}
+                        className="bg-white text-[#1C1B1A] hover:bg-[#F8F6F0] font-semibold text-xs rounded-xl px-4 py-2.5 flex items-center gap-1.5 border border-[#E0DDD0] shadow-2xs transition-all cursor-pointer"
+                      >
+                        <span>View Task Resources</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. MY TASKS PREVIEW SECTION */}
+              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
+                <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
                   <div>
-                    <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                      <CheckSquare className="w-4 h-4 text-indigo-600" />
-                      Today&apos;s Tasks
+                    <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-[#1C1B1A]" />
+                      My Tasks Overview
                     </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Tasks relevant for today, prioritized by current due date and status.
+                    <p className="text-xs text-[#66645E] mt-0.5">
+                      Assigned sprint deliverables with live status and progress.
                     </p>
                   </div>
-                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full">
-                    Max 5 Tasks
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveNav('my-tasks')}
+                    className="text-xs font-semibold text-[#1C1B1A] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    View All ({totalTasks}) <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <div className="p-5 space-y-2.5">
-                  {todaysTasks.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl">
-                      No tasks scheduled for today.
+
+                <div className="p-6 space-y-3">
+                  {loadingTasks ? (
+                    <div className="p-6 text-center text-xs text-[#66645E] flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#1C1B1A]" />
+                      <span>Loading assigned tasks...</span>
+                    </div>
+                  ) : myTasksPreviewList.length === 0 ? (
+                    <div className="p-5 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
+                      No tasks assigned currently.
                     </div>
                   ) : (
-                    todaysTasks.map((t) => {
+                    myTasksPreviewList.map((t, idx) => {
+                      if (!t) return null;
                       const isDone = t.status === 'completed';
                       return (
                         <div
-                          key={t._id}
-                          className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all text-xs"
+                          key={t._id || idx}
+                          className="p-4 rounded-xl border border-[#E0DDD0] bg-white hover:border-[#1C1B1A]/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs cursor-pointer"
+                          onClick={() => setSelectedOverviewTask(t)}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${isDone ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
-                            <div className="truncate">
-                              <h4 className="font-bold text-slate-900 truncate">{t.title}</h4>
-                              <p className="text-[11px] text-slate-500 truncate">{t.topic || 'Engineering Sprint Task'}</p>
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${isDone ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                              <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-serif">
+                                {typeof t.title === 'string' ? t.title : 'Task Item'}
+                              </h4>
                             </div>
+                            <p className="text-[11px] text-[#66645E] truncate">{t.topic || 'Engineering Track'}</p>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] font-semibold text-slate-500">
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-[11px] font-mono text-[#66645E]">
                               Due {formatDate(t.deadline)}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
                                 isDone
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-[#EEECDF] text-[#1C1B1A] border-[#E0DDD0]'
                               }`}
                             >
                               {isDone ? 'Completed' : 'Pending'}
                             </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedOverviewTask(t);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
+                            >
+                              View Overview
+                            </button>
                           </div>
                         </div>
                       );
@@ -828,184 +1535,246 @@ export default function StudentDashboard() {
                 </div>
               </div>
 
-              {/* REAL 15-MINUTE STREAK SECTION (ADMIN DASHBOARD CARD DESIGN STYLE) */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shadow-amber-500/20 shrink-0">
-                      <Flame className="w-5 h-5 animate-pulse" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                        Activity Streak
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-800 rounded-full border border-amber-200">
-                          15 Min / Day Goal
-                        </span>
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Requires at least 15 minutes active session per day to build your streak.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-2 rounded-xl shadow-xs self-start sm:self-auto">
-                    <Flame className="w-4 h-4" />
-                    <span className="text-sm font-black tracking-tight">
-                      {streakData.currentStreak} {streakData.currentStreak === 1 ? 'Day Streak' : 'Days Streak'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-5 space-y-4">
-                  {/* WEEKLY CALENDAR GRID (M, T, W, T, F, S, S) */}
-                  <div className="grid grid-cols-7 gap-1.5 sm:gap-3 text-center py-2 bg-slate-50/80 rounded-2xl border border-slate-200 p-3">
-                    {streakData.weeklyActivity && streakData.weeklyActivity.length > 0 ? (
-                      streakData.weeklyActivity.map((day, idx) => {
-                        const isDone = day.isStreakCompleted;
-                        const isToday = day.isToday;
-                        return (
-                          <div key={idx} className="flex flex-col items-center space-y-1.5 min-w-0">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase">
-                              {day.dayName}
-                            </span>
-                            <span
-                              className={`text-xs font-extrabold ${
-                                isToday ? 'text-indigo-600 underline decoration-2 font-black' : 'text-slate-700'
-                              }`}
-                            >
-                              {day.dateNum}
-                            </span>
-                            <div className="pt-1">
-                              {isDone ? (
-                                <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xs">
-                                  <CheckCircle2 className="w-4 h-4" />
-                                </div>
-                              ) : isToday ? (
-                                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 border-2 border-indigo-500 flex items-center justify-center font-bold text-[10px] animate-pulse">
-                                  {Math.floor(streakData.todayActiveSeconds / 60)}m
-                                </div>
-                              ) : (
-                                <div className="w-7 h-7 rounded-full border-2 border-slate-200 bg-white flex items-center justify-center text-slate-300 font-semibold text-xs">
-                                  ○
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                        <div key={i} className="flex flex-col items-center space-y-1.5">
-                          <span className="text-[11px] font-bold text-slate-400">{d}</span>
-                          <span className="text-xs font-bold text-slate-400">--</span>
-                          <div className="w-7 h-7 rounded-full border-2 border-slate-200 bg-white flex items-center justify-center text-slate-300">
-                            ○
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* ACTIVE SESSION PROGRESS BAR */}
-                  <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-indigo-900 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                        Today&apos;s Active Session:
-                      </span>
-                      <span className="font-bold text-indigo-700">
-                        {Math.floor(streakData.todayActiveSeconds / 60)} / 15 mins
-                        {streakData.todayStreakCompleted ? ' (Streak Goal Achieved! 🎉)' : ''}
+              {/* 5. TWO-COLUMN LOWER DASHBOARD GRID */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* LEFT COLUMN: OVERALL PROGRESS, UPCOMING DEADLINES, RECENT ACTIVITY */}
+                <div className="space-y-6">
+                  
+                  {/* OVERALL PROGRESS CARD */}
+                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                          <TrendingUp className="w-5 h-5 text-[#1C1B1A]" />
+                          Overall Progress
+                        </h3>
+                        <p className="text-xs text-[#66645E] mt-0.5">
+                          Cohort milestone completion rate
+                        </p>
+                      </div>
+                      <span className="text-xl font-mono font-bold text-[#1C1B1A]">
+                        {overallProgressPercentage}%
                       </span>
                     </div>
 
-                    <div className="w-full bg-indigo-200/60 h-2 rounded-full overflow-hidden">
+                    <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden">
                       <div
-                        className={`h-full transition-all duration-500 ${
-                          streakData.todayStreakCompleted ? 'bg-emerald-500' : 'bg-indigo-600'
-                        }`}
-                        style={{
-                          width: `${Math.min(100, Math.round((streakData.todayActiveSeconds / 900) * 100))}%`,
-                        }}
+                        className="bg-emerald-600 h-full transition-all duration-500 rounded-full"
+                        style={{ width: `${overallProgressPercentage}%` }}
                       />
                     </div>
 
-                    <p className="text-[11px] text-slate-500">
-                      {streakData.todayStreakCompleted
-                        ? 'Awesome work! You completed your 15-minute active session requirement today.'
-                        : `Keep the application active for ${Math.max(
-                            0,
-                            15 - Math.floor(streakData.todayActiveSeconds / 60)
-                          )} more minute(s) to achieve today's streak requirement.`}
-                    </p>
+                    <div className="flex items-center justify-between text-xs text-[#66645E] font-mono pt-1">
+                      <span>{completedTasksCount} of {totalTasks} Tasks Completed</span>
+                      <span>Target: 100%</span>
+                    </div>
+                  </div>
+
+                  {/* UPCOMING DEADLINES MODULE */}
+                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
+                    <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
+                      <div>
+                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                          <Calendar className="w-5 h-5 text-[#1C1B1A]" />
+                          Upcoming Deadlines
+                        </h3>
+                        <p className="text-xs text-[#66645E] mt-0.5">
+                          Incomplete tasks sorted by nearest due date.
+                        </p>
+                      </div>
+                      <span className="text-xs font-mono font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                        {incompleteTasks.length} Pending
+                      </span>
+                    </div>
+                    <div className="p-6 space-y-3">
+                      {incompleteTasks.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
+                          No upcoming deadlines! All tasks completed. 🎉
+                        </div>
+                      ) : (
+                        incompleteTasks.slice(0, 4).map((t, idx) => (
+                          <div
+                            key={t._id || idx}
+                            onClick={() => setSelectedOverviewTask(t)}
+                            className="flex items-center justify-between p-3.5 rounded-xl border border-[#E0DDD0] bg-white hover:border-[#1C1B1A]/40 transition-all text-xs cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                              <div className="truncate">
+                                <h4 className="font-bold text-[#1C1B1A] truncate">{t.title}</h4>
+                                <p className="text-[11px] text-[#66645E] truncate">{t.topic || 'Engineering Task'}</p>
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                              Due {formatDate(t.deadline)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RECENT ACTIVITY LOG */}
+                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
+                    <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
+                      <div>
+                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-[#1C1B1A]" />
+                          Recent Activity Log
+                        </h3>
+                        <p className="text-xs text-[#66645E] mt-0.5">
+                          Latest learning events &amp; status updates.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-6 space-y-3">
+                      {activityLogPreview.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
+                          No activity logged yet.
+                        </div>
+                      ) : (
+                        activityLogPreview.map((act) => (
+                          <div key={act.id} className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E0DDD0] text-xs">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-6 h-6 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center shrink-0">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              </div>
+                              <span className="font-medium text-[#1C1B1A] truncate">{act.title}</span>
+                            </div>
+                            <span className="text-[10px] font-mono text-[#66645E] shrink-0 ml-2">{act.time}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* RIGHT COLUMN: RECENT RESOURCES & ADMIN MESSAGES */}
+                <div className="space-y-6">
+                  
+                  {/* RECENT RESOURCES PREVIEW */}
+                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
+                    <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
+                      <div>
+                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                          <FolderKanban className="w-5 h-5 text-[#1C1B1A]" />
+                          Recent Resources &amp; Specs
+                        </h3>
+                        <p className="text-xs text-[#66645E] mt-0.5">
+                          Assigned deliverable specs and repository links.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveNav('resources')}
+                        className="text-xs font-semibold text-[#1C1B1A] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        View All <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-3">
+                      {recentResourcesPreview.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
+                          No resources available.
+                        </div>
+                      ) : (
+                        recentResourcesPreview.map((resItem, idx) => (
+                          <div key={idx} className="p-3.5 bg-white border border-[#E0DDD0] rounded-xl flex items-center justify-between hover:border-[#1C1B1A]/40 transition-colors shadow-2xs text-xs">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <FileCode className="w-4 h-4 text-[#1C1B1A] shrink-0" />
+                              <div className="truncate">
+                                <div className="font-bold text-[#1C1B1A] truncate">{resItem.name}</div>
+                                <div className="text-[10px] text-[#66645E] truncate">{resItem.taskTitle}</div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openMediaResource(resItem.taskObj, resItem.name, resItem.resourceIndex)}
+                              className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-1 rounded-md border border-[#E0DDD0] shrink-0 cursor-pointer hover:bg-[#1C1B1A] hover:text-white transition-colors flex items-center gap-1"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View Spec</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                </div>
               </div>
+
             </div>
           )}
 
-          {/* TAB 2: MY TASKS (SHOWS ALL TASKS - NO 5 LIMIT) */}
+          {/* TAB 2: MY TASKS (SHOWS ALL TASKS - Requirement 1) */}
           {activeNav === 'my-tasks' && (
-            <div className="max-w-[1100px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in duration-200">
-              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="max-w-[1240px] mx-auto bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden animate-in fade-in duration-200">
+              <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
-                  <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-[#1C1B1A]" />
                     My Tasks (All Assigned Tasks)
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    All tasks assigned to you by Admin and Team Leads. Every task remains visible here.
+                  <p className="text-xs text-[#66645E] mt-0.5">
+                    Click any task card below to open its complete specification overview on this page.
                   </p>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 w-fit">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0] w-fit">
                   {totalTasks} Total Task{totalTasks === 1 ? '' : 's'}
                 </span>
               </div>
 
               <div className="p-6 space-y-4">
                 {loadingTasks ? (
-                  <div className="p-8 text-center text-slate-500 flex items-center justify-center gap-2 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                  <div className="p-8 text-center text-[#66645E] flex items-center justify-center gap-2 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#1C1B1A]" />
                     <span>Loading all assigned tasks...</span>
                   </div>
-                ) : tasks.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
-                    <p className="text-sm font-semibold text-slate-700">No tasks assigned currently.</p>
+                ) : safeTasks.length === 0 ? (
+                  <div className="p-8 text-center text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
+                    <p className="text-sm font-semibold text-[#1C1B1A]">No tasks assigned currently.</p>
                   </div>
                 ) : (
-                  tasks.map((task) => {
+                  safeTasks.map((task, idx) => {
+                    if (!task) return null;
                     const isCompleted = task.status === 'completed';
                     return (
                       <div
-                        key={task._id}
-                        className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all space-y-3"
+                        key={task._id || idx}
+                        onClick={() => setSelectedOverviewTask(task)}
+                        className="p-5 rounded-2xl border border-[#E0DDD0] bg-white hover:border-[#1C1B1A]/40 transition-all space-y-3 shadow-2xs cursor-pointer group"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2.5">
                             <span className={`w-2.5 h-2.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                            <h4 className="text-sm font-bold text-slate-900">{task.title}</h4>
+                            <h4 className="text-base font-bold text-[#1C1B1A] font-serif tracking-wide group-hover:text-black">
+                              {task.title}
+                            </h4>
                           </div>
 
                           <div className="flex items-center gap-2 flex-wrap">
                             {task.priority && (
-                              <span className="px-2 py-0.5 text-[10px] font-semibold bg-purple-50 text-purple-700 rounded-md border border-purple-200">
+                              <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
                                 {task.priority} Priority
                               </span>
                             )}
                             <span
-                              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                              className={`inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${
                                 isCompleted
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                   : 'bg-amber-50 text-amber-800 border-amber-200'
                               }`}
                             >
                               {isCompleted ? (
                                 <>
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Completed
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-700" /> Completed
                                 </>
                               ) : (
                                 <>
-                                  <Clock className="w-3 h-3 text-amber-600" /> Pending
+                                  <Clock className="w-3 h-3 text-amber-700" /> Pending / In Progress
                                 </>
                               )}
                             </span>
@@ -1014,51 +1783,32 @@ export default function StudentDashboard() {
 
                         <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{task.description}</p>
 
-                        {/* Attached Related Resources */}
-                        {Array.isArray(task.relatedResources) && task.relatedResources.length > 0 && (
-                          <div className="pt-2.5 border-t border-slate-100 space-y-2">
-                            <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                              <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>Related Resources</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {task.relatedResources.map((res, rIdx) => (
-                                <a
-                                  key={res._id || rIdx}
-                                  href={res.url || '#'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 transition-all flex items-center justify-between gap-2 text-xs group"
-                                >
-                                  <div className="truncate">
-                                    <div className="font-bold text-slate-900 group-hover:text-indigo-600 truncate">
-                                      {res.title}
-                                    </div>
-                                    {res.description && (
-                                      <div className="text-[11px] text-slate-500 truncate">{res.description}</div>
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] font-semibold text-indigo-600 flex items-center gap-1 shrink-0">
-                                    Open Resource <ExternalLink className="w-3 h-3" />
-                                  </span>
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500 gap-2">
+                        <div className="flex flex-wrap items-center justify-between pt-3 border-t border-[#E0DDD0] text-xs text-[#66645E] gap-2">
                           <div className="flex items-center gap-3 flex-wrap">
                             {task.topic && (
-                              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
+                              <span className="bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium border border-[#E0DDD0]">
                                 Domain: {task.topic}
                               </span>
                             )}
-                            <span>Assigned by: {task.createdBy?.name || 'Admin / Lead'}</span>
+                            <span>Assigned by: <strong className="text-[#1C1B1A]">{task.createdBy?.name || 'Admin / Lead'}</strong></span>
                           </div>
-                          <div className="flex items-center gap-1 text-slate-700 font-semibold">
-                            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Due: {formatDate(task.deadline)}</span>
+
+                          <div className="flex items-center gap-3">
+                            <span className="flex items-center gap-1.5 text-[#1C1B1A] font-semibold font-mono">
+                              <Calendar className="w-3.5 h-3.5 text-[#66645E]" />
+                              Due: {formatDate(task.deadline)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedOverviewTask(task);
+                              }}
+                              className="px-3.5 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer flex items-center gap-1"
+                            >
+                              <span>Open Overview</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1070,217 +1820,521 @@ export default function StudentDashboard() {
           )}
 
 
-          {/* TAB 3: RESOURCES */}
+          {/* TAB 3: RESOURCES (Filtered by Task or View All) */}
           {activeNav === 'resources' && (
-            <div className="max-w-[1100px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in duration-200">
-              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="max-w-[1240px] mx-auto bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden animate-in fade-in duration-200">
+              <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                    <FolderKanban className="w-5 h-5 text-purple-600" />
-                    My Task Resources
+                  <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                    <FolderKanban className="w-5 h-5 text-[#1C1B1A]" />
+                    My Task Resources &amp; Deliverables
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Click a task name to view all resource links, code specs, and documentation assigned to that task.
+                  <p className="text-xs text-[#66645E] mt-0.5">
+                    Click any resource item to open media, watch video lessons, or verify deliverable specifications.
                   </p>
                 </div>
-                <span className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded-full">
-                  {tasks.length} Resource Topics
-                </span>
-              </div>
 
-              <div className="p-6 space-y-3">
-                {loadingTasks ? (
-                  <div className="p-8 text-center text-slate-500 flex items-center justify-center gap-2 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-                    <span>Loading task resources...</span>
-                  </div>
-                ) : tasks.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                    No task resources currently available.
-                  </div>
-                ) : (
-                  tasks.map((task) => {
-                    const isExpanded = Boolean(expandedResources[task._id]);
-                    const deliverables = Array.isArray(task.deliverables) && task.deliverables.length > 0
-                      ? task.deliverables
-                      : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'];
-
-                    return (
-                      <div
-                        key={task._id}
-                        className="rounded-xl border border-slate-200 bg-white overflow-hidden transition-all shadow-2xs"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleTaskResources(task._id)}
-                          className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-purple-50 text-purple-700 rounded-lg shrink-0">
-                              <BookOpen className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-slate-900">{task.title}</h4>
-                              <p className="text-[11px] text-slate-500">{task.topic || 'Engineering Track'}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100">
-                              {deliverables.length} Resources
-                            </span>
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-slate-500" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-slate-400" />
-                            )}
-                          </div>
-                        </button>
-
-                        {isExpanded && (
-                          <div className="p-4 bg-slate-50 border-t border-slate-100 space-y-2.5 animate-in fade-in duration-150">
-                            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                              Assigned Deliverables &amp; Reference Links:
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                              {deliverables.map((item, idx) => {
-                                const itemLower = item.toLowerCase();
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between hover:border-purple-300 transition-colors"
-                                  >
-                                    <div className="flex items-center gap-2.5">
-                                      {itemLower.includes('code') || itemLower.includes('repo') ? (
-                                        <FileCode className="w-4 h-4 text-indigo-600 shrink-0" />
-                                      ) : itemLower.includes('pull') || itemLower.includes('request') ? (
-                                        <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
-                                      ) : itemLower.includes('demo') || itemLower.includes('video') ? (
-                                        <Video className="w-4 h-4 text-purple-600 shrink-0" />
-                                      ) : (
-                                        <ExternalLink className="w-4 h-4 text-blue-600 shrink-0" />
-                                      )}
-                                      <div>
-                                        <div className="text-xs font-bold text-slate-800">{item}</div>
-                                        <div className="text-[10px] text-slate-400">Required Deliverable Spec</div>
-                                      </div>
-                                    </div>
-                                    <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                                      View Spec
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: PROGRESS */}
-          {activeNav === 'progress' && (
-            <div className="max-w-[1100px] mx-auto bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden animate-in fade-in duration-200">
-              <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-indigo-600" />
-                    Progress &amp; Completion Tracking
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Track milestone completion status and mark tasks as completed in live MongoDB Atlas.
-                  </p>
+                {/* Filter Dropdown for Selected Task */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-semibold text-[#66645E]">Filter Task:</span>
+                  <select
+                    value={selectedResourceTaskId}
+                    onChange={(e) => setSelectedResourceTaskId(e.target.value)}
+                    className="text-xs font-mono bg-white border border-[#E0DDD0] rounded-xl px-3 py-1.5 text-[#1C1B1A] shadow-2xs focus:outline-none focus:border-[#1C1B1A]"
+                  >
+                    <option value="all">All Task Resources ({totalTasks})</option>
+                    {safeTasks.map((t) => (
+                      <option key={t._id} value={t._id}>
+                        {t.title}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full">
-                  {completedTasksCount} of {totalTasks} Completed
-                </span>
               </div>
 
               <div className="p-6 space-y-4">
                 {loadingTasks ? (
-                  <div className="p-8 text-center text-slate-500 flex items-center justify-center gap-2 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                    <span>Loading progress items...</span>
+                  <div className="p-8 text-center text-[#66645E] flex items-center justify-center gap-2 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#1C1B1A]" />
+                    <span>Loading task resources...</span>
                   </div>
-                ) : tasks.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                    No tasks to track.
+                ) : safeTasks.length === 0 ? (
+                  <div className="p-8 text-center text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0] text-xs">
+                    No task resources currently available.
                   </div>
                 ) : (
-                  tasks.map((task) => {
-                    const isCompleted = task.status === 'completed';
-                    const isUpdating = updatingTaskId === task._id;
+                  safeTasks
+                    .filter((task) => selectedResourceTaskId === 'all' || String(task._id) === String(selectedResourceTaskId))
+                    .map((task, idx) => {
+                      if (!task) return null;
+                      const isExpanded = selectedResourceTaskId !== 'all' || Boolean(expandedResources[task._id]);
+                      const deliverables = Array.isArray(task.deliverables) && task.deliverables.length > 0
+                        ? task.deliverables
+                        : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'];
 
-                    return (
-                      <div
-                        key={task._id}
-                        className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                      >
-                        <div className="space-y-1.5 flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-bold text-slate-900">{task.title}</h4>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              Deadline: {formatDate(task.deadline)}
-                            </span>
-                            <span>•</span>
-                            <span>
-                              Status: <strong className={isCompleted ? 'text-emerald-700' : 'text-amber-700'}>{isCompleted ? 'Completed' : 'In Progress / Pending'}</strong>
-                            </span>
-                          </div>
+                      return (
+                        <div
+                          key={task._id || idx}
+                          className="rounded-2xl border border-[#E0DDD0] bg-white overflow-hidden transition-all shadow-2xs"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleTaskResources(task._id)}
+                            className="w-full p-5 flex items-center justify-between text-left hover:bg-[#F8F6F0] transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3.5">
+                              <div className="p-2.5 bg-[#EEECDF] text-[#1C1B1A] rounded-xl border border-[#E0DDD0] shrink-0">
+                                <BookOpen className="w-4.5 h-4.5" />
+                              </div>
+                              <div>
+                                <h4 className="text-base font-bold text-[#1C1B1A] font-serif">{task.title}</h4>
+                                <p className="text-[11px] text-[#66645E]">{task.topic || 'Engineering Track'}</p>
+                              </div>
+                            </div>
 
-                          <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden mt-2 max-w-md">
-                            <div
-                              className={`h-full transition-all duration-300 ${
-                                isCompleted ? 'bg-emerald-500 w-full' : 'bg-amber-500 w-1/3'
-                              }`}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 self-end sm:self-center">
-                          {isCompleted ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                              ✓ Completed
-                            </span>
-                          ) : (
-                            <Button
-                              type="button"
-                              onClick={() => handleMarkCompleted(task._id)}
-                              disabled={isUpdating}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl px-4 py-2 flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
-                            >
-                              {isUpdating ? (
-                                <>
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  Updating...
-                                </>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] px-3 py-1 rounded-lg border border-[#E0DDD0]">
+                                {deliverables.length} Resources
+                              </span>
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-[#1C1B1A]" />
                               ) : (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Mark as Completed
-                                </>
+                                <ChevronRight className="w-4 h-4 text-[#66645E]" />
                               )}
-                            </Button>
+                            </div>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="p-5 bg-[#F4F1E8]/60 border-t border-[#E0DDD0] space-y-3 animate-in fade-in duration-150">
+                              <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#66645E] mb-2 flex items-center justify-between">
+                                <span>Assigned Deliverables &amp; Reference Links:</span>
+                                <span>Click to View / Watch Resource</span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {deliverables.map((item, dIdx) => {
+                                  let itemName = 'Deliverable Spec';
+                                  if (typeof item === 'string') {
+                                    itemName = item;
+                                  } else if (item && typeof item === 'object') {
+                                    itemName = item.name || item.title || item.label || 'Deliverable Spec';
+                                  }
+                                  const itemLower = String(itemName).toLowerCase();
+                                  const rId = `res-${dIdx}`;
+                                  const key = `${task._id}_${rId}`;
+                                  const progressObj = resourceProgressMap[key];
+                                  const isResourceCompleted = Boolean(progressObj && progressObj.isCompleted);
+
+                                  return (
+                                    <div
+                                      key={dIdx}
+                                      onClick={() => openMediaResource(task, itemName, dIdx)}
+                                      className="p-3.5 bg-white border border-[#E0DDD0] rounded-xl flex items-center justify-between hover:border-[#1C1B1A]/60 transition-all shadow-2xs cursor-pointer group"
+                                    >
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        {itemLower.includes('code') || itemLower.includes('repo') ? (
+                                          <FileCode className="w-4 h-4 text-[#1C1B1A] shrink-0" />
+                                        ) : itemLower.includes('pull') || itemLower.includes('request') ? (
+                                          <FileText className="w-4 h-4 text-emerald-700 shrink-0" />
+                                        ) : itemLower.includes('demo') || itemLower.includes('video') ? (
+                                          <Video className="w-4 h-4 text-[#1C1B1A] shrink-0" />
+                                        ) : (
+                                          <ExternalLink className="w-4 h-4 text-[#66645E] shrink-0" />
+                                        )}
+                                        <div className="truncate">
+                                          <div className="text-xs font-bold text-[#1C1B1A] truncate group-hover:underline">
+                                            {String(itemName)}
+                                          </div>
+                                          <div className="text-[10px] text-[#66645E] truncate">
+                                            {isResourceCompleted ? '✓ Resource Completed' : 'Click to open & view'}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {isResourceCompleted ? (
+                                          <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Done
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-1 rounded-md border border-[#E0DDD0] flex items-center gap-1 group-hover:bg-[#1C1B1A] group-hover:text-white transition-colors">
+                                            <Eye className="w-3 h-3" /> View
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: PROGRESS (Requirement 2: Subject/Domain Bar Graph & Breakdown) */}
+          {activeNav === 'progress' && (
+            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
+              {/* OVERALL PROGRESS TOP CONTAINER */}
+              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
+                <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-[#1C1B1A]" />
+                      Progress &amp; Completion Tracking
+                    </h3>
+                    <p className="text-xs text-[#66645E] mt-0.5">
+                      Real-time subject/domain breakdown and automatic completion tracking.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] border border-[#E0DDD0] px-3 py-1 rounded-full">
+                    {completedTasksCount} of {totalTasks} Completed ({overallProgressPercentage}%)
+                  </span>
+                </div>
+
+                {/* REQUIREMENT 2: BAR GRAPH SHOWING TASK PROGRESS BY SUBJECT/DOMAIN */}
+                <div className="p-6 sm:p-8 space-y-6">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-mono font-bold text-[#1C1B1A] uppercase tracking-wider">
+                      Subject / Domain Task Progress Bar Graph
+                    </h4>
+                    <p className="text-xs text-[#66645E]">
+                      Dynamic completion breakdown across assigned learning tracks.
+                    </p>
+                  </div>
+
+                  {subjectList.length === 0 ? (
+                    <div className="p-8 text-center text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0] text-xs">
+                      No subject task data available yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-5 bg-[#F4F1E8]/60 p-6 rounded-2xl border border-[#E0DDD0]">
+                      <div className="space-y-4">
+                        {subjectList.map((item, idx) => (
+                          <div key={idx} className="space-y-2">
+                            <div className="flex items-center justify-between text-xs font-mono">
+                              <span className="font-bold text-[#1C1B1A]">{item.subject}</span>
+                              <span className="text-[#66645E]">
+                                <strong>{item.completed}</strong> / {item.total} Tasks ({item.percentage}%)
+                              </span>
+                            </div>
+
+                            {/* Stacked Bar Graph Visual */}
+                            <div className="w-full bg-[#E0DDD0] h-4 rounded-full overflow-hidden flex shadow-inner">
+                              {item.completed > 0 && (
+                                <div
+                                  className="bg-emerald-600 h-full transition-all duration-500"
+                                  style={{ width: `${(item.completed / item.total) * 100}%` }}
+                                  title={`Completed: ${item.completed}`}
+                                />
+                              )}
+                              {item.inProgress > 0 && (
+                                <div
+                                  className="bg-amber-500 h-full transition-all duration-500"
+                                  style={{ width: `${(item.inProgress / item.total) * 100}%` }}
+                                  title={`In Progress: ${item.inProgress}`}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Legend */}
+                      <div className="flex items-center gap-6 pt-3 border-t border-[#E0DDD0] text-xs font-mono text-[#66645E]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-sm bg-emerald-600 inline-block" />
+                          <span>Completed Tasks</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-sm bg-amber-500 inline-block" />
+                          <span>In Progress / Pending</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* DETAILED SUBJECT CARDS BREAKDOWN */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {subjectList.map((item, idx) => (
+                  <div key={idx} className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs space-y-4 flex flex-col justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
+                          Domain Track
+                        </span>
+                        <span className="text-xs font-mono font-bold text-[#1C1B1A]">
+                          {item.percentage}% Done
+                        </span>
+                      </div>
+                      <h4 className="font-serif text-xl font-bold text-[#1C1B1A] pt-1">{item.subject}</h4>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono pt-2">
+                      <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200">
+                        <div className="font-bold text-base">{item.completed}</div>
+                        <div className="text-[10px]">Completed</div>
+                      </div>
+                      <div className="p-2.5 bg-amber-50 text-amber-800 rounded-xl border border-amber-200">
+                        <div className="font-bold text-base">{item.inProgress}</div>
+                        <div className="text-[10px]">In Progress</div>
+                      </div>
+                      <div className="p-2.5 bg-[#EEECDF] text-[#1C1B1A] rounded-xl border border-[#E0DDD0]">
+                        <div className="font-bold text-base">{item.pending}</div>
+                        <div className="text-[10px]">Pending</div>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-[#E0DDD0] h-2 rounded-full overflow-hidden pt-1">
+                      <div className="bg-emerald-600 h-full transition-all duration-300" style={{ width: `${item.percentage}%` }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </main>
       </div>
+
+      {/* ==================== SELECTED TASK OVERVIEW MODAL ==================== */}
+      {selectedOverviewTask && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setSelectedOverviewTask(null)}
+              className="absolute top-5 right-5 p-2 rounded-full hover:bg-black/5 text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-2 pr-8">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#1C1B1A] text-white px-2.5 py-0.5 rounded-full">
+                  Task Overview
+                </span>
+                {selectedOverviewTask.topic && (
+                  <span className="text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
+                    Domain: {selectedOverviewTask.topic}
+                  </span>
+                )}
+                <span
+                  className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${
+                    selectedOverviewTask.status === 'completed'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}
+                >
+                  {selectedOverviewTask.status === 'completed' ? '✓ Completed' : 'Pending / In Progress'}
+                </span>
+              </div>
+              <h2 className="font-['Instrument_Serif',serif] text-3xl font-bold text-[#1C1B1A]">
+                {selectedOverviewTask.title}
+              </h2>
+            </div>
+
+            <div className="space-y-3 bg-[#F4F1E8]/60 p-4 rounded-xl border border-[#E0DDD0]">
+              <h4 className="text-xs font-mono font-bold text-[#1C1B1A] uppercase tracking-wider">
+                Task Specifications &amp; Description
+              </h4>
+              <p className="text-xs text-[#66645E] leading-relaxed whitespace-pre-line">
+                {selectedOverviewTask.description || 'No detailed description specified.'}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 text-xs font-mono border-t border-[#E0DDD0]">
+                <div>
+                  <span className="text-[#66645E] text-[10px] block">Deadline:</span>
+                  <span className="font-bold text-[#1C1B1A]">{formatDate(selectedOverviewTask.deadline)}</span>
+                </div>
+                <div>
+                  <span className="text-[#66645E] text-[10px] block">Priority:</span>
+                  <span className="font-bold text-[#1C1B1A]">{selectedOverviewTask.priority || 'Normal'}</span>
+                </div>
+                <div>
+                  <span className="text-[#66645E] text-[10px] block">Created By:</span>
+                  <span className="font-bold text-[#1C1B1A]">{selectedOverviewTask.createdBy?.name || 'Admin'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Resources List in Overview */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-mono font-bold text-[#1C1B1A] uppercase tracking-wider flex items-center justify-between">
+                <span>Assigned Task Resources ({Array.isArray(selectedOverviewTask.deliverables) ? selectedOverviewTask.deliverables.length : 4})</span>
+                <span className="text-[10px] font-normal text-[#66645E]">50%+ watch time required for videos</span>
+              </h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {(Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
+                  ? selectedOverviewTask.deliverables
+                  : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation']
+                ).map((item, idx) => {
+                  const itemName = typeof item === 'string' ? item : item.name || 'Resource';
+                  const key = `${selectedOverviewTask._id}_res-${idx}`;
+                  const prog = resourceProgressMap[key];
+                  const isDone = Boolean(prog && prog.isCompleted);
+
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3 bg-white border border-[#E0DDD0] rounded-xl flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <BookOpen className="w-4 h-4 text-[#1C1B1A] shrink-0" />
+                        <span className="font-semibold text-[#1C1B1A] truncate">{String(itemName)}</span>
+                      </div>
+                      <span
+                        className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border ${
+                          isDone
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-[#EEECDF] text-[#1C1B1A] border-[#E0DDD0]'
+                        }`}
+                      >
+                        {isDone ? '✓ Completed' : 'Pending'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E0DDD0]">
+              <button
+                type="button"
+                onClick={() => setSelectedOverviewTask(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#66645E] hover:bg-black/5 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedResourceTaskId(selectedOverviewTask._id);
+                  setActiveNav('resources');
+                  setSelectedOverviewTask(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold flex items-center gap-2 shadow-2xs transition-colors cursor-pointer"
+              >
+                <span>View Task Resources</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== ACTIVE MEDIA / VIDEO VIEWER MODAL ==================== */}
+      {activeMediaResource && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-3xl w-full p-6 space-y-5 shadow-2xl relative overflow-hidden">
+            <button
+              type="button"
+              onClick={closeMediaResource}
+              className="absolute top-5 right-5 p-2 rounded-full hover:bg-black/5 text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1 pr-8">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#1C1B1A] text-white px-2.5 py-0.5 rounded-full">
+                  Resource Viewer
+                </span>
+                <span className="text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
+                  Task: {activeMediaResource.task?.title}
+                </span>
+              </div>
+              <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                {activeMediaResource.name}
+              </h3>
+            </div>
+
+            {/* Video Player or Document Spec Viewer */}
+            {activeMediaResource.type === 'video' ? (
+              <div className="space-y-4">
+                <div className="w-full aspect-video rounded-xl overflow-hidden bg-black shadow-md relative">
+                  {isYouTubeUrl(activeMediaResource.url || activeMediaResource.name) ? (
+                    <div id="yt-player-iframe" className="w-full h-full" />
+                  ) : (
+                    <video
+                      ref={videoRef}
+                      controls
+                      src={activeMediaResource.url || 'https://www.w3schools.com/html/mov_bbb.mp4'}
+                      onTimeUpdate={handleHtml5TimeUpdate}
+                      className="w-full h-full object-contain"
+                    />
+                  )}
+                </div>
+
+                {/* Video Watch Progress Tracker */}
+                <div className="p-4 bg-[#F4F1E8]/70 rounded-xl border border-[#E0DDD0] space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="font-bold text-[#1C1B1A]">
+                      Watch Time Progress: {formatTimeSecs(videoWatchedSecs)} / {formatTimeSecs(videoDurSecs)}
+                    </span>
+                    <span className="font-bold text-[#1C1B1A]">
+                      {videoDurSecs > 0 ? Math.min(100, Math.round((videoWatchedSecs / videoDurSecs) * 100)) : 0}%
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        videoWatchedSecs >= 0.5 * videoDurSecs ? 'bg-emerald-600' : 'bg-amber-500'
+                      }`}
+                      style={{
+                        width: `${videoDurSecs > 0 ? Math.min(100, (videoWatchedSecs / videoDurSecs) * 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-mono pt-1">
+                    <span className="text-[#66645E]">
+                      Required: At least 50% watch time ({formatTimeSecs(0.5 * videoDurSecs)})
+                    </span>
+                    {videoWatchedSecs >= 0.5 * videoDurSecs ? (
+                      <span className="text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        ✓ 50%+ Watched - Completed!
+                      </span>
+                    ) : (
+                      <span className="text-amber-800 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Watching in progress...
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center space-y-4 bg-[#F4F1E8]/60 rounded-xl border border-[#E0DDD0]">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto border border-emerald-200">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-[#1C1B1A] text-base">Deliverable Resource Verified</h4>
+                  <p className="text-xs text-[#66645E]">
+                    Opening and viewing this deliverable specification automatically marked it completed in your progress log.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end pt-2 border-t border-[#E0DDD0]">
+              <button
+                type="button"
+                onClick={closeMediaResource}
+                className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+              >
+                Close &amp; Save Progress
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

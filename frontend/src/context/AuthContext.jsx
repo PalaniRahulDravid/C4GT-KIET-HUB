@@ -20,15 +20,15 @@ export const getRoleName = (role) => {
 };
 
 export const getDashboardPath = (role) => {
-  switch (role) {
+  const r = role ? String(role).toLowerCase().trim() : '';
+  switch (r) {
     case 'admin':
-      return '/admin';
+      return '/admin/dashboard';
     case 'teamlead':
     case 'team_lead':
-      return '/team-lead';
+      return '/teamlead';
     case 'user':
     case 'student':
-      return '/student';
     default:
       return '/student';
   }
@@ -36,8 +36,8 @@ export const getDashboardPath = (role) => {
 
 export const isStudentProfileComplete = (user) => {
   if (!user) return false;
-  // Admin role does not require student details
-  if (user.role === 'admin') return true;
+  // Admin and Team Lead roles do not require student roll/branch onboarding details
+  if (user.role === 'admin' || user.role === 'teamlead' || user.role === 'team_lead') return true;
   return Boolean(
     user.rollNumber &&
       typeof user.rollNumber === 'string' &&

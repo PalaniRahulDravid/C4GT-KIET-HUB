@@ -48,11 +48,11 @@ export default function App() {
               }
             />
 
-            {/* Student Dashboard: accessible to ALL authenticated users (any role) */}
+            {/* Student Dashboard: strictly Student only */}
             <Route
               path="student"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['student', 'user']}>
                   <StudentDashboard />
                 </ProtectedRoute>
               }
@@ -60,9 +60,17 @@ export default function App() {
 
             {/* Team Lead Dashboard: strictly Team Lead only */}
             <Route
+              path="teamlead"
+              element={
+                <ProtectedRoute allowedRoles={['teamlead', 'team_lead']}>
+                  <TeamLeadDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="team-lead"
               element={
-                <ProtectedRoute allowedRoles={['teamlead']}>
+                <ProtectedRoute allowedRoles={['teamlead', 'team_lead']}>
                   <TeamLeadDashboard />
                 </ProtectedRoute>
               }
@@ -71,7 +79,7 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Route>
 
-          {/* Dedicated Admin Portal: HIDES the public header, uses dedicated AdminLayout & sidebar */}
+          {/* Dedicated Admin Portal: HIDES public header, strictly Admin only */}
           <Route
             path="/admin"
             element={
@@ -80,9 +88,9 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            {/* /admin - Overview */}
+            {/* /admin & /admin/dashboard - Overview */}
             <Route index element={<AdminOverview />} />
-            {/* /admin/overview alias */}
+            <Route path="dashboard" element={<AdminOverview />} />
             <Route path="overview" element={<AdminOverview />} />
             {/* /admin/users - User Management & RBAC */}
             <Route path="users" element={<ManageUsers />} />

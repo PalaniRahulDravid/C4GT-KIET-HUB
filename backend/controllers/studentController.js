@@ -3,6 +3,7 @@ const Task = require('../models/Task');
 const TaskAssignment = require('../models/TaskAssignment');
 const Team = require('../models/Team');
 const StudentActivity = require('../models/StudentActivity');
+const StudentResourceProgress = require('../models/StudentResourceProgress');
 
 /**
  * Helper to format Date objects to 'YYYY-MM-DD'
@@ -142,6 +143,24 @@ const updateStudentTaskStatus = async (req, res) => {
       });
     }
 
+    // If trying to manually complete task, verify required resources are finished
+    if (status === 'completed') {
+      const taskResourcesCount = task.resources ? task.resources.length : 0;
+      if (taskResourcesCount > 0) {
+        const completedCount = await StudentResourceProgress.countDocuments({
+          studentId,
+          taskId: task._id,
+          isCompleted: true,
+        });
+        if (completedCount < taskResourcesCount) {
+          return res.status(400).json({
+            success: false,
+            message: 'Task cannot be completed until all required resources are watched/viewed.',
+          });
+        }
+      }
+    }
+
     // Find or create TaskAssignment record for student
     let assignment = await TaskAssignment.findOne({ taskId: task._id, studentId });
     if (!assignment) {
@@ -257,7 +276,6 @@ const getStudentStreak = async (req, res) => {
     const todayCompleted = todayAct && todayAct.isStreakCompleted;
 
     if (!todayCompleted) {
-      // If today is not completed yet, check yesterday to start counting consecutive streak
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
@@ -273,7 +291,7 @@ const getStudentStreak = async (req, res) => {
     }
 
     // Build 7-day week array (Monday to Sunday of current week)
-    const currentDayOfWeek = now.getDay(); // 0 is Sunday, 1 is Monday...
+    const currentDayOfWeek = now.getDay();
     const distanceToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
 
     const monday = new Date(now);
@@ -314,9 +332,177 @@ const getStudentStreak = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get all resource progress for the logged-in student
+ * @route   GET /api/student/resource-progress
+ * @access  Private (Authenticated User)
+ */
+const getStudentResourceProgress = async (req, res) => {
+  try {
+    const studentId = req.user._id;
+    const progressList = await StudentResourceProgress.find({ studentId });
+    res.status(200).json({
+      success: true,
+      count: progressList.length,
+      progress: progressList,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch resource progress',
+    });
+  }
+};
+
+/**
+ * @desc    Update resource progress (watch time for video, or view event for doc/link)
+ * @route   POST /api/student/resource-progress
+ * @access  Private (Authenticated User)
+ */
+const updateResourceProgress = async (req, res) => {
+  try {
+    const studentId = req.user._id;
+    const {
+      taskId,
+      resourceId,
+      resourceType,
+      watchedSeconds,
+      durationSeconds,
+      requiredResourceIds,
+      totalTaskResourcesCount,
+    } = req.body;
+
+    if (!taskId || !resourceId || !resourceType) {
+      return res.status(400).json({
+        success: false,
+        message: 'taskId, resourceId, and resourceType are required',
+      });
+    }
+
+    // Security check: Verify task exists
+    let task = null;
+    if (mongoose.Types.ObjectId.isValid(taskId)) {
+      task = await Task.findById(taskId);
+    }
+
+    let progress = await StudentResourceProgress.findOne({
+      studentId,
+      taskId,
+      resourceId,
+    });
+
+    const cleanType = String(resourceType).toLowerCase();
+    const validTypes = ['video', 'pdf', 'docx', 'note', 'link'];
+    const safeType = validTypes.includes(cleanType) ? cleanType : 'note';
+
+    if (!progress) {
+      progress = new StudentResourceProgress({
+        studentId,
+        taskId,
+        resourceId,
+        resourceType: safeType,
+        durationSeconds: Number(durationSeconds) || 0,
+        watchedSeconds: Number(watchedSeconds) || 0,
+        progressPercentage: 0,
+      });
+    }
+
+    progress.lastWatchedAt = new Date();
+
+    if (safeType === 'video') {
+      const newDur = Math.max(Number(durationSeconds) || 0, progress.durationSeconds || 0);
+      const newWatched = Math.max(Number(watchedSeconds) || 0, progress.watchedSeconds || 0);
+      progress.durationSeconds = newDur;
+      progress.watchedSeconds = newWatched;
+      progress.progressPercentage = newDur > 0 ? Math.min(100, Math.round((newWatched / newDur) * 100)) : 0;
+
+      // Rule: Video watched >= 50% of total duration
+      if (newDur > 0 && newWatched >= 0.5 * newDur) {
+        progress.isCompleted = true;
+        if (!progress.completedAt) progress.completedAt = new Date();
+      }
+    } else {
+      // PDF, DOCX, Note, Link: viewing/opening marks completed
+      progress.progressPercentage = 100;
+      progress.isCompleted = true;
+      if (!progress.completedAt) progress.completedAt = new Date();
+    }
+
+    await progress.save();
+
+    // Required Resources Audit
+    // Determine which resourceIds are REQUIRED for this task
+    let reqIds = Array.isArray(requiredResourceIds) ? requiredResourceIds : [];
+    
+    // If not provided in body, fallback to matching all student resource progress records for this task
+    let allTaskProgress = await StudentResourceProgress.find({ studentId, taskId });
+
+    let isTaskCompleted = false;
+    let taskStatus = 'in_progress';
+
+    if (reqIds.length > 0) {
+      // Task has explicitly defined required resource IDs
+      const completedReqCount = allTaskProgress.filter(
+        (p) => reqIds.includes(String(p.resourceId)) && p.isCompleted
+      ).length;
+      if (completedReqCount >= reqIds.length) {
+        isTaskCompleted = true;
+        taskStatus = 'completed';
+      } else {
+        taskStatus = 'in_progress';
+      }
+    } else {
+      // Default rule: compare completed vs total assigned task resources count
+      const totalCount = Number(totalTaskResourcesCount) || 4;
+      const completedCount = allTaskProgress.filter((p) => p.isCompleted).length;
+      if (completedCount >= totalCount) {
+        isTaskCompleted = true;
+        taskStatus = 'completed';
+      } else {
+        taskStatus = 'in_progress';
+      }
+    }
+
+    // Update TaskAssignment in MongoDB
+    if (mongoose.Types.ObjectId.isValid(taskId)) {
+      let assignment = await TaskAssignment.findOne({ taskId, studentId });
+      if (!assignment) {
+        assignment = new TaskAssignment({
+          taskId,
+          studentId,
+          status: taskStatus,
+        });
+      } else {
+        assignment.status = taskStatus;
+      }
+
+      if (taskStatus === 'completed') {
+        assignment.completedAt = assignment.completedAt || new Date();
+      } else {
+        assignment.completedAt = null;
+      }
+      await assignment.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      progress,
+      taskStatus,
+      isTaskCompleted,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update resource progress',
+    });
+  }
+};
+
 module.exports = {
   getStudentTasks,
   updateStudentTaskStatus,
   recordHeartbeat,
   getStudentStreak,
+  getStudentResourceProgress,
+  updateResourceProgress,
 };

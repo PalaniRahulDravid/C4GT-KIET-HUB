@@ -2,9 +2,6 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Team = require('../models/Team');
 const Task = require('../models/Task');
-const Resource = require('../models/Resource');
-const TaskAssignment = require('../models/TaskAssignment');
-
 
 /**
  * @desc    Get all registered users (Admin only)
@@ -459,9 +456,7 @@ const createTask = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    const populatedTask = await Task.findById(task._id)
-      .populate('createdBy', 'name email avatar')
-      .populate('relatedResources', 'title type description url topic');
+    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
 
     res.status(201).json({
       success: true,
@@ -517,9 +512,7 @@ const updateTask = async (req, res) => {
 
     await task.save();
 
-    const populatedTask = await Task.findById(task._id)
-      .populate('createdBy', 'name email avatar')
-      .populate('relatedResources', 'title type description url topic');
+    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
 
     res.status(200).json({
       success: true,

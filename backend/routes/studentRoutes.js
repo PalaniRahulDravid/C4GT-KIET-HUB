@@ -4,8 +4,16 @@ const {
   updateStudentTaskStatus,
   recordHeartbeat,
   getStudentStreak,
+  getStudentResourceProgress,
+  updateResourceProgress,
 } = require('../controllers/studentController');
 const { protect } = require('../middleware/auth');
+
+const {
+  getStudentNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} = require('../controllers/notificationController');
 
 const router = express.Router();
 
@@ -16,5 +24,14 @@ router.get('/tasks', getStudentTasks);
 router.patch('/tasks/:taskId/status', updateStudentTaskStatus);
 router.post('/heartbeat', recordHeartbeat);
 router.get('/streak', getStudentStreak);
+
+// Resource progress tracking endpoints (automatic task completion)
+router.get('/resource-progress', getStudentResourceProgress);
+router.post('/resource-progress', updateResourceProgress);
+
+// Notification endpoints
+router.get('/notifications', getStudentNotifications);
+router.patch('/notifications/read-all', markAllNotificationsRead);
+router.patch('/notifications/:id/read', markNotificationRead);
 
 module.exports = router;

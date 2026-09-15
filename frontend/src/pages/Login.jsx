@@ -17,12 +17,24 @@ export default function Login() {
   const DEFAULT_GOOGLE_CLIENT_ID = '37964450681-qjr64dq42neav1q5jbpbeo0pcgtgpfi0.apps.googleusercontent.com';
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
 
+  const resolveRedirectPath = (authUser, fromPath) => {
+    const dest = getDashboardPath(authUser?.role);
+    if (!fromPath || typeof fromPath !== 'string') return dest;
+
+    const role = authUser?.role ? String(authUser.role).toLowerCase().trim() : 'student';
+    if (role === 'admin' && fromPath.startsWith('/admin')) return fromPath;
+    if ((role === 'teamlead' || role === 'team_lead') && (fromPath.startsWith('/teamlead') || fromPath.startsWith('/team-lead'))) return fromPath;
+    if ((role === 'student' || role === 'user') && fromPath.startsWith('/student')) return fromPath;
+
+    return dest;
+  };
+
   // Synchronously prevent authenticated users from viewing or accessing the login page
   if (!loading && isAuthenticated && user) {
-    if (!isStudentProfileComplete(user) && user.role !== 'admin') {
+    if (!isStudentProfileComplete(user) && user.role !== 'admin' && user.role !== 'teamlead' && user.role !== 'team_lead') {
       return <Navigate to="/complete-profile" replace />;
     }
-    const targetPath = location.state?.from?.pathname || getDashboardPath(user.role);
+    const targetPath = resolveRedirectPath(user, location.state?.from?.pathname);
     return <Navigate to={targetPath} replace />;
   }
 
@@ -44,10 +56,10 @@ export default function Login() {
                 setError(null);
                 try {
                   const loggedInUser = await loginWithGoogle(response.credential);
-                  if (!isStudentProfileComplete(loggedInUser) && loggedInUser.role !== 'admin') {
+                  if (!isStudentProfileComplete(loggedInUser) && loggedInUser.role !== 'admin' && loggedInUser.role !== 'teamlead' && loggedInUser.role !== 'team_lead') {
                     navigate('/complete-profile', { replace: true });
                   } else {
-                    const dest = location.state?.from?.pathname || getDashboardPath(loggedInUser.role);
+                    const dest = resolveRedirectPath(loggedInUser, location.state?.from?.pathname);
                     navigate(dest, { replace: true });
                   }
                 } catch (err) {
