@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Team = require('../models/Team');
 const Task = require('../models/Task');
+const Resource = require('../models/Resource');
+const TaskAssignment = require('../models/TaskAssignment');
+
 
 /**
  * @desc    Get all registered users (Admin only)
@@ -26,6 +29,7 @@ const getUsers = async (req, res) => {
     });
   }
 };
+
 
 /**
  * @desc    Update a user's role (Admin only)
@@ -250,6 +254,116 @@ const assignTeamLead = async (req, res) => {
 };
 
 /**
+ * @desc    Get all resources (auto-seeds default resources if none exist)
+ * @route   GET /api/admin/resources
+ * @access  Private/Admin
+ */
+const getResources = async (req, res) => {
+  try {
+    let resources = await Resource.find()
+      .sort({ createdAt: -1 })
+      .populate('createdBy', 'name email avatar');
+
+    // Auto-seed default learning resources if database is empty
+    if (resources.length === 0) {
+      const adminUser = (await User.findOne({ role: 'admin' })) || (await User.findOne());
+      if (adminUser) {
+        const seedResources = [
+          {
+            title: 'React Authentication & Google SSO Integration Guide',
+            type: 'link',
+            description: 'Official developer documentation for Google Identity Services (GIS) and React OAuth 2.0 flow.',
+            url: 'https://developers.google.com/identity/gsi/web/guides/overview',
+            topic: 'Full-Stack Web Dev / Security',
+            createdBy: adminUser._id,
+          },
+          {
+            title: 'MongoDB Atlas Schema & Role-Based Access Control Spec',
+            type: 'note',
+            description: 'Architectural specifications for user role gating, indexing, and connection security.',
+            url: 'https://www.mongodb.com/docs/atlas/',
+            topic: 'Database / MongoDB Atlas',
+            createdBy: adminUser._id,
+          },
+          {
+            title: 'RESTful API Security & Middleware Guidelines',
+            type: 'pdf',
+            description: 'Comprehensive checklist for JWT authentication middleware, CORS protection, and input sanitization.',
+            url: 'https://expressjs.com/en/advanced/best-practice-security.html',
+            topic: 'Full-Stack Web Dev / Backend',
+            createdBy: adminUser._id,
+          },
+          {
+            title: 'Data Structures & Algorithms Problem-Solving Patterns',
+            type: 'link',
+            description: 'Curated problem patterns for array manipulation, graph traversal, and dynamic programming.',
+            url: 'https://leetcode.com',
+            topic: 'Data Structures & Algorithms',
+            createdBy: adminUser._id,
+          },
+        ];
+
+        await Resource.insertMany(seedResources);
+        resources = await Resource.find()
+          .sort({ createdAt: -1 })
+          .populate('createdBy', 'name email avatar');
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      count: resources.length,
+      resources,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch resources',
+    });
+  }
+};
+
+/**
+ * @desc    Create a new resource
+ * @route   POST /api/admin/resources
+ * @access  Private/Admin
+ */
+const createResource = async (req, res) => {
+  try {
+    const { title, type, description, url, topic } = req.body;
+
+    if (!title || !type || !url) {
+      return res.status(400).json({
+        success: false,
+        message: 'Resource title, type, and URL are required',
+      });
+    }
+
+    const resource = await Resource.create({
+      title: title.trim(),
+      type: type.toLowerCase().trim(),
+      description: description ? description.trim() : '',
+      url: url.trim(),
+      topic: topic ? topic.trim() : 'General',
+      createdBy: req.user._id,
+    });
+
+    const populatedResource = await Resource.findById(resource._id).populate('createdBy', 'name email avatar');
+
+    res.status(201).json({
+      success: true,
+      message: 'Resource created successfully',
+      resource: populatedResource,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create resource',
+    });
+  }
+};
+
+/**
  * @desc    Get all tasks
  * @route   GET /api/admin/tasks
  * @access  Private/Admin
@@ -258,7 +372,8 @@ const getTasks = async (req, res) => {
   try {
     let tasks = await Task.find()
       .sort({ createdAt: -1 })
-      .populate('createdBy', 'name email avatar');
+      .populate('createdBy', 'name email avatar')
+      .populate('relatedResources', 'title type description url topic');
 
     // Auto-seed default task if none exist
     if (tasks.length === 0) {
@@ -277,7 +392,11 @@ const getTasks = async (req, res) => {
           status: 'Published',
           createdBy: adminUser._id,
         });
-        tasks = [await Task.findById(defaultTask._id).populate('createdBy', 'name email avatar')];
+        tasks = [
+          await Task.findById(defaultTask._id)
+            .populate('createdBy', 'name email avatar')
+            .populate('relatedResources', 'title type description url topic'),
+        ];
       }
     }
 
@@ -310,6 +429,7 @@ const createTask = async (req, res) => {
       priority,
       assignedTeams,
       deliverables,
+      relatedResources,
     } = req.body;
 
     if (!title || !description || !deadline) {
@@ -334,11 +454,14 @@ const createTask = async (req, res) => {
         Array.isArray(deliverables) && deliverables.length > 0
           ? deliverables
           : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+      relatedResources: Array.isArray(relatedResources) ? relatedResources : [],
       status: 'Published',
       createdBy: req.user._id,
     });
 
-    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email avatar')
+      .populate('relatedResources', 'title type description url topic');
 
     res.status(201).json({
       success: true,
@@ -377,6 +500,7 @@ const updateTask = async (req, res) => {
       priority,
       assignedTeams,
       deliverables,
+      relatedResources,
       status,
     } = req.body;
 
@@ -388,11 +512,14 @@ const updateTask = async (req, res) => {
     if (priority) task.priority = priority;
     if (assignedTeams) task.assignedTeams = assignedTeams;
     if (deliverables) task.deliverables = deliverables;
+    if (relatedResources !== undefined) task.relatedResources = relatedResources;
     if (status) task.status = status;
 
     await task.save();
 
-    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email avatar')
+      .populate('relatedResources', 'title type description url topic');
 
     res.status(200).json({
       success: true,
@@ -408,13 +535,22 @@ const updateTask = async (req, res) => {
 };
 
 /**
- * @desc    Delete a task
+ * @desc    Delete a task permanently from MongoDB Atlas
  * @route   DELETE /api/admin/tasks/:id
  * @access  Private/Admin
  */
 const deleteTask = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid task ID format',
+      });
+    }
+
+    const task = await Task.findById(id);
 
     if (!task) {
       return res.status(404).json({
@@ -423,6 +559,10 @@ const deleteTask = async (req, res) => {
       });
     }
 
+    // Clean up all associated TaskAssignment records to prevent orphaned documents in MongoDB Atlas
+    await TaskAssignment.deleteMany({ taskId: task._id });
+
+    // Permanently delete task document from MongoDB Atlas
     await task.deleteOne();
 
     res.status(200).json({
@@ -430,6 +570,7 @@ const deleteTask = async (req, res) => {
       message: 'Task deleted successfully',
     });
   } catch (error) {
+    console.error('Task deletion error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete task',
@@ -437,14 +578,18 @@ const deleteTask = async (req, res) => {
   }
 };
 
+
 module.exports = {
   getUsers,
   updateUserRole,
   getAdminStats,
   getTeams,
   assignTeamLead,
+  getResources,
+  createResource,
   getTasks,
   createTask,
   updateTask,
   deleteTask,
 };
+

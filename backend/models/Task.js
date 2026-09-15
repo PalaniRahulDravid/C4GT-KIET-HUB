@@ -42,6 +42,12 @@ const taskSchema = new mongoose.Schema({
     type: [String],
     default: ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
   },
+  relatedResources: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Resource',
+    },
+  ],
   status: {
     type: String,
     default: 'Published',
@@ -59,3 +65,4 @@ const taskSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.models.Task || mongoose.model('Task', taskSchema);
+

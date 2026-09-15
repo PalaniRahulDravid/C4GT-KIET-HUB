@@ -5,6 +5,8 @@ const {
   getAdminStats,
   getTeams,
   assignTeamLead,
+  getResources,
+  createResource,
   getTasks,
   createTask,
   updateTask,
@@ -23,10 +25,13 @@ router.get('/users', getUsers);
 router.patch('/users/:id/role', updateUserRole);
 router.get('/teams', getTeams);
 router.patch('/teams/:id/lead', assignTeamLead);
+router.get('/resources', getResources);
+router.post('/resources', createResource);
 router.get('/tasks', getTasks);
 router.post('/tasks', createTask);
 router.patch('/tasks/:id', updateTask);
 router.delete('/tasks/:id', deleteTask);
 
 module.exports = router;
+
 

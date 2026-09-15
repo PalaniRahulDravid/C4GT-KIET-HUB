@@ -79,14 +79,17 @@ const getStudentTasks = async (req, res) => {
 
     let tasks = await Task.find(query)
       .sort({ deadline: 1 })
-      .populate('createdBy', 'name email avatar role');
+      .populate('createdBy', 'name email avatar role')
+      .populate('relatedResources', 'title type description url topic');
 
     // Fallback: if database has tasks but query returned none, return published tasks for cohort
     if (tasks.length === 0) {
       tasks = await Task.find()
         .sort({ deadline: 1 })
-        .populate('createdBy', 'name email avatar role');
+        .populate('createdBy', 'name email avatar role')
+        .populate('relatedResources', 'title type description url topic');
     }
+
 
     // Attach student specific status to each task
     const tasksWithStatus = tasks.map((t) => {

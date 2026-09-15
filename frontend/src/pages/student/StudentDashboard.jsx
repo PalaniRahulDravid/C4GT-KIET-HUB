@@ -1014,6 +1014,39 @@ export default function StudentDashboard() {
 
                         <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{task.description}</p>
 
+                        {/* Attached Related Resources */}
+                        {Array.isArray(task.relatedResources) && task.relatedResources.length > 0 && (
+                          <div className="pt-2.5 border-t border-slate-100 space-y-2">
+                            <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Related Resources</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {task.relatedResources.map((res, rIdx) => (
+                                <a
+                                  key={res._id || rIdx}
+                                  href={res.url || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 transition-all flex items-center justify-between gap-2 text-xs group"
+                                >
+                                  <div className="truncate">
+                                    <div className="font-bold text-slate-900 group-hover:text-indigo-600 truncate">
+                                      {res.title}
+                                    </div>
+                                    {res.description && (
+                                      <div className="text-[11px] text-slate-500 truncate">{res.description}</div>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-semibold text-indigo-600 flex items-center gap-1 shrink-0">
+                                    Open Resource <ExternalLink className="w-3 h-3" />
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500 gap-2">
                           <div className="flex items-center gap-3 flex-wrap">
                             {task.topic && (
@@ -1035,6 +1068,7 @@ export default function StudentDashboard() {
               </div>
             </div>
           )}
+
 
           {/* TAB 3: RESOURCES */}
           {activeNav === 'resources' && (
