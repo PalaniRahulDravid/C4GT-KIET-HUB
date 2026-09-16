@@ -16,21 +16,16 @@ export default function Login() {
   const [error, setError] = useState(null);
 
   const resolveRedirectPath = (authUser, fromPath) => {
-    const dest = getDashboardPath(authUser?.role);
-    if (!fromPath || typeof fromPath !== 'string') return dest;
-
     const role = authUser?.role ? String(authUser.role).toLowerCase().trim() : 'student';
-    if (role === 'admin' && fromPath.startsWith('/admin')) return fromPath;
-    if (
-      (role === 'teamlead' || role === 'team_lead') &&
-      (fromPath.startsWith('/teamlead') ||
-        fromPath.startsWith('/team-lead') ||
-        fromPath.startsWith('/student'))
-    )
-      return fromPath;
-    if ((role === 'student' || role === 'user') && fromPath.startsWith('/student')) return fromPath;
+    if (role === 'admin') {
+      if (fromPath && typeof fromPath === 'string' && fromPath.startsWith('/admin')) {
+        return fromPath;
+      }
+      return '/admin/dashboard';
+    }
 
-    return dest;
+    // After login, students and team leads first open the main site ('/')
+    return '/';
   };
 
   // If already authenticated, redirect to appropriate workspace

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, getDashboardPath, getRoleName } from '../context/AuthContext';
-import { Menu, X, ChevronDown, LogOut, LayoutDashboard, Sparkles, ArrowRight } from 'lucide-react';
+import { Menu, X, ChevronDown, LogOut, LayoutDashboard, Sparkles, ArrowRight, GraduationCap } from 'lucide-react';
 import C4GTLogo from './C4GTLogo';
 
 const NAV_ITEMS = [
@@ -171,16 +171,6 @@ export default function LandingHeader() {
             </>
           ) : (
             <div className="flex items-center gap-3">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleGetStarted}
-                className="hidden sm:inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white rounded-full bg-[#1C1B1A] hover:bg-black shadow-xs transition-all cursor-pointer"
-              >
-                <span>Dashboard</span>
-                <ArrowRight className="w-4 h-4" />
-              </motion.button>
-
               {/* USER PROFILE DROPDOWN */}
               <div className="relative" ref={dropdownRef}>
                 <button
@@ -232,6 +222,19 @@ export default function LandingHeader() {
                           <LayoutDashboard className="w-4 h-4 text-[#1C1B1A]" />
                           <span>{getDashboardLabel(user?.role)}</span>
                         </button>
+
+                        {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                          <button
+                            onClick={() => {
+                              setProfileDropdownOpen(false);
+                              navigate('/student');
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#1C1B1A] hover:bg-black/5 rounded-xl transition-colors text-left cursor-pointer"
+                          >
+                            <GraduationCap className="w-4 h-4 text-blue-600" />
+                            <span>Student Workspace</span>
+                          </button>
+                        )}
 
                         <button
                           onClick={() => {

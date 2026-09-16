@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
 import C4GTLogo from '../../components/C4GTLogo';
@@ -29,7 +29,6 @@ import {
   User,
   Users,
   Award,
-  ShieldCheck,
   ArrowRight,
   Bell,
   Activity,
@@ -48,6 +47,15 @@ export default function StudentDashboard() {
 
   // Profile Details Modal State
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef(null);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('profile') === 'true' || searchParams.get('tab') === 'profile') {
+      setShowProfileModal(true);
+    }
+  }, [searchParams]);
 
   // Active Sidebar Navigation State: ONLY Overview, My Tasks, Resources, Progress
   const [activeNav, setActiveNav] = useState('dashboard'); // 'dashboard' | 'my-tasks' | 'resources' | 'progress'
@@ -57,6 +65,8 @@ export default function StudentDashboard() {
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [tasksError, setTasksError] = useState(null);
   const [expandedResources, setExpandedResources] = useState({});
+  const [taskFilter, setTaskFilter] = useState('all'); // 'all' | 'admin' | 'teamlead'
+  const [overviewTaskFilter, setOverviewTaskFilter] = useState('all'); // 'all' | 'admin' | 'teamlead'
 
   // MY TASKS -> Selected Task Overview Modal State
   const [selectedOverviewTask, setSelectedOverviewTask] = useState(null);
@@ -261,11 +271,14 @@ export default function StudentDashboard() {
     }
   };
 
-  // Close notifications popover when clicking outside
+  // Close notifications and profile popover when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
         setNotificationsPopoverOpen(false);
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -654,6 +667,15 @@ export default function StudentDashboard() {
 
   const safeTasks = Array.isArray(tasks) ? tasks.filter(Boolean) : [];
 
+  // Categorize tasks into Admin Tasks and Team Lead Tasks
+  const isTeamLeadTask = (t) => {
+    const role = t?.createdBy?.role;
+    return role === 'teamlead' || role === 'team_lead';
+  };
+
+  const adminTasks = safeTasks.filter((t) => !isTeamLeadTask(t));
+  const teamLeadTasks = safeTasks.filter((t) => isTeamLeadTask(t));
+
   // Task & Statistics Calculations (Real Data)
   const totalTasks = safeTasks.length;
   const completedTasksCount = safeTasks.filter((t) => t.status === 'completed').length;
@@ -823,7 +845,7 @@ export default function StudentDashboard() {
   const getPageInfo = () => {
     switch (activeNav) {
       case 'my-tasks':
-        return { breadcrumb: 'My Tasks', title: 'My Tasks (All Assigned Tasks)' };
+        return { breadcrumb: 'My Tasks', title: 'My Tasks (Admin & Team Lead)' };
       case 'resources':
         return { breadcrumb: 'Resources', title: 'My Task Resources' };
       case 'progress':
@@ -835,6 +857,105 @@ export default function StudentDashboard() {
   };
 
   const pageInfo = getPageInfo();
+
+  // Helper renderer for consistent, interactive task cards
+  const renderTaskCard = (task, idx, type) => {
+    if (!task) return null;
+    const isCompleted = task.status === 'completed';
+    const isLeadTask = type === 'teamlead' || isTeamLeadTask(task);
+
+    return (
+      <div
+        key={task._id || idx}
+        onClick={() => setSelectedOverviewTask(task)}
+        className={`p-5 rounded-2xl border bg-white hover:border-[#1C1B1A]/40 transition-all space-y-3 shadow-2xs cursor-pointer group ${
+          isLeadTask ? 'border-emerald-200/90 hover:border-emerald-500/60' : 'border-purple-200/90 hover:border-purple-500/60'
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className={`w-2.5 h-2.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <h4 className="text-base font-bold text-[#1C1B1A] font-serif tracking-wide group-hover:text-black">
+              {task.title}
+            </h4>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-md border ${
+                isLeadTask
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-purple-50 text-purple-800 border-purple-200'
+              }`}
+            >
+              {isLeadTask ? 'Team Lead Task' : 'Admin Task'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {task.priority && (
+              <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
+                {task.priority} Priority
+              </span>
+            )}
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${
+                isCompleted
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}
+            >
+              {isCompleted ? (
+                <>
+                  <CheckCircle2 className="w-3 h-3 text-emerald-700" /> Completed
+                </>
+              ) : (
+                <>
+                  <Clock className="w-3 h-3 text-amber-700" /> Pending / In Progress
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{task.description}</p>
+
+        <div className="flex flex-wrap items-center justify-between pt-3 border-t border-[#E0DDD0] text-xs text-[#66645E] gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            {task.topic && (
+              <span className="bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium border border-[#E0DDD0]">
+                Domain: {task.topic}
+              </span>
+            )}
+            <span>
+              Assigned by:{' '}
+              <strong className="text-[#1C1B1A]">
+                {task.createdBy?.name || (isLeadTask ? 'Team Lead' : 'Platform Admin')}
+              </strong>
+              {isLeadTask && studentTeam?.name && (
+                <span className="ml-1 text-[11px] text-[#66645E]">({studentTeam.name})</span>
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-[#1C1B1A] font-semibold font-mono">
+              <Calendar className="w-3.5 h-3.5 text-[#66645E]" />
+              Due: {formatDate(task.deadline)}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedOverviewTask(task);
+              }}
+              className="px-3.5 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <span>Open Overview</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-[#F7F5EE] font-sans antialiased text-[#1C1B1A] select-none overflow-hidden">
@@ -873,9 +994,18 @@ export default function StudentDashboard() {
             </div>
 
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
                   {selectedOverviewTask.topic || 'Engineering Track'}
+                </span>
+                <span
+                  className={`px-2.5 py-0.5 text-[10px] font-mono font-bold rounded-full border ${
+                    isTeamLeadTask(selectedOverviewTask)
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-purple-50 text-purple-800 border-purple-200'
+                  }`}
+                >
+                  {isTeamLeadTask(selectedOverviewTask) ? 'Team Lead Task' : 'Admin Task'}
                 </span>
                 {selectedOverviewTask.priority && (
                   <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-amber-50 text-amber-900 rounded-full border border-amber-200">
@@ -908,8 +1038,17 @@ export default function StudentDashboard() {
               </div>
               <div className="p-3 bg-white rounded-xl border border-[#E0DDD0] space-y-1">
                 <div className="text-[#66645E]">Assigned By:</div>
-                <div className="font-bold text-[#1C1B1A]">
-                  {selectedOverviewTask.createdBy?.name || 'Admin / Team Lead'}
+                <div className="font-bold text-[#1C1B1A] flex items-center gap-1.5">
+                  <span>{selectedOverviewTask.createdBy?.name || (isTeamLeadTask(selectedOverviewTask) ? 'Team Lead' : 'Platform Admin')}</span>
+                  <span
+                    className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
+                      isTeamLeadTask(selectedOverviewTask)
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-purple-100 text-purple-800'
+                    }`}
+                  >
+                    {isTeamLeadTask(selectedOverviewTask) ? 'TEAM LEAD' : 'ADMIN'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1075,30 +1214,6 @@ export default function StudentDashboard() {
             </button>
           </div>
 
-          {/* DUAL ROLE: TEAM LEAD SWITCH CARD */}
-          {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-            <div className="mb-6 p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 via-[#F7FDF9] to-teal-50 border border-emerald-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[9px] font-mono font-bold uppercase tracking-wider">
-                  Lead & Student
-                </span>
-                <span className="text-[10px] font-mono text-emerald-800 font-semibold">2 Dashboards Active</span>
-              </div>
-              <p className="text-[11px] text-emerald-950 font-medium leading-tight">
-                You are a Team Lead. Switch anytime to manage your 9-member team roster.
-              </p>
-              <Link
-                to="/teamlead"
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer group"
-              >
-                <span className="flex items-center gap-2">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>Team Lead Dashboard</span>
-                </span>
-                <ChevronRight className="w-3.5 h-3.5 text-emerald-200 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
-            </div>
-          )}
 
           {/* Navigation Section Label */}
           <div className="mb-3 px-2 flex items-center justify-between">
@@ -1237,18 +1352,6 @@ export default function StudentDashboard() {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
-            {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-              <Link
-                to="/teamlead"
-                className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                title="Switch to Team Lead Dashboard"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Team Lead Dashboard</span>
-                <ChevronRight className="w-3 h-3" />
-              </Link>
-            )}
-
             {/* Bell Notification Popover Container */}
             <div className="relative" ref={notificationsRef}>
               <button
@@ -1326,26 +1429,153 @@ export default function StudentDashboard() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-2.5 p-1.5 rounded-full hover:bg-black/5 transition-colors cursor-pointer border border-[#E0DDD0] bg-white shadow-2xs"
-              title="Click to view & edit Profile Details"
-            >
-              {user?.avatar ? (
-                <img src={user.avatar} alt={user.name || 'User'} className="w-8 h-8 rounded-full object-cover border border-[#E0DDD0]" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-[#1C1B1A] text-white font-bold flex items-center justify-center text-xs shadow-2xs">
-                  {getInitials(user?.name)}
+            {/* Top Profile Header with Dropdown (Switch to Team Lead & Profile Routes) */}
+            <div className="relative" ref={profileDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                className={`flex items-center gap-2.5 p-1.5 pr-3 rounded-full hover:bg-black/5 transition-all cursor-pointer border ${
+                  profileDropdownOpen ? 'border-[#1C1B1A] ring-2 ring-black/5 bg-[#F4F1E8]' : 'border-[#E0DDD0] bg-white'
+                } shadow-2xs`}
+                title="Account & Navigation Menu"
+              >
+                {user?.avatar ? (
+                  <img src={user.avatar} alt={user.name || 'User'} className="w-8 h-8 rounded-full object-cover border border-[#E0DDD0]" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-[#1C1B1A] text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                    {getInitials(user?.name)}
+                  </div>
+                )}
+                <div className="text-left hidden sm:block">
+                  <p className="text-xs font-bold text-[#1C1B1A] leading-tight flex items-center gap-1.5">
+                    <span className="truncate max-w-[110px]">{user?.name || 'Student'}</span>
+                    {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                      <span className="px-1.5 py-0.2 text-[8px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        LEAD
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-[#66645E] font-medium leading-tight">
+                    {user?.role === 'teamlead' || user?.role === 'team_lead' ? 'Team Lead & Student' : 'Student Account'}
+                  </p>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-[#66645E] transition-transform duration-200 ${profileDropdownOpen ? 'rotate-180 text-[#1C1B1A]' : ''}`} />
+              </button>
+
+              {/* Profile Dropdown Popover */}
+              {profileDropdownOpen && (
+                <div className="absolute right-0 mt-3 w-72 sm:w-80 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                  {/* User Profile Header Card */}
+                  <div className="p-4 border-b border-[#E0DDD0] bg-[#F4F1E8]/70">
+                    <div className="flex items-center gap-3">
+                      {user?.avatar ? (
+                        <img src={user.avatar} alt={user.name || 'User'} className="w-10 h-10 rounded-full object-cover border border-[#E0DDD0]" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-[#1C1B1A] text-white font-bold flex items-center justify-center text-sm shadow-2xs">
+                          {getInitials(user?.name)}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-sm text-[#1C1B1A] truncate">{user?.name || 'Student Account'}</div>
+                        <div className="text-[11px] text-[#66645E] font-mono truncate">{user?.email || 'student@c4gt.in'}</div>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              TEAM LEAD
+                            </span>
+                          )}
+                          <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
+                            STUDENT
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Navigation & Actions */}
+                  <div className="p-2 space-y-1">
+                    {/* Switch to Team Lead Route (for Team Leads) */}
+                    {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                      <Link
+                        to="/teamlead"
+                        onClick={() => setProfileDropdownOpen(false)}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-emerald-50/80 to-[#F7FDF9] hover:from-emerald-100/90 hover:to-emerald-50 border border-emerald-200/80 text-emerald-950 transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform">
+                            <Users className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-emerald-900 leading-tight flex items-center gap-1.5">
+                              Switch to Team Lead
+                              <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-200/80 text-emerald-900">
+                                Portal
+                              </span>
+                            </p>
+                            <p className="text-[10px] text-emerald-700/90">Manage roster, invite members & tasks</p>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-emerald-700 group-hover:translate-x-0.5 transition-transform" />
+                      </Link>
+                    )}
+
+                    {/* Profile Route / Details */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        setShowProfileModal(true);
+                      }}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F2EFE6] text-[#1C1B1A] transition-colors group cursor-pointer text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white border border-[#E0DDD0] text-[#1C1B1A] flex items-center justify-center shadow-2xs group-hover:bg-[#1C1B1A] group-hover:text-white transition-colors">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-[#1C1B1A] leading-tight">My Profile</p>
+                          <p className="text-[10px] text-[#66645E]">View & edit student details and track</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[#9E9C94] group-hover:text-[#1C1B1A] group-hover:translate-x-0.5 transition-all" />
+                    </button>
+
+                    {/* Exit to Main Site */}
+                    <Link
+                      to="/"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F2EFE6] text-[#1C1B1A] transition-colors group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white border border-[#E0DDD0] text-[#66645E] flex items-center justify-center shadow-2xs group-hover:text-[#1C1B1A]">
+                          <Home className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-[#1C1B1A] leading-tight">Exit to Main Site</p>
+                          <p className="text-[10px] text-[#66645E]">Return to public LMS landing page</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[#9E9C94] group-hover:text-[#1C1B1A] group-hover:translate-x-0.5 transition-all" />
+                    </Link>
+                  </div>
+
+                  {/* Sign Out Action */}
+                  <div className="p-2 border-t border-[#E0DDD0] bg-[#F4F1E8]/30">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4 text-rose-500" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
                 </div>
               )}
-              <div className="text-left hidden sm:block pr-2">
-                <p className="text-xs font-bold text-[#1C1B1A] leading-tight">
-                  {user?.name || 'Student'}
-                </p>
-                <p className="text-[10px] text-[#66645E] font-semibold hover:underline">View Profile</p>
-              </div>
-            </button>
+            </div>
           </div>
         </header>
 
@@ -1550,7 +1780,9 @@ export default function StudentDashboard() {
                       Assigned
                     </span>
                   </div>
-                  <p className="text-xs text-[#66645E] mt-1">Admin deliverables</p>
+                  <p className="text-xs text-[#66645E] mt-1 font-mono">
+                    {adminTasks.length} Admin • {teamLeadTasks.length} Team Lead
+                  </p>
                 </div>
 
                 {/* Completed */}
@@ -1735,82 +1967,213 @@ export default function StudentDashboard() {
 
               {/* 4. MY TASKS PREVIEW SECTION */}
               <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
+                <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
                       <BookOpen className="w-5 h-5 text-[#1C1B1A]" />
                       My Tasks Overview
                     </h3>
                     <p className="text-xs text-[#66645E] mt-0.5">
-                      Assigned sprint deliverables with live status and progress.
+                      Assigned sprint deliverables divided into Admin and Team Lead sections.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveNav('my-tasks')}
-                    className="text-xs font-semibold text-[#1C1B1A] hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    View All ({totalTasks}) <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center bg-[#F2EFE6] p-1 rounded-xl border border-[#E0DDD0] text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setOverviewTaskFilter('all')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                          overviewTaskFilter === 'all' ? 'bg-[#1C1B1A] text-white shadow-2xs' : 'text-[#66645E]'
+                        }`}
+                      >
+                        All ({totalTasks})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOverviewTaskFilter('admin')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                          overviewTaskFilter === 'admin' ? 'bg-purple-700 text-white shadow-2xs' : 'text-[#66645E]'
+                        }`}
+                      >
+                        Admin ({adminTasks.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOverviewTaskFilter('teamlead')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                          overviewTaskFilter === 'teamlead' ? 'bg-emerald-700 text-white shadow-2xs' : 'text-[#66645E]'
+                        }`}
+                      >
+                        Team Lead ({teamLeadTasks.length})
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveNav('my-tasks')}
+                      className="text-xs font-semibold text-[#1C1B1A] hover:underline flex items-center gap-1 cursor-pointer pl-1"
+                    >
+                      View All <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="p-6 space-y-3">
+                <div className="p-6 space-y-6">
                   {loadingTasks ? (
                     <div className="p-6 text-center text-xs text-[#66645E] flex items-center justify-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-[#1C1B1A]" />
                       <span>Loading assigned tasks...</span>
                     </div>
-                  ) : myTasksPreviewList.length === 0 ? (
+                  ) : safeTasks.length === 0 ? (
                     <div className="p-5 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
                       No tasks assigned currently.
                     </div>
                   ) : (
-                    myTasksPreviewList.map((t, idx) => {
-                      if (!t) return null;
-                      const isDone = t.status === 'completed';
-                      return (
-                        <div
-                          key={t._id || idx}
-                          className="p-4 rounded-xl border border-[#E0DDD0] bg-white hover:border-[#1C1B1A]/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs cursor-pointer"
-                          onClick={() => setSelectedOverviewTask(t)}
-                        >
-                          <div className="space-y-1 min-w-0 flex-1">
+                    <>
+                      {/* SECTION 1: ADMIN TASKS PREVIEW */}
+                      {(overviewTaskFilter === 'all' || overviewTaskFilter === 'admin') && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${isDone ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                              <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-serif">
-                                {typeof t.title === 'string' ? t.title : 'Task Item'}
+                              <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
+                              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-purple-950">
+                                Admin Curriculum Tasks ({adminTasks.length})
                               </h4>
                             </div>
-                            <p className="text-[11px] text-[#66645E] truncate">{t.topic || 'Engineering Track'}</p>
+                            <span className="text-[11px] font-mono text-[#66645E]">
+                              {adminTasks.filter((t) => t.status === 'completed').length} completed
+                            </span>
                           </div>
 
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className="text-[11px] font-mono text-[#66645E]">
-                              Due {formatDate(t.deadline)}
-                            </span>
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
-                                isDone
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                  : 'bg-[#EEECDF] text-[#1C1B1A] border-[#E0DDD0]'
-                              }`}
-                            >
-                              {isDone ? 'Completed' : 'Pending'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedOverviewTask(t);
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
-                            >
-                              View Overview
-                            </button>
-                          </div>
+                          {adminTasks.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/40 rounded-xl border border-[#E0DDD0]">
+                              No Admin tasks assigned yet.
+                            </div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              {adminTasks.slice(0, 2).map((t, idx) => (
+                                <div
+                                  key={t._id || idx}
+                                  className="p-4 rounded-xl border border-purple-200/80 bg-white hover:border-purple-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs cursor-pointer"
+                                  onClick={() => setSelectedOverviewTask(t)}
+                                >
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-serif">
+                                        {typeof t.title === 'string' ? t.title : 'Task Item'}
+                                      </h4>
+                                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-purple-100 text-purple-800 border border-purple-200">
+                                        ADMIN
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-[#66645E] truncate">{t.topic || 'Engineering Track'}</p>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <span className="text-[11px] font-mono text-[#66645E]">
+                                      Due {formatDate(t.deadline)}
+                                    </span>
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
+                                        t.status === 'completed'
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                          : 'bg-[#EEECDF] text-[#1C1B1A] border-[#E0DDD0]'
+                                      }`}
+                                    >
+                                      {t.status === 'completed' ? 'Completed' : 'Pending'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedOverviewTask(t);
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
+                                    >
+                                      View Overview
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      );
-                    })
+                      )}
+
+                      {/* SECTION 2: TEAM LEAD TASKS PREVIEW */}
+                      {(overviewTaskFilter === 'all' || overviewTaskFilter === 'teamlead') && (
+                        <div className="space-y-3 pt-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+                              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-950">
+                                Team Lead Tasks ({teamLeadTasks.length})
+                              </h4>
+                            </div>
+                            <span className="text-[11px] font-mono text-[#66645E]">
+                              {teamLeadTasks.filter((t) => t.status === 'completed').length} completed
+                            </span>
+                          </div>
+
+                          {teamLeadTasks.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/40 rounded-xl border border-[#E0DDD0]">
+                              No tasks assigned by your Team Lead yet.
+                            </div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              {teamLeadTasks.slice(0, 2).map((t, idx) => (
+                                <div
+                                  key={t._id || idx}
+                                  className="p-4 rounded-xl border border-emerald-200/80 bg-white hover:border-emerald-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs cursor-pointer"
+                                  onClick={() => setSelectedOverviewTask(t)}
+                                >
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-serif">
+                                        {typeof t.title === 'string' ? t.title : 'Task Item'}
+                                      </h4>
+                                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                        TEAM LEAD
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-[#66645E] truncate">
+                                      Lead: {t.createdBy?.name || 'Team Lead'} • {t.topic || 'Sprint'}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <span className="text-[11px] font-mono text-[#66645E]">
+                                      Due {formatDate(t.deadline)}
+                                    </span>
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
+                                        t.status === 'completed'
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                          : 'bg-emerald-50/50 text-emerald-900 border-emerald-200'
+                                      }`}
+                                    >
+                                      {t.status === 'completed' ? 'Completed' : 'Pending'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedOverviewTask(t);
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
+                                    >
+                                      View Overview
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1989,113 +2352,166 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          {/* TAB 2: MY TASKS (SHOWS ALL TASKS - Requirement 1) */}
+          {/* TAB 2: MY TASKS (DIVIDED INTO ADMIN TASKS & TEAM LEAD TASKS) */}
           {activeNav === 'my-tasks' && (
-            <div className="max-w-[1240px] mx-auto bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden animate-in fade-in duration-200">
-              <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
+              {/* Top Controls Bar with Section Filters */}
+              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-[#1C1B1A]" />
-                    My Tasks (All Assigned Tasks)
+                  <h3 className="font-['Instrument_Serif',serif] text-2xl sm:text-3xl font-semibold text-[#1C1B1A] flex items-center gap-2.5">
+                    <BookOpen className="w-6 h-6 text-[#1C1B1A]" />
+                    My Assigned Tasks
                   </h3>
-                  <p className="text-xs text-[#66645E] mt-0.5">
-                    Click any task card below to open its complete specification overview on this page.
+                  <p className="text-xs text-[#66645E] mt-1">
+                    Sprint deliverables divided between <strong>Admin Curriculum Tasks</strong> and <strong>Team Lead Tasks</strong>.
                   </p>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0] w-fit">
-                  {totalTasks} Total Task{totalTasks === 1 ? '' : 's'}
-                </span>
+
+                {/* Section Filter Pills */}
+                <div className="flex items-center gap-2 bg-[#F2EFE6] p-1.5 rounded-xl border border-[#E0DDD0] self-start md:self-auto flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setTaskFilter('all')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      taskFilter === 'all'
+                        ? 'bg-[#1C1B1A] text-white shadow-2xs'
+                        : 'text-[#66645E] hover:text-[#1C1B1A]'
+                    }`}
+                  >
+                    All Tasks ({totalTasks})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskFilter('admin')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      taskFilter === 'admin'
+                        ? 'bg-purple-700 text-white shadow-2xs'
+                        : 'text-[#66645E] hover:text-purple-900'
+                    }`}
+                  >
+                    <span>Admin Tasks</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      taskFilter === 'admin' ? 'bg-white/20 text-white' : 'bg-[#E0DDD0] text-[#1C1B1A]'
+                    }`}>
+                      {adminTasks.length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskFilter('teamlead')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      taskFilter === 'teamlead'
+                        ? 'bg-emerald-700 text-white shadow-2xs'
+                        : 'text-[#66645E] hover:text-emerald-900'
+                    }`}
+                  >
+                    <span>Team Lead Tasks</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      taskFilter === 'teamlead' ? 'bg-white/20 text-white' : 'bg-[#E0DDD0] text-[#1C1B1A]'
+                    }`}>
+                      {teamLeadTasks.length}
+                    </span>
+                  </button>
+                </div>
               </div>
 
-              <div className="p-6 space-y-4">
-                {loadingTasks ? (
-                  <div className="p-8 text-center text-[#66645E] flex items-center justify-center gap-2 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-[#1C1B1A]" />
-                    <span>Loading all assigned tasks...</span>
-                  </div>
-                ) : safeTasks.length === 0 ? (
-                  <div className="p-8 text-center text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
-                    <p className="text-sm font-semibold text-[#1C1B1A]">No tasks assigned currently.</p>
-                  </div>
-                ) : (
-                  safeTasks.map((task, idx) => {
-                    if (!task) return null;
-                    const isCompleted = task.status === 'completed';
-                    return (
-                      <div
-                        key={task._id || idx}
-                        onClick={() => setSelectedOverviewTask(task)}
-                        className="p-5 rounded-2xl border border-[#E0DDD0] bg-white hover:border-[#1C1B1A]/40 transition-all space-y-3 shadow-2xs cursor-pointer group"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <span className={`w-2.5 h-2.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                            <h4 className="text-base font-bold text-[#1C1B1A] font-serif tracking-wide group-hover:text-black">
-                              {task.title}
-                            </h4>
+              {loadingTasks ? (
+                <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-12 text-center text-[#66645E] flex items-center justify-center gap-2 text-sm shadow-2xs">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#1C1B1A]" />
+                  <span>Loading assigned tasks...</span>
+                </div>
+              ) : safeTasks.length === 0 ? (
+                <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-12 text-center text-[#66645E] shadow-2xs">
+                  <p className="text-base font-semibold text-[#1C1B1A]">No tasks assigned currently.</p>
+                  <p className="text-xs mt-1">Admin and Team Lead tasks will appear here once assigned.</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* ================= SECTION 1: ADMIN TASKS ================= */}
+                  {(taskFilter === 'all' || taskFilter === 'admin') && (
+                    <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
+                      <div className="p-5 sm:p-6 border-b border-[#E0DDD0] bg-gradient-to-r from-purple-50/50 via-[#FDFCF9] to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-900 flex items-center justify-center border border-purple-200 shadow-2xs shrink-0">
+                            <Award className="w-5 h-5 text-purple-700" />
                           </div>
-
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {task.priority && (
-                              <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
-                                {task.priority} Priority
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                                Admin Tasks
+                              </h4>
+                              <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-md bg-purple-100 text-purple-800 border border-purple-200">
+                                Cohort Curriculum
                               </span>
-                            )}
-                            <span
-                              className={`inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${
-                                isCompleted
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                  : 'bg-amber-50 text-amber-800 border-amber-200'
-                              }`}
-                            >
-                              {isCompleted ? (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-700" /> Completed
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="w-3 h-3 text-amber-700" /> Pending / In Progress
-                                </>
-                              )}
-                            </span>
+                            </div>
+                            <p className="text-xs text-[#66645E] mt-0.5">
+                              Core learning specifications, milestone reviews & platform deliverables published by Admins.
+                            </p>
                           </div>
                         </div>
 
-                        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{task.description}</p>
-
-                        <div className="flex flex-wrap items-center justify-between pt-3 border-t border-[#E0DDD0] text-xs text-[#66645E] gap-2">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            {task.topic && (
-                              <span className="bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium border border-[#E0DDD0]">
-                                Domain: {task.topic}
-                              </span>
-                            )}
-                            <span>Assigned by: <strong className="text-[#1C1B1A]">{task.createdBy?.name || 'Admin / Lead'}</strong></span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <span className="flex items-center gap-1.5 text-[#1C1B1A] font-semibold font-mono">
-                              <Calendar className="w-3.5 h-3.5 text-[#66645E]" />
-                              Due: {formatDate(task.deadline)}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedOverviewTask(task);
-                              }}
-                              className="px-3.5 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer flex items-center gap-1"
-                            >
-                              <span>Open Overview</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="px-3 py-1 rounded-full text-xs font-mono font-semibold bg-purple-50 text-purple-900 border border-purple-200">
+                            {adminTasks.filter((t) => t.status === 'completed').length} / {adminTasks.length} Completed
+                          </span>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
+
+                      <div className="p-5 sm:p-6 space-y-4">
+                        {adminTasks.length === 0 ? (
+                          <div className="p-8 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
+                            No Admin tasks assigned to your track yet.
+                          </div>
+                        ) : (
+                          adminTasks.map((task, idx) => renderTaskCard(task, idx, 'admin'))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ================= SECTION 2: TEAM LEAD TASKS ================= */}
+                  {(taskFilter === 'all' || taskFilter === 'teamlead') && (
+                    <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
+                      <div className="p-5 sm:p-6 border-b border-[#E0DDD0] bg-gradient-to-r from-emerald-50/50 via-[#FDFCF9] to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center border border-emerald-200 shadow-2xs shrink-0">
+                            <Users className="w-5 h-5 text-emerald-700" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                                Team Lead Tasks
+                              </h4>
+                              <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Team Sprint
+                              </span>
+                            </div>
+                            <p className="text-xs text-[#66645E] mt-0.5">
+                              Team-specific sprint tasks, feature reviews & coordination action items assigned by your Team Lead.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="px-3 py-1 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200">
+                            {teamLeadTasks.filter((t) => t.status === 'completed').length} / {teamLeadTasks.length} Completed
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-5 sm:p-6 space-y-4">
+                        {teamLeadTasks.length === 0 ? (
+                          <div className="p-8 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
+                            No Team Lead tasks assigned to your team yet.
+                          </div>
+                        ) : (
+                          teamLeadTasks.map((task, idx) => renderTaskCard(task, idx, 'teamlead'))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

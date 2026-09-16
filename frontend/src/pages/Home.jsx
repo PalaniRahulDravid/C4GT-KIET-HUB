@@ -145,7 +145,7 @@ export default function Home() {
                 onClick={handleGetStarted}
                 className="inline-flex items-center justify-center gap-2.5 px-7 py-3.5 text-base font-medium text-white rounded-full bg-[#1C1B1A] hover:bg-black shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
               >
-                <span>Get started</span>
+                <span>{isAuthenticated ? 'Go to Dashboard' : 'Get started'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -812,7 +812,7 @@ export default function Home() {
                 onClick={handleGetStarted}
                 className="inline-flex items-center justify-center gap-2.5 px-8 py-4 text-base font-medium text-white rounded-full bg-[#1C1B1A] hover:bg-black shadow-md transition-all cursor-pointer hover:scale-[1.01]"
               >
-                <span>Get started</span>
+                <span>{isAuthenticated ? 'Go to Dashboard' : 'Get started'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button

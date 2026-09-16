@@ -48,6 +48,16 @@ export default function App() {
               }
             />
 
+            {/* Direct Profile Route: opens student dashboard with profile modal */}
+            <Route
+              path="profile"
+              element={
+                <ProtectedRoute allowedRoles={['student', 'user', 'teamlead', 'team_lead']}>
+                  <Navigate to="/student?profile=true" replace />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Student Dashboard: Accessible to Students and Team Leads (who are also students) */}
             <Route
               path="student"

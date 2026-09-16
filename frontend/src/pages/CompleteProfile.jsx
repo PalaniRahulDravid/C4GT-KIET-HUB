@@ -151,8 +151,12 @@ export default function CompleteProfile() {
         memberType,
       });
 
-      const targetPath = getDashboardPath(updatedUser?.role || user?.role);
-      navigate(targetPath, { replace: true });
+      const userRole = updatedUser?.role || user?.role;
+      if (userRole === 'admin') {
+        navigate('/admin/dashboard', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err) {
       setErrorMessage(err.message || 'Failed to save student details. Please try again.');
     } finally {
