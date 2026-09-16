@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
+import ResourceUploadModal from '../../components/ResourceUploadModal';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -31,6 +32,14 @@ import {
   ExternalLink,
   FileCode,
   FileText,
+  FileSpreadsheet,
+  Code2,
+  GitBranch,
+  UploadCloud,
+  Download,
+  Search,
+  Filter,
+  Tag,
   Video,
   LogOut,
   Home,
@@ -73,6 +82,7 @@ export default function StudentDashboard() {
     const p = location.pathname;
     if (p.includes('/student/my-tasks')) return 'my-tasks';
     if (p.includes('/student/progress')) return 'progress';
+    if (p.includes('/student/resources')) return 'resources';
     return 'dashboard';
   })();
 
@@ -115,6 +125,18 @@ export default function StudentDashboard() {
   const videoRef = useRef(null);
   const lastHtml5TimeRef = useRef(0);
   const ytPlayerRef = useRef(null);
+
+  // RESOURCE HUB & CLOUDINARY REPOSITORY STATE
+  const [hubResources, setHubResources] = useState([]);
+  const [loadingHubResources, setLoadingHubResources] = useState(true);
+  const [resourceCategoryFilter, setResourceCategoryFilter] = useState('all');
+  const [resourceTopicFilter, setResourceTopicFilter] = useState('all');
+  const [resourceSearchQuery, setResourceSearchQuery] = useState('');
+  const [resourceStats, setResourceStats] = useState({ total: 0, completed: 0, percentage: 0 });
+  const [availableResourceTopics, setAvailableResourceTopics] = useState([]);
+  const [togglingResourceId, setTogglingResourceId] = useState(null);
+  const [completionPromptResource, setCompletionPromptResource] = useState(null);
+  const [uploadResourceModalOpen, setUploadResourceModalOpen] = useState(false);
 
   // YouTube Helper & Time Format Utilities
   const isYouTubeUrl = (url) => {
@@ -370,6 +392,125 @@ export default function StudentDashboard() {
     }
   };
 
+  const fetchHubResources = async () => {
+    try {
+      setLoadingHubResources(true);
+      const res = await fetch(`${API_BASE_URL}/resources`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.resources)) {
+          setHubResources(data.resources);
+          setResourceStats({
+            total: data.count || 0,
+            completed: data.completedCount || 0,
+            percentage: data.completionPercentage || 0,
+          });
+          if (Array.isArray(data.topics)) {
+            setAvailableResourceTopics(data.topics);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load learning resources:', err);
+    } finally {
+      setLoadingHubResources(false);
+    }
+  };
+
+  const handleToggleResourceComplete = async (resource) => {
+    if (!resource || !resource._id) return;
+    try {
+      setTogglingResourceId(resource._id);
+      const res = await fetch(`${API_BASE_URL}/resources/${resource._id}/complete`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setHubResources((prev) =>
+          prev.map((r) =>
+            r._id === resource._id ? { ...r, isCompleted: data.isCompleted } : r
+          )
+        );
+        setResourceStats((prev) => {
+          const newCompleted = data.isCompleted
+            ? prev.completed + 1
+            : Math.max(0, prev.completed - 1);
+          return {
+            ...prev,
+            completed: newCompleted,
+            percentage: prev.total > 0 ? Math.round((newCompleted / prev.total) * 100) : 0,
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle completion:', err);
+    } finally {
+      setTogglingResourceId(null);
+    }
+  };
+
+  const handleDownloadOrOpenResource = async (resource) => {
+    if (!resource || !resource.url) return;
+
+    // Record download count in background
+    try {
+      fetch(`${API_BASE_URL}/resources/${resource._id}/download`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setHubResources((prev) =>
+        prev.map((r) =>
+          r._id === resource._id ? { ...r, downloadsCount: (r.downloadsCount || 0) + 1 } : r
+        )
+      );
+    } catch (e) {}
+
+    // Open file or link in a new tab
+    window.open(resource.url, '_blank', 'noopener,noreferrer');
+
+    // Prompt user to mark as completed if not completed yet
+    if (!resource.isCompleted) {
+      setCompletionPromptResource(resource);
+    }
+  };
+
+  // Filtered Hub Resources
+  const filteredHubResources = hubResources.filter((resItem) => {
+    if (resourceCategoryFilter !== 'all') {
+      if (resourceCategoryFilter === 'files') {
+        if (!['doc', 'excel', 'pdf', 'image'].includes(resItem.type)) return false;
+      } else if (resourceCategoryFilter === 'links') {
+        if (!['git_repo', 'dsa_problem', 'link'].includes(resItem.type)) return false;
+      } else if (resItem.type !== resourceCategoryFilter) {
+        return false;
+      }
+    }
+
+    if (resourceTopicFilter !== 'all' && resItem.topic !== resourceTopicFilter) {
+      return false;
+    }
+
+    if (resourceSearchQuery.trim()) {
+      const q = resourceSearchQuery.toLowerCase().trim();
+      const matchTitle = resItem.title && resItem.title.toLowerCase().includes(q);
+      const matchTopic = resItem.topic && resItem.topic.toLowerCase().includes(q);
+      const matchDesc = resItem.description && resItem.description.toLowerCase().includes(q);
+      const matchFile = resItem.originalFilename && resItem.originalFilename.toLowerCase().includes(q);
+      if (!matchTitle && !matchTopic && !matchDesc && !matchFile) return false;
+    }
+
+    return true;
+  });
+
   useEffect(() => {
     fetchStudentTasks();
     fetchStudentStreak();
@@ -377,6 +518,7 @@ export default function StudentDashboard() {
     fetchNotifications();
     fetchStudentTeam();
     fetchStudentInvitations();
+    fetchHubResources();
   }, [user]);
 
   // Real Session Heartbeat Tracking
@@ -834,7 +976,7 @@ export default function StudentDashboard() {
     return name.slice(0, 2).toUpperCase();
   }
 
-  // 3 Student Sidebar Items (Resources removed)
+  // 4 Student Sidebar Items (Overview, My Tasks, Progress, Resources)
   const sidebarNavItems = [
     {
       id: 'dashboard',
@@ -857,6 +999,13 @@ export default function StudentDashboard() {
       description: 'Status & completion tracking',
       icon: <TrendingUp className="w-4.5 h-4.5" />,
     },
+    {
+      id: 'resources',
+      path: '/student/resources',
+      name: 'Resources',
+      description: 'Cloudinary files, DSA & Git repos',
+      icon: <FolderKanban className="w-4.5 h-4.5" />,
+    },
   ];
 
   const getPageInfo = () => {
@@ -865,6 +1014,8 @@ export default function StudentDashboard() {
         return { breadcrumb: 'My Tasks', title: 'My Tasks' };
       case 'progress':
         return { breadcrumb: 'Progress', title: 'Progress' };
+      case 'resources':
+        return { breadcrumb: 'Resources', title: 'Learning Resources' };
       case 'dashboard':
       default:
         return { breadcrumb: 'Overview', title: 'Overview' };
@@ -872,6 +1023,25 @@ export default function StudentDashboard() {
   };
 
   const pageInfo = getPageInfo();
+
+  const getTaskResourceIcon = (type) => {
+    switch (type) {
+      case 'doc':
+        return <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
+      case 'excel':
+        return <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+      case 'pdf':
+        return <FileText className="w-3.5 h-3.5 text-rose-600 shrink-0" />;
+      case 'image':
+        return <UploadCloud className="w-3.5 h-3.5 text-purple-600 shrink-0" />;
+      case 'dsa_problem':
+        return <Code2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+      case 'git_repo':
+        return <GitBranch className="w-3.5 h-3.5 text-slate-800 shrink-0" />;
+      default:
+        return <ExternalLink className="w-3.5 h-3.5 text-indigo-600 shrink-0" />;
+    }
+  };
 
   // Helper renderer for consistent, interactive task cards — clean simple design
   const renderTaskCard = (task, idx, type) => {
@@ -906,9 +1076,48 @@ export default function StudentDashboard() {
 
           {/* Description */}
           {task.description && (
-            <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4">
+            <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-3">
               {task.description}
             </p>
+          )}
+
+          {/* Connected Resources Direct Links */}
+          {Array.isArray(task.relatedResources) && task.relatedResources.length > 0 && (
+            <div className="mb-3 pt-2.5 border-t border-slate-100 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+              <div className="text-[11px] font-mono uppercase text-slate-500 font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <UploadCloud className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Attached Study Resources ({task.relatedResources.length}):</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">Click to see / download</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {task.relatedResources.map((resItem) => {
+                  if (!resItem || !resItem._id) return null;
+                  const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
+                  return (
+                    <a
+                      key={resItem._id}
+                      href={resItem.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={isFile}
+                      onClick={() => handleDownloadOrOpenResource(resItem)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-50 border border-slate-200 hover:bg-white hover:border-slate-400 text-slate-800 transition shadow-2xs group cursor-pointer"
+                      title={resItem.title}
+                    >
+                      {getTaskResourceIcon(resItem.type)}
+                      <span className="truncate max-w-[150px] font-semibold">{resItem.title}</span>
+                      {isFile ? (
+                        <Download className="w-3 h-3 text-slate-400 group-hover:text-black" />
+                      ) : (
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-black" />
+                      )}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* Footer */}
@@ -1044,6 +1253,67 @@ export default function StudentDashboard() {
                 ))}
               </div>
             </div>
+
+            {/* Connected Study Resources & Materials (Direct connect with uploaded resources so students can click, see, and download) */}
+            {Array.isArray(selectedOverviewTask.relatedResources) && selectedOverviewTask.relatedResources.length > 0 && (
+              <div className="space-y-2.5 p-4 bg-gradient-to-r from-sky-50 via-[#FDFCF9] to-indigo-50/40 rounded-2xl border border-sky-200">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-mono font-bold uppercase text-sky-950 flex items-center gap-1.5">
+                    <UploadCloud className="w-4 h-4 text-sky-600" />
+                    <span>Connected Learning Resources ({selectedOverviewTask.relatedResources.length}):</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-sky-700 bg-white px-2 py-0.5 rounded-full border border-sky-200">
+                    Direct Access & Download
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {selectedOverviewTask.relatedResources.map((resItem) => {
+                    if (!resItem || !resItem._id) return null;
+                    const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
+                    return (
+                      <div
+                        key={resItem._id}
+                        className="p-3 bg-white border border-sky-200 rounded-xl flex items-center justify-between gap-3 shadow-xs hover:border-sky-400 transition group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                            {getTaskResourceIcon(resItem.type)}
+                          </div>
+                          <div className="truncate">
+                            <div className="text-xs font-bold text-[#1C1B1A] truncate">{resItem.title}</div>
+                            <div className="text-[10px] text-[#66645E] font-mono truncate">
+                              {resItem.topic || 'Resource'} {resItem.fileFormat ? `• ${resItem.fileFormat.toUpperCase()}` : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        <a
+                          href={resItem.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={isFile}
+                          onClick={() => handleDownloadOrOpenResource(resItem)}
+                          className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                        >
+                          {isFile ? (
+                            <>
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download</span>
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>Open</span>
+                            </>
+                          )}
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-3 border-t border-[#E0DDD0]">
               <button
@@ -2415,6 +2685,291 @@ export default function StudentDashboard() {
               </div>
             </div>
           )}
+
+          {/* TAB 5: LEARNING RESOURCES & CLOUDINARY REPOSITORY */}
+          {activeNav === 'resources' && (
+            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
+              {/* TOP HEADER & METRIC HERO */}
+              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 sm:p-8 shadow-2xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EEECDF] text-[#1C1B1A] text-[11px] font-semibold uppercase tracking-wider border border-[#E0DDD0]">
+                      <FolderKanban className="w-3.5 h-3.5" />
+                      <span>Cloudinary Storage &amp; Resource Hub</span>
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-[#1C1B1A] tracking-tight">
+                      Curated Learning Materials &amp; Links
+                    </h2>
+                    <p className="text-xs text-[#66645E] max-w-2xl">
+                      Download official architecture specs, spreadsheets, PDFs, diagrams, and access curated LeetCode DSA questions and GitHub repositories.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {/* If user is teamlead or admin, show upload button */}
+                    {(user?.role === 'admin' || user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                      <button
+                        type="button"
+                        onClick={() => setUploadResourceModalOpen(true)}
+                        className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#1C1B1A] text-white hover:bg-black transition-colors shadow-2xs flex items-center gap-2 cursor-pointer"
+                      >
+                        <UploadCloud className="w-4 h-4" />
+                        <span>Upload Resource</span>
+                      </button>
+                    )}
+
+                    {/* Progress Badge */}
+                    <div className="p-3 bg-[#FAF8F2] border border-[#E0DDD0] rounded-xl text-right shrink-0">
+                      <div className="text-[11px] font-semibold text-[#66645E]">Your Completion</div>
+                      <div className="text-lg font-bold text-[#1C1B1A] leading-tight">
+                        {resourceStats.completed} / {resourceStats.total}{' '}
+                        <span className="text-xs font-medium text-[#66645E]">({resourceStats.percentage}%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="space-y-1.5 pt-2 border-t border-[#E0DDD0]">
+                  <div className="flex items-center justify-between text-xs text-[#66645E]">
+                    <span className="font-medium">Total Resources Studied &amp; Solved</span>
+                    <span className="font-bold text-[#1C1B1A]">{resourceStats.percentage}% Completed</span>
+                  </div>
+                  <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden flex shadow-inner">
+                    <div
+                      className="bg-emerald-600 h-full transition-all duration-500 rounded-full"
+                      style={{ width: `${resourceStats.percentage}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SEARCH & FILTERS BAR */}
+              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-4 sm:p-5 shadow-2xs space-y-4">
+                {/* Search & Topic Selector */}
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Search className="w-4 h-4 text-[#88867E] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={resourceSearchQuery}
+                      onChange={(e) => setResourceSearchQuery(e.target.value)}
+                      placeholder="Search resources by title, topic, or keyword..."
+                      className="w-full pl-10 pr-4 py-2 rounded-xl bg-white border border-[#E0DDD0] text-xs text-[#1C1B1A] placeholder-[#88867E] focus:ring-2 focus:ring-[#1C1B1A] outline-none font-medium"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Filter className="w-4 h-4 text-[#88867E] shrink-0" />
+                    <select
+                      value={resourceTopicFilter}
+                      onChange={(e) => setResourceTopicFilter(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-white border border-[#E0DDD0] text-xs text-[#1C1B1A] focus:ring-2 focus:ring-[#1C1B1A] outline-none font-semibold w-full sm:w-auto cursor-pointer"
+                    >
+                      <option value="all">All Topics &amp; Domains</option>
+                      {availableResourceTopics.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Category Pills */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none text-xs flex-wrap">
+                  {[
+                    { id: 'all', label: 'All Resources' },
+                    { id: 'dsa_problem', label: '💻 DSA Problems' },
+                    { id: 'git_repo', label: '🐙 Git Repositories' },
+                    { id: 'pdf', label: '📄 PDFs' },
+                    { id: 'excel', label: '📊 Spreadsheets (Excel)' },
+                    { id: 'doc', label: '📝 Word & Docs' },
+                    { id: 'image', label: '🖼️ Photos & Diagrams' },
+                    { id: 'link', label: '🌐 Web Docs & Notes' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setResourceCategoryFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer whitespace-nowrap text-xs ${
+                        resourceCategoryFilter === cat.id
+                          ? 'bg-[#1C1B1A] text-white shadow-xs'
+                          : 'bg-white border border-[#E0DDD0] text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#FAF8F2]'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* RESOURCE CARDS GRID */}
+              {loadingHubResources ? (
+                <div className="p-12 text-center bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] space-y-3">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#1C1B1A]" />
+                  <p className="text-xs text-[#66645E]">Loading learning resources...</p>
+                </div>
+              ) : filteredHubResources.length === 0 ? (
+                <div className="p-12 text-center bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] space-y-2">
+                  <FolderKanban className="w-10 h-10 mx-auto text-[#9E9C94]" />
+                  <h4 className="text-sm font-bold text-[#1C1B1A]">No resources found</h4>
+                  <p className="text-xs text-[#66645E]">
+                    Try adjusting your search query or category filters.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredHubResources.map((resItem) => {
+                    const isFile = ['doc', 'excel', 'pdf', 'image'].includes(resItem.type);
+                    const isDSA = resItem.type === 'dsa_problem';
+                    const isGit = resItem.type === 'git_repo';
+
+                    return (
+                      <div
+                        key={resItem._id}
+                        className={`bg-[#FDFCF9] rounded-2xl p-6 border transition-all duration-200 flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md ${
+                          resItem.isCompleted
+                            ? 'border-emerald-300 ring-1 ring-emerald-200/60'
+                            : 'border-[#E0DDD0]'
+                        }`}
+                      >
+                        <div className="space-y-3">
+                          {/* Top Row: Type Badge & Status */}
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                                isDSA
+                                  ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                                  : isGit
+                                  ? 'bg-neutral-900 text-white'
+                                  : resItem.type === 'pdf'
+                                  ? 'bg-rose-100 text-rose-900 border border-rose-200'
+                                  : resItem.type === 'excel'
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                                  : resItem.type === 'image'
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                  : 'bg-blue-100 text-blue-900 border border-blue-200'
+                              }`}
+                            >
+                              {isDSA && <Code2 className="w-3.5 h-3.5" />}
+                              {isGit && <GitBranch className="w-3.5 h-3.5" />}
+                              {resItem.type === 'pdf' && <FileText className="w-3.5 h-3.5" />}
+                              {resItem.type === 'excel' && <FileSpreadsheet className="w-3.5 h-3.5" />}
+                              {resItem.type === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
+                              {!isDSA && !isGit && resItem.type !== 'pdf' && resItem.type !== 'excel' && resItem.type !== 'image' && (
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              )}
+                              <span className="uppercase text-[10px] tracking-wider">
+                                {isDSA ? 'DSA Problem' : isGit ? 'Git Repo' : resItem.type}
+                              </span>
+                            </span>
+
+                            {resItem.isCompleted && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Completed</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Title & Topic */}
+                          <div>
+                            <span className="text-[11px] font-semibold text-[#66645E] uppercase tracking-wider">
+                              {resItem.topic}
+                            </span>
+                            <h4 className="text-base font-bold text-[#1C1B1A] pt-0.5 tracking-tight leading-snug line-clamp-2">
+                              {resItem.title}
+                            </h4>
+                          </div>
+
+                          {/* Description */}
+                          {resItem.description && (
+                            <p className="text-xs text-[#66645E] leading-relaxed line-clamp-3">
+                              {resItem.description}
+                            </p>
+                          )}
+
+                          {/* Metadata pill */}
+                          <div className="flex items-center gap-3 text-[11px] text-[#88867E] pt-1 flex-wrap">
+                            {resItem.fileSize > 0 && (
+                              <span>{(resItem.fileSize / 1024 / 1024).toFixed(1)} MB</span>
+                            )}
+                            {resItem.downloadsCount > 0 && (
+                              <span>{resItem.downloadsCount} views</span>
+                            )}
+                            {resItem.difficulty && resItem.difficulty !== 'General' && (
+                              <span className="font-semibold text-purple-800">
+                                Level: {resItem.difficulty}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bottom Actions */}
+                        <div className="pt-4 border-t border-[#E0DDD0] space-y-2">
+                          <div className="flex items-center gap-2">
+                            {/* Download / Open Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadOrOpenResource(resItem)}
+                              className="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-[#1C1B1A] text-white hover:bg-black transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                            >
+                              {isFile ? (
+                                <>
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </>
+                              ) : isDSA ? (
+                                <>
+                                  <Code2 className="w-3.5 h-3.5" />
+                                  <span>Solve Problem</span>
+                                </>
+                              ) : isGit ? (
+                                <>
+                                  <GitBranch className="w-3.5 h-3.5" />
+                                  <span>View Repo</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <span>Open Link</span>
+                                </>
+                              )}
+                            </button>
+
+                            {/* Mark as Completed Toggle Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleResourceComplete(resItem)}
+                              disabled={togglingResourceId === resItem._id}
+                              className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                resItem.isCompleted
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                  : 'bg-white text-[#1C1B1A] border-[#E0DDD0] hover:bg-[#FAF8F2]'
+                              }`}
+                              title={resItem.isCompleted ? 'Mark as Incomplete' : 'Mark as Completed'}
+                            >
+                              {togglingResourceId === resItem._id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2
+                                  className={`w-3.5 h-3.5 ${
+                                    resItem.isCompleted ? 'text-emerald-600' : 'text-[#88867E]'
+                                  }`}
+                                />
+                              )}
+                              <span>{resItem.isCompleted ? 'Done' : 'Mark Done'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
 
@@ -2517,6 +3072,67 @@ export default function StudentDashboard() {
                 })}
               </div>
             </div>
+
+            {/* Connected Study Resources & Materials */}
+            {Array.isArray(selectedOverviewTask.relatedResources) && selectedOverviewTask.relatedResources.length > 0 && (
+              <div className="space-y-2.5 p-4 bg-gradient-to-r from-sky-50 via-[#FDFCF9] to-indigo-50/40 rounded-2xl border border-sky-200">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-mono font-bold uppercase text-sky-950 flex items-center gap-1.5">
+                    <UploadCloud className="w-4 h-4 text-sky-600" />
+                    <span>Attached Cloudinary Materials & Links ({selectedOverviewTask.relatedResources.length}):</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-sky-700 bg-white px-2 py-0.5 rounded-full border border-sky-200">
+                    Direct Download / Open
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {selectedOverviewTask.relatedResources.map((resItem) => {
+                    if (!resItem || !resItem._id) return null;
+                    const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
+                    return (
+                      <div
+                        key={resItem._id}
+                        className="p-3 bg-white border border-sky-200 rounded-xl flex items-center justify-between gap-3 shadow-xs hover:border-sky-400 transition group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                            {getTaskResourceIcon(resItem.type)}
+                          </div>
+                          <div className="truncate">
+                            <div className="text-xs font-bold text-[#1C1B1A] truncate">{resItem.title}</div>
+                            <div className="text-[10px] text-[#66645E] font-mono truncate">
+                              {resItem.topic || 'Resource'} {resItem.fileFormat ? `• ${resItem.fileFormat.toUpperCase()}` : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        <a
+                          href={resItem.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={isFile}
+                          onClick={() => handleDownloadOrOpenResource(resItem)}
+                          className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                        >
+                          {isFile ? (
+                            <>
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download</span>
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>Open</span>
+                            </>
+                          )}
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E0DDD0]">
@@ -2651,6 +3267,57 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
+
+      {/* ==================== INTERACTIVE COMPLETION CONFIRMATION PROMPT ==================== */}
+      {completionPromptResource && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-md w-full p-6 space-y-4 shadow-2xl relative text-center">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-200 shadow-2xs">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-[#1C1B1A] tracking-tight">
+                Resource Accessed!
+              </h3>
+              <p className="text-xs text-[#66645E]">
+                You opened <strong className="text-[#1C1B1A]">"{completionPromptResource.title}"</strong>. Have you finished reviewing or solving this resource?
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCompletionPromptResource(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-[#E0DDD0] text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#FAF8F2] cursor-pointer"
+              >
+                Maybe Later
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleToggleResourceComplete(completionPromptResource);
+                  setCompletionPromptResource(null);
+                }}
+                className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Mark as Completed ✓</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== RESOURCE UPLOAD MODAL ==================== */}
+      <ResourceUploadModal
+        isOpen={uploadResourceModalOpen}
+        onClose={() => setUploadResourceModalOpen(false)}
+        onResourceUploaded={() => fetchHubResources()}
+        apiBaseUrl={API_BASE_URL}
+        token={token}
+      />
     </div>
   );
 }
+

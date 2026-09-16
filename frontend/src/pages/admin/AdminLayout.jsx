@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, Home as HomeIcon, ChevronRight, Award } from 'lucide-react';
+import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, Home as HomeIcon, ChevronRight, Award, UploadCloud } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -55,6 +55,12 @@ export default function AdminLayout() {
       description: 'Milestones & deliverables',
       icon: <CheckSquare className="w-4.5 h-4.5" />,
     },
+    {
+      name: 'Resource Library',
+      to: '/admin/resources',
+      description: 'Cloudinary media & links',
+      icon: <UploadCloud className="w-4.5 h-4.5" />,
+    },
   ];
 
   const getPageInfo = () => {
@@ -69,6 +75,9 @@ export default function AdminLayout() {
     }
     if (location.pathname === '/admin/tasks') {
       return { breadcrumb: 'Tasks', title: 'Next Tasks for Teams' };
+    }
+    if (location.pathname === '/admin/resources') {
+      return { breadcrumb: 'Resources', title: 'Cloudinary Resource Management' };
     }
     return { breadcrumb: 'Overview', title: 'Admin Dashboard Overview' };
   };

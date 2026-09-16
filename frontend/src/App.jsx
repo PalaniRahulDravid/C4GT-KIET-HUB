@@ -11,6 +11,7 @@ import ManageUsers from './pages/admin/ManageUsers';
 import TeamOverview from './pages/admin/TeamOverview';
 import Batches from './pages/admin/Batches';
 import TeamTasks from './pages/admin/TeamTasks';
+import AdminResources from './pages/admin/AdminResources';
 import TeamLeadDashboard from './pages/teamlead/TeamLeadDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
 import CompleteProfile from './pages/CompleteProfile';
@@ -113,6 +114,8 @@ export default function App() {
             <Route path="teams" element={<TeamOverview />} />
             {/* /admin/tasks - Next Tasks for Teams */}
             <Route path="tasks" element={<TeamTasks />} />
+            {/* /admin/resources - Cloudinary Resource Hub & Links */}
+            <Route path="resources" element={<AdminResources />} />
           </Route>
         </Routes>
       </BrowserRouter>

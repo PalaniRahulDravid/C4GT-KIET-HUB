@@ -419,7 +419,8 @@ const getTeamTasks = async (req, res) => {
       ],
     })
       .sort({ deadline: 1 })
-      .populate('createdBy', 'name email avatar role');
+      .populate('createdBy', 'name email avatar role')
+      .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
 
     // Fetch members and their individual assignment statuses
     const memberIds = [...(team.members || [])];
@@ -478,6 +479,7 @@ const createTeamTask = async (req, res) => {
       deadline,
       priority,
       deliverables,
+      relatedResources,
     } = req.body;
 
     if (!title || !description || !deadline) {
@@ -499,6 +501,7 @@ const createTeamTask = async (req, res) => {
         Array.isArray(deliverables) && deliverables.length > 0
           ? deliverables
           : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+      relatedResources: Array.isArray(relatedResources) ? relatedResources : [],
       status: 'Published',
       createdBy: req.user._id,
     });
@@ -528,7 +531,9 @@ const createTeamTask = async (req, res) => {
       }
     }
 
-    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar role');
+    const populatedTask = await Task.findById(task._id)
+      .populate('createdBy', 'name email avatar role')
+      .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
 
     res.status(201).json({
       success: true,

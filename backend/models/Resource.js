@@ -10,11 +10,12 @@ const resourceSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Resource type is required'],
     enum: {
-      values: ['note', 'pdf', 'image', 'link'],
-      message: 'Resource type must be note, pdf, image, or link',
+      values: ['doc', 'excel', 'pdf', 'image', 'git_repo', 'dsa_problem', 'link', 'note'],
+      message: 'Resource type must be doc, excel, pdf, image, git_repo, dsa_problem, link, or note',
     },
     lowercase: true,
     trim: true,
+    index: true,
   },
   description: {
     type: String,
@@ -23,13 +24,43 @@ const resourceSchema = new mongoose.Schema({
   },
   url: {
     type: String,
-    required: [true, 'Resource URL or file reference is required'],
+    required: [true, 'Resource URL or file link is required'],
     trim: true,
   },
   topic: {
     type: String,
-    required: [true, 'Topic is required'],
+    required: [true, 'Topic / Domain is required'],
     trim: true,
+    index: true,
+  },
+  difficulty: {
+    type: String,
+    enum: ['Easy', 'Medium', 'Hard', 'General'],
+    default: 'General',
+  },
+  fileSize: {
+    type: Number,
+    default: 0,
+  },
+  fileFormat: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  originalFilename: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  cloudinaryPublicId: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  targetTeamId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Team',
+    default: null,
     index: true,
   },
   createdBy: {
@@ -37,6 +68,16 @@ const resourceSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'Creator reference is required'],
     index: true,
+  },
+  completedBy: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+  ],
+  downloadsCount: {
+    type: Number,
+    default: 0,
   },
   createdAt: {
     type: Date,

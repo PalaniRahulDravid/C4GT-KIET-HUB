@@ -43,8 +43,14 @@ import {
   Home,
   Menu,
   LogOut,
+  UploadCloud,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  Code2,
+  Download,
 } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
+import ResourceUploadModal from '../../components/ResourceUploadModal';
 
 export default function TeamLeadDashboard() {
   const { user, token, apiBaseUrl, logout } = useAuth();
@@ -55,7 +61,7 @@ export default function TeamLeadDashboard() {
   const [teamData, setTeamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState(initialTab); // 'roster' | 'search' | 'invitations' | 'give-tasks' | 'student-dashboard'
+  const [activeTab, setActiveTab] = useState(initialTab); // 'roster' | 'search' | 'invitations' | 'give-tasks' | 'resources' | 'student-dashboard'
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -81,6 +87,8 @@ export default function TeamLeadDashboard() {
         return 'Pending Invitations';
       case 'give-tasks':
         return 'Give Tasks to Students';
+      case 'resources':
+        return 'Learning Resources & Practice Materials';
       case 'roster':
       default:
         return 'Team Roster';
@@ -89,7 +97,7 @@ export default function TeamLeadDashboard() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['roster', 'search', 'invitations', 'give-tasks', 'student-dashboard'].includes(tab)) {
+    if (tab && ['roster', 'search', 'invitations', 'give-tasks', 'resources', 'student-dashboard'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -132,11 +140,24 @@ export default function TeamLeadDashboard() {
   ];
   const [taskDeliverables, setTaskDeliverables] = useState([...defaultDeliverables]);
   const [customDeliverableInput, setCustomDeliverableInput] = useState('');
+  const [taskRelatedResources, setTaskRelatedResources] = useState([]);
+  const [isTaskResourceSelectorOpen, setIsTaskResourceSelectorOpen] = useState(false);
+  const [isUploadModalForTaskOpen, setIsUploadModalForTaskOpen] = useState(false);
+  const [taskResourceSearch, setTaskResourceSearch] = useState('');
 
   // Student Dashboard Preview State
   const [studentTasks, setStudentTasks] = useState([]);
   const [studentStreak, setStudentStreak] = useState(null);
   const [loadingStudentData, setLoadingStudentData] = useState(false);
+
+  // Resources Hub State
+  const [hubResources, setHubResources] = useState([]);
+  const [loadingHubResources, setLoadingHubResources] = useState(false);
+  const [isResourceUploadOpen, setIsResourceUploadOpen] = useState(false);
+  const [resourceFilterType, setResourceFilterType] = useState('all');
+  const [resourceLeadSearchQuery, setResourceLeadSearchQuery] = useState('');
+  const [promptCompletionResource, setPromptCompletionResource] = useState(null);
+  const [submittingCompletion, setSubmittingCompletion] = useState(false);
 
   // Toast
   const [toast, setToast] = useState(null);
@@ -247,6 +268,79 @@ export default function TeamLeadDashboard() {
     }
   };
 
+  const fetchHubResources = async () => {
+    try {
+      setLoadingHubResources(true);
+      const res = await fetch(`${API_BASE_URL}/resources`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.resources)) {
+          setHubResources(data.resources);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load learning resources:', err);
+    } finally {
+      setLoadingHubResources(false);
+    }
+  };
+
+  const handleToggleResourceCompletion = async (resource) => {
+    if (!resource || !resource._id) return;
+    try {
+      setSubmittingCompletion(true);
+      const res = await fetch(`${API_BASE_URL}/resources/${resource._id}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setHubResources((prev) =>
+          prev.map((r) =>
+            r._id === resource._id ? { ...r, isCompleted: data.isCompleted } : r
+          )
+        );
+        showToast(
+          data.isCompleted ? 'Resource marked as completed! ✓' : 'Marked as incomplete.'
+        );
+        setPromptCompletionResource(null);
+      }
+    } catch (err) {
+      console.error('Toggle completion error:', err);
+    } finally {
+      setSubmittingCompletion(false);
+    }
+  };
+
+  const handleDownloadOrOpenResource = (resource) => {
+    if (!resource) return;
+    try {
+      fetch(`${API_BASE_URL}/resources/${resource._id}/download`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }).catch(() => {});
+
+      setHubResources((prev) =>
+        prev.map((r) =>
+          r._id === resource._id ? { ...r, downloadsCount: (r.downloadsCount || 0) + 1 } : r
+        )
+      );
+    } catch (err) {
+      console.error('Download counter error:', err);
+    }
+
+    if (!resource.isCompleted) {
+      setTimeout(() => {
+        setPromptCompletionResource(resource);
+      }, 1200);
+    }
+  };
+
   useEffect(() => {
     fetchMyTeam();
   }, [user]);
@@ -254,8 +348,11 @@ export default function TeamLeadDashboard() {
   useEffect(() => {
     if (activeTab === 'give-tasks') {
       fetchTeamTasks();
+      fetchHubResources();
     } else if (activeTab === 'student-dashboard') {
       fetchStudentPreviewData();
+    } else if (activeTab === 'resources') {
+      fetchHubResources();
     }
   }, [activeTab]);
 
@@ -273,8 +370,12 @@ export default function TeamLeadDashboard() {
     setIsRefreshing(true);
     fetchMyTeam();
     if (activeTab === 'search') fetchUsers();
-    if (activeTab === 'give-tasks') fetchTeamTasks();
+    if (activeTab === 'give-tasks') {
+      fetchTeamTasks();
+      fetchHubResources();
+    }
     if (activeTab === 'student-dashboard') fetchStudentPreviewData();
+    if (activeTab === 'resources') fetchHubResources();
     showToast('Refreshed team workspace data.');
   };
 
@@ -301,6 +402,7 @@ export default function TeamLeadDashboard() {
           deadline: taskDeadline,
           priority: taskPriority,
           deliverables: taskDeliverables,
+          relatedResources: taskRelatedResources.map((r) => r._id || r),
         }),
       });
       const data = await res.json();
@@ -309,6 +411,8 @@ export default function TeamLeadDashboard() {
         setTaskTitle('');
         setTaskDescription('');
         setTaskDeadline('');
+        setTaskRelatedResources([]);
+        setIsTaskResourceSelectorOpen(false);
         setShowTaskForm(false);
         fetchTeamTasks();
       } else {
@@ -447,6 +551,64 @@ export default function TeamLeadDashboard() {
   const pendingInvitations = teamData?.pendingInvitations || [];
 
   const progressPct = Math.min(100, Math.round((totalCount / maxMembers) * 100));
+
+  const filteredLeadResources = useMemo(() => {
+    return hubResources.filter((item) => {
+      const matchesSearch =
+        !resourceLeadSearchQuery ||
+        item.title?.toLowerCase().includes(resourceLeadSearchQuery.toLowerCase()) ||
+        item.description?.toLowerCase().includes(resourceLeadSearchQuery.toLowerCase()) ||
+        item.topic?.toLowerCase().includes(resourceLeadSearchQuery.toLowerCase());
+
+      const matchesType = resourceFilterType === 'all' || item.type === resourceFilterType;
+      return matchesSearch && matchesType;
+    });
+  }, [hubResources, resourceLeadSearchQuery, resourceFilterType]);
+
+  const getResourceIcon = (type) => {
+    switch (type) {
+      case 'doc':
+        return <FileText className="w-5 h-5 text-blue-600" />;
+      case 'excel':
+        return <FileSpreadsheet className="w-5 h-5 text-emerald-600" />;
+      case 'pdf':
+        return <FileText className="w-5 h-5 text-rose-600" />;
+      case 'image':
+        return <ImageIcon className="w-5 h-5 text-purple-600" />;
+      case 'dsa_problem':
+        return <Code2 className="w-5 h-5 text-amber-600" />;
+      case 'git_repo':
+        return <GitBranch className="w-5 h-5 text-slate-800" />;
+      default:
+        return <BookOpen className="w-5 h-5 text-indigo-600" />;
+    }
+  };
+
+  const getResourceLabel = (type) => {
+    switch (type) {
+      case 'doc':
+        return 'Document';
+      case 'excel':
+        return 'Spreadsheet';
+      case 'pdf':
+        return 'PDF Document';
+      case 'image':
+        return 'Image / Graphic';
+      case 'dsa_problem':
+        return 'DSA Problem';
+      case 'git_repo':
+        return 'Git Repository';
+      default:
+        return 'External Link';
+    }
+  };
+
+  const formatResourceSize = (bytes) => {
+    if (!bytes) return null;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   if (loading) {
     return (
@@ -595,6 +757,20 @@ export default function TeamLeadDashboard() {
                 isActive={activeTab === 'give-tasks'}
                 onClick={() => {
                   handleTabChange('give-tasks');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/teamlead?tab=resources',
+                  label: 'Learning Resources',
+                  icon: <BookOpen className="w-5 h-5" />,
+                  badge: hubResources.length > 0 ? hubResources.length : undefined,
+                }}
+                isActive={activeTab === 'resources'}
+                onClick={() => {
+                  handleTabChange('resources');
                   setMobileSidebarOpen(false);
                 }}
               />
@@ -866,6 +1042,23 @@ export default function TeamLeadDashboard() {
           {teamTasks.length > 0 && (
             <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200">
               {teamTasks.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('resources')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
+            activeTab === 'resources'
+              ? 'bg-[#1C1B1A] text-white shadow-xs'
+              : 'bg-white hover:bg-[#F2EFE6] text-[#66645E] border border-[#E0DDD0]'
+          }`}
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>Learning Resources ({hubResources.length})</span>
+          {hubResources.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-sky-100 text-sky-900 border border-sky-200">
+              {hubResources.length}
             </span>
           )}
         </button>
@@ -1448,6 +1641,149 @@ export default function TeamLeadDashboard() {
                   </div>
                 </div>
 
+                {/* Connect Learning Resources (Cloudinary Media, Spreadsheets & Links) */}
+                <div className="space-y-3 md:col-span-2 p-4 bg-[#F5F3EC]/80 rounded-2xl border border-[#E0DDD0]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] flex items-center gap-1.5">
+                        <UploadCloud className="w-4 h-4 text-sky-600" />
+                        <span>Connect Learning Resources (Cloudinary Media & Practice Links)</span>
+                      </label>
+                      <p className="text-[11px] text-[#66645E] mt-0.5">
+                        Attach documents, spreadsheets, PDFs, diagrams or DSA problem links so students can directly view or download them on this task.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          fetchHubResources();
+                          setIsTaskResourceSelectorOpen(!isTaskResourceSelectorOpen);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-[#E0DDD0] hover:bg-[#EAE7DE] text-xs font-semibold text-[#1C1B1A] flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>{isTaskResourceSelectorOpen ? 'Close Picker' : 'Choose Existing Resource'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsUploadModalForTaskOpen(true)}
+                        className="px-3 py-1.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Upload New to Task</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Currently Attached Resources */}
+                  {taskRelatedResources.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {taskRelatedResources.map((res) => {
+                        const isFile = ['pdf', 'doc', 'excel', 'image'].includes(res.type);
+                        return (
+                          <div
+                            key={res._id}
+                            className="px-3 py-2 rounded-xl bg-white border border-[#E0DDD0] flex items-center gap-2 text-xs shadow-2xs group"
+                          >
+                            {getResourceIcon(res.type)}
+                            <div className="max-w-[220px] truncate">
+                              <span className="font-semibold text-[#1C1B1A] truncate block">{res.title}</span>
+                              <span className="text-[10px] text-[#66645E] block font-mono">
+                                {getResourceLabel(res.type)} {res.fileFormat ? `• ${res.fileFormat.toUpperCase()}` : ''}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setTaskRelatedResources((prev) => prev.filter((r) => r._id !== res._id))}
+                              className="ml-1 text-[#88867E] hover:text-rose-600 p-0.5 rounded cursor-pointer"
+                              title="Remove from task"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#88867E] italic">
+                      No resources attached yet. Click "Choose Existing Resource" or "Upload New to Task" to attach study materials.
+                    </p>
+                  )}
+
+                  {/* Expandable Resource Selector Dropdown */}
+                  {isTaskResourceSelectorOpen && (
+                    <div className="mt-2 p-3 bg-white rounded-xl border border-[#E0DDD0] shadow-xs space-y-3 animate-in fade-in duration-150">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#88867E]" />
+                        <input
+                          type="text"
+                          value={taskResourceSearch}
+                          onChange={(e) => setTaskResourceSearch(e.target.value)}
+                          placeholder="Search resources by title, topic, or file type..."
+                          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[#E0DDD0] bg-[#FAF9F5] text-[#1C1B1A] focus:outline-none focus:border-[#1C1B1A]"
+                        />
+                      </div>
+
+                      <div className="max-h-56 overflow-y-auto divide-y divide-[#E0DDD0]/50">
+                        {hubResources.length === 0 ? (
+                          <div className="py-4 text-center text-xs text-[#88867E]">
+                            No resources found in database. Click "Upload New to Task" to add one!
+                          </div>
+                        ) : (
+                          hubResources
+                            .filter((r) =>
+                              !taskResourceSearch ||
+                              r.title?.toLowerCase().includes(taskResourceSearch.toLowerCase()) ||
+                              r.topic?.toLowerCase().includes(taskResourceSearch.toLowerCase()) ||
+                              r.type?.toLowerCase().includes(taskResourceSearch.toLowerCase())
+                            )
+                            .map((res) => {
+                              const isSelected = taskRelatedResources.some((r) => r._id === res._id);
+                              return (
+                                <div
+                                  key={res._id}
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setTaskRelatedResources((prev) => prev.filter((r) => r._id !== res._id));
+                                    } else {
+                                      setTaskRelatedResources((prev) => [...prev, res]);
+                                    }
+                                  }}
+                                  className={`p-2 rounded-lg flex items-center justify-between gap-3 text-xs cursor-pointer transition ${
+                                    isSelected ? 'bg-[#FAF9F5]' : 'hover:bg-[#F9F8F3]'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {getResourceIcon(res.type)}
+                                    <div className="truncate">
+                                      <div className="font-semibold text-[#1C1B1A] truncate">{res.title}</div>
+                                      <div className="text-[10px] text-[#66645E]">
+                                        {res.topic || 'General'} • {getResourceLabel(res.type)} {res.fileFormat ? `(${res.fileFormat.toUpperCase()})` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                      isSelected
+                                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                        : 'bg-[#F2EFE6] text-[#66645E] border-transparent'
+                                    }`}>
+                                      {isSelected ? '✓ Attached' : '+ Attach'}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Description */}
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
@@ -1603,6 +1939,44 @@ export default function TeamLeadDashboard() {
                               <span>{typeof deliv === 'string' ? deliv : deliv.name}</span>
                             </span>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Attached Resources & Study Materials */}
+                    {Array.isArray(t.relatedResources) && t.relatedResources.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] flex items-center gap-1.5">
+                          <UploadCloud className="w-3.5 h-3.5 text-sky-600" />
+                          <span>Connected Study Materials ({t.relatedResources.length}):</span>
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {t.relatedResources.map((resItem) => {
+                            if (!resItem || !resItem._id) return null;
+                            const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
+                            return (
+                              <a
+                                key={resItem._id}
+                                href={resItem.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={isFile}
+                                onClick={() => handleDownloadOrOpenResource(resItem)}
+                                className="px-3 py-1.5 rounded-xl bg-white border border-[#E0DDD0] hover:border-black/50 hover:shadow-xs transition text-xs font-medium text-[#1C1B1A] flex items-center gap-2 group cursor-pointer"
+                              >
+                                {getResourceIcon(resItem.type)}
+                                <span className="font-semibold">{resItem.title}</span>
+                                <span className="text-[10px] font-mono uppercase text-[#66645E] bg-[#F2EFE6] px-1.5 py-0.5 rounded">
+                                  {getResourceLabel(resItem.type)} {resItem.fileFormat ? `(${resItem.fileFormat.toUpperCase()})` : ''}
+                                </span>
+                                {isFile ? (
+                                  <Download className="w-3.5 h-3.5 text-[#66645E] group-hover:text-black" />
+                                ) : (
+                                  <ExternalLink className="w-3.5 h-3.5 text-[#66645E] group-hover:text-black" />
+                                )}
+                              </a>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -1800,6 +2174,212 @@ export default function TeamLeadDashboard() {
         </div>
       )}
 
+      {/* ================= TAB: LEARNING RESOURCES & CLOUDINARY MEDIA ================= */}
+      {activeTab === 'resources' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Banner */}
+          <div className="p-6 bg-gradient-to-r from-amber-50 via-[#FDFCF9] to-sky-50 rounded-2xl border border-[#E0DDD0] flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#1C1B1A] text-white text-[10px] font-mono font-bold uppercase tracking-wider">
+                  Team Learning Hub
+                </span>
+                <span className="text-xs text-[#66645E]">Docs, Spreadsheets, PDFs, DSA & Git</span>
+              </div>
+              <h3 className="text-lg font-bold text-[#1C1B1A]">
+                Resources & Curated Study Materials
+              </h3>
+              <p className="text-xs text-[#66645E] mt-0.5">
+                Review, download, or share study materials hosted on Cloudinary and practice problem links with your cohort.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsResourceUploadOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Upload New Resource</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Search & Filter Bar */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#88867E]" />
+                <input
+                  type="text"
+                  value={resourceLeadSearchQuery}
+                  onChange={(e) => setResourceLeadSearchQuery(e.target.value)}
+                  placeholder="Search resources by title, topic, keywords..."
+                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-[#E0DDD0] bg-[#FAF9F5] text-xs text-[#1C1B1A] focus:outline-none focus:border-[#1C1B1A] transition"
+                />
+              </div>
+
+              <div className="text-xs text-[#66645E] font-medium">
+                Showing {filteredLeadResources.length} of {hubResources.length} items
+              </div>
+            </div>
+
+            {/* Filter pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+              {[
+                { id: 'all', label: 'All Items' },
+                { id: 'doc', label: 'Documents' },
+                { id: 'pdf', label: 'PDFs' },
+                { id: 'excel', label: 'Spreadsheets' },
+                { id: 'image', label: 'Images' },
+                { id: 'dsa_problem', label: 'DSA Questions' },
+                { id: 'git_repo', label: 'Git Repos' },
+                { id: 'link', label: 'Links' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setResourceFilterType(item.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
+                    resourceFilterType === item.id
+                      ? 'bg-[#1C1B1A] text-white shadow-xs'
+                      : 'bg-[#F2EFE6] text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#E5E2D8]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Resources Grid */}
+          {loadingHubResources ? (
+            <div className="py-16 flex flex-col items-center justify-center space-y-3">
+              <RefreshCw className="w-6 h-6 text-[#1C1B1A] animate-spin" />
+              <p className="text-xs text-[#66645E]">Loading team learning materials...</p>
+            </div>
+          ) : filteredLeadResources.length === 0 ? (
+            <div className="py-14 text-center bg-white rounded-2xl border border-[#E0DDD0] p-6 space-y-3">
+              <BookOpen className="w-10 h-10 text-[#C8C5BB] mx-auto" />
+              <div className="text-sm font-bold text-[#1C1B1A]">No resources found</div>
+              <p className="text-xs text-[#66645E] max-w-sm mx-auto">
+                No resources match your active search or filter. You can upload documents, spreadsheets, or link DSA problems anytime.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsResourceUploadOpen(true)}
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Upload First Resource</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredLeadResources.map((resItem) => {
+                const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
+                const isCloudinary = Boolean(resItem.cloudinaryPublicId);
+
+                return (
+                  <div
+                    key={resItem._id}
+                    className="p-5 bg-white rounded-2xl border border-[#E0DDD0] hover:border-[#1C1B1A]/40 hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-[#F8F7F2] border border-[#E0DDD0] flex items-center justify-center flex-shrink-0">
+                            {getResourceIcon(resItem.type)}
+                          </div>
+                          <div>
+                            <span className="inline-block px-2 py-0.5 rounded-md bg-[#F2EFE6] text-[#66645E] text-[10px] font-semibold uppercase tracking-wider">
+                              {getResourceLabel(resItem.type)}
+                            </span>
+                            {resItem.difficulty && (
+                              <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                {resItem.difficulty}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {isCloudinary && (
+                          <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-medium">
+                            Cloudinary
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="mt-3 text-sm font-bold text-[#1C1B1A] leading-snug line-clamp-2">
+                        {resItem.title}
+                      </h4>
+
+                      {resItem.description && (
+                        <p className="mt-1 text-xs text-[#66645E] line-clamp-2 leading-relaxed">
+                          {resItem.description}
+                        </p>
+                      )}
+
+                      <div className="mt-3 pt-3 border-t border-[#F2EFE6] flex items-center justify-between text-[11px] text-[#66645E]">
+                        <span className="font-medium text-[#1C1B1A]/80 truncate max-w-[150px]">
+                          {resItem.topic || 'General'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {resItem.fileSize && <span>{formatResourceSize(resItem.fileSize)}</span>}
+                          {resItem.fileFormat && (
+                            <span className="uppercase font-semibold text-neutral-500">
+                              {resItem.fileFormat}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-[#E0DDD0] flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleResourceCompletion(resItem)}
+                        disabled={submittingCompletion}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                          resItem.isCompleted
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                            : 'bg-[#F2EFE6] text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#E5E2D8]'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{resItem.isCompleted ? 'Completed ✓' : 'Mark Done'}</span>
+                      </button>
+
+                      <a
+                        href={resItem.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={isFile}
+                        onClick={() => handleDownloadOrOpenResource(resItem)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition shadow-2xs"
+                      >
+                        {isFile ? (
+                          <>
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download</span>
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>Open Link</span>
+                          </>
+                        )}
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Invite Confirmation Modal */}
       {inviteModalUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
@@ -1867,6 +2447,93 @@ export default function TeamLeadDashboard() {
             </div>
           </div>
         )}
+
+        {/* Interactive Mark as Completed Prompt Modal */}
+        {promptCompletionResource && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+            <div className="bg-[#FDFCF9] border border-[#E0DDD0] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E0DDD0]">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  <h4 className="text-sm font-bold text-[#1C1B1A]">Mark as Completed?</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPromptCompletionResource(null)}
+                  className="w-7 h-7 rounded-full bg-[#F2EFE6] flex items-center justify-center text-[#1C1B1A] cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-[#E0DDD0] flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#F8F7F2] border border-[#E0DDD0] flex items-center justify-center flex-shrink-0">
+                  {getResourceIcon(promptCompletionResource.type)}
+                </div>
+                <div className="truncate">
+                  <div className="text-xs font-bold text-[#1C1B1A] truncate">
+                    {promptCompletionResource.title}
+                  </div>
+                  <div className="text-[11px] text-[#66645E]">
+                    {promptCompletionResource.topic || 'Learning Material'}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-[#66645E] leading-relaxed">
+                You just downloaded or opened this resource. Would you like to mark it as completed to track your progress?
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPromptCompletionResource(null)}
+                  className="px-4 py-2 rounded-xl bg-[#F2EFE6] hover:bg-[#E5E2D8] text-xs font-medium text-[#1C1B1A] cursor-pointer"
+                >
+                  Maybe Later
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleResourceCompletion(promptCompletionResource)}
+                  disabled={submittingCompletion}
+                  className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Mark as Completed ✓</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Resource Upload Modal for Team Lead */}
+        <ResourceUploadModal
+          isOpen={isResourceUploadOpen}
+          onClose={() => setIsResourceUploadOpen(false)}
+          onResourceUploaded={() => {
+            fetchHubResources();
+            showToast('Resource uploaded successfully!');
+          }}
+          apiBaseUrl={API_BASE_URL}
+          token={token}
+        />
+
+        {/* Resource Upload Modal for Direct Task Specification */}
+        <ResourceUploadModal
+          isOpen={isUploadModalForTaskOpen}
+          onClose={() => setIsUploadModalForTaskOpen(false)}
+          onResourceUploaded={(newResource) => {
+            fetchHubResources();
+            if (newResource && newResource._id) {
+              setTaskRelatedResources((prev) => [...prev, newResource]);
+              showToast(`Uploaded and attached "${newResource.title}" to this task! ✓`);
+            } else {
+              showToast('Resource uploaded! Select it from the picker.');
+            }
+          }}
+          apiBaseUrl={API_BASE_URL}
+          token={token}
+        />
           </div>
         </main>
       </div>

@@ -8,6 +8,11 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'c4gt_kiet_hub_jwt_secret_dev_key_2026',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_SECRET_KEY || '',
+  },
 };
 
 if (!config.mongoUri) {

@@ -185,8 +185,14 @@ export default function LandingHeader() {
                       className="w-8 h-8 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center text-xs font-bold shadow-inner">
-                      {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                    <div className="w-8 h-8 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center text-xs font-bold shadow-inner tracking-tight">
+                      {(() => {
+                        if (!user?.name) return 'U';
+                        const parts = user.name.trim().split(/\s+/);
+                        return parts.length === 1
+                          ? parts[0].substring(0, 2).toUpperCase()
+                          : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                      })()}
                     </div>
                   )}
                   <ChevronDown className={`w-4 h-4 text-[#66645E] transition-transform ${profileDropdownOpen ? 'rotate-180' : ''}`} />
@@ -205,7 +211,7 @@ export default function LandingHeader() {
                         <p className="text-sm font-bold text-[#1C1B1A] truncate">{user?.name || 'User'}</p>
                         <p className="text-xs text-[#66645E] truncate mt-0.5">{user?.email}</p>
                         <div className="mt-2">
-                          <span className="text-[10px] font-mono font-semibold uppercase px-2 py-0.5 rounded bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
+                          <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
                             {getRoleName(user?.role)}
                           </span>
                         </div>

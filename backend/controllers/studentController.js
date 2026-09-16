@@ -85,14 +85,14 @@ const getStudentTasks = async (req, res) => {
     let tasks = await Task.find(query)
       .sort({ deadline: 1 })
       .populate('createdBy', 'name email avatar role')
-      .populate('relatedResources', 'title type description url topic');
+      .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
 
     // Fallback: if database has tasks but query returned none, return published tasks for cohort
     if (tasks.length === 0) {
       tasks = await Task.find()
         .sort({ deadline: 1 })
         .populate('createdBy', 'name email avatar role')
-        .populate('relatedResources', 'title type description url topic');
+        .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
     }
 
 

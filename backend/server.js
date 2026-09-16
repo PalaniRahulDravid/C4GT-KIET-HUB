@@ -7,6 +7,7 @@ const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 
 const cookieParser = require('cookie-parser');
+require('./config/cloudinary');
 
 const app = express();
 
