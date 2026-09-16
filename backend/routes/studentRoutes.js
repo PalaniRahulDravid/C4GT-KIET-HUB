@@ -2,6 +2,7 @@ const express = require('express');
 const {
   getStudentTasks,
   updateStudentTaskStatus,
+  submitTaskDeliverables,
   recordHeartbeat,
   getStudentStreak,
   getStudentResourceProgress,
@@ -24,6 +25,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/tasks', getStudentTasks);
+router.post('/tasks/:taskId/submit', submitTaskDeliverables);
 router.patch('/tasks/:taskId/status', updateStudentTaskStatus);
 router.post('/heartbeat', recordHeartbeat);
 router.get('/streak', getStudentStreak);

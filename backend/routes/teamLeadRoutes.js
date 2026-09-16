@@ -9,6 +9,7 @@ const {
   getTeamTasks,
   createTeamTask,
   deleteTeamTask,
+  reviewTaskSubmission,
 } = require('../controllers/teamLeadController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -28,6 +29,7 @@ router.delete('/members/:memberId', removeMember);
 // Team Lead Student Task Assignment endpoints
 router.get('/tasks', getTeamTasks);
 router.post('/tasks', createTeamTask);
+router.post('/tasks/:taskId/review/:studentId', reviewTaskSubmission);
 router.delete('/tasks/:id', deleteTeamTask);
 
 module.exports = router;

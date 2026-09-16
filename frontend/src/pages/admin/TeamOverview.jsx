@@ -332,6 +332,28 @@ export default function TeamOverview() {
                   </div>
                 </div>
 
+                {/* Team Task & Sprint Progress (Live whole progress in admin side) */}
+                <div className="mt-3 p-3 bg-white rounded-xl border border-[#E0DDD0]/80 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[11px] font-mono font-semibold text-[#66645E]">Team Sprint Progress</span>
+                    <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      {t.progressPercentage || 0}% Completed
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-[#EFECE3] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-emerald-600 transition-all duration-300"
+                      style={{ width: `${t.progressPercentage || 0}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-[#88867E] font-mono">
+                    <span>{t.completedAssignments || 0} / {t.totalExpectedAssignments || 0} Assignments Done</span>
+                    {t.submittedAssignments > 0 && (
+                      <span className="text-blue-700 font-semibold">{t.submittedAssignments} Awaiting Review</span>
+                    )}
+                  </div>
+                </div>
+
                 {/* Team Lead Card */}
                 <div className="mt-3 p-3 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] text-xs">
                   <div className="flex items-center justify-between">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
 import {
@@ -12,7 +12,6 @@ import {
 } from '../../components/AceternitySidebar';
 import {
   Users,
-  UserPlus,
   Search,
   CheckCircle2,
   Clock,
@@ -55,13 +54,37 @@ import ResourceUploadModal from '../../components/ResourceUploadModal';
 export default function TeamLeadDashboard() {
   const { user, token, apiBaseUrl, logout } = useAuth();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'roster';
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  // Route-based active tab derivation with query fallback
+  const activeTab = useMemo(() => {
+    const p = location.pathname.toLowerCase();
+    if (p.includes('/teamlead/roster') || p.includes('/team-lead/roster')) {
+      return 'roster';
+    }
+    if (p.includes('/teamlead/resources') || p.includes('/team-lead/resources')) {
+      return 'resources';
+    }
+    if (
+      p.includes('/teamlead/tasks') ||
+      p.includes('/teamlead/give-tasks') ||
+      p.includes('/team-lead/tasks') ||
+      p.includes('/team-lead/give-tasks')
+    ) {
+      return 'give-tasks';
+    }
+    // Query parameter fallback
+    const tab = searchParams.get('tab');
+    if (tab === 'roster') return 'roster';
+    if (tab === 'resources') return 'resources';
+    if (tab === 'give-tasks' || tab === 'tasks') return 'give-tasks';
+    return 'give-tasks'; // Default route
+  }, [location.pathname, searchParams]);
 
   const [teamData, setTeamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState(initialTab); // 'roster' | 'search' | 'invitations' | 'give-tasks' | 'resources' | 'student-dashboard'
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -81,42 +104,27 @@ export default function TeamLeadDashboard() {
 
   const getPageTitle = () => {
     switch (activeTab) {
-      case 'search':
-        return 'Search Users & Add to Team';
-      case 'invitations':
-        return 'Pending Invitations';
-      case 'give-tasks':
-        return 'Give Tasks to Students';
+      case 'roster':
+        return 'Team Roster';
       case 'resources':
         return 'Learning Resources & Practice Materials';
-      case 'roster':
+      case 'give-tasks':
       default:
-        return 'Team Roster';
+        return 'Give Tasks to Students';
     }
   };
-
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && ['roster', 'search', 'invitations', 'give-tasks', 'resources', 'student-dashboard'].includes(tab)) {
-      setActiveTab(tab);
-    }
-  }, [searchParams]);
 
   const handleTabChange = (newTab) => {
-    setActiveTab(newTab);
-    setSearchParams({ tab: newTab });
+    if (newTab === 'roster') {
+      navigate('/teamlead/roster');
+    } else if (newTab === 'resources') {
+      navigate('/teamlead/resources');
+    } else if (newTab === 'give-tasks' || newTab === 'tasks') {
+      navigate('/teamlead/tasks');
+    } else if (newTab === 'student-dashboard') {
+      navigate('/student');
+    }
   };
-
-  // Search users state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'available' | 'assigned'
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-
-  // Invite modal / state
-  const [invitingUserId, setInvitingUserId] = useState(null);
-  const [inviteMessage, setInviteMessage] = useState('');
-  const [inviteModalUser, setInviteModalUser] = useState(null);
 
   // Give Tasks to Students State
   const [teamTasks, setTeamTasks] = useState([]);
@@ -144,6 +152,11 @@ export default function TeamLeadDashboard() {
   const [isTaskResourceSelectorOpen, setIsTaskResourceSelectorOpen] = useState(false);
   const [isUploadModalForTaskOpen, setIsUploadModalForTaskOpen] = useState(false);
   const [taskResourceSearch, setTaskResourceSearch] = useState('');
+
+  // Deliverables Review & Completion States
+  const [reviewingKey, setReviewingKey] = useState(null);
+  const [revisionFeedbackPrompt, setRevisionFeedbackPrompt] = useState(null);
+  const [revisionFeedbackText, setRevisionFeedbackText] = useState('');
 
   // Student Dashboard Preview State
   const [studentTasks, setStudentTasks] = useState([]);
@@ -188,31 +201,6 @@ export default function TeamLeadDashboard() {
     } finally {
       setLoading(false);
       setIsRefreshing(false);
-    }
-  };
-
-  // Search Users across total registered users
-  const fetchUsers = async () => {
-    try {
-      setSearching(true);
-      const params = new URLSearchParams();
-      if (searchQuery.trim()) params.append('search', searchQuery.trim());
-      if (filterType !== 'all') params.append('filter', filterType);
-
-      const res = await fetch(`${API_BASE_URL}/teamlead/users?${params.toString()}`, {
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.users)) {
-          setSearchResults(data.users);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to search users:', err);
-    } finally {
-      setSearching(false);
     }
   };
 
@@ -356,20 +344,9 @@ export default function TeamLeadDashboard() {
     }
   }, [activeTab]);
 
-  // Refetch search when tab is search or search query / filter changes
-  useEffect(() => {
-    if (activeTab === 'search') {
-      const delay = setTimeout(() => {
-        fetchUsers();
-      }, 300);
-      return () => clearTimeout(delay);
-    }
-  }, [activeTab, searchQuery, filterType]);
-
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchMyTeam();
-    if (activeTab === 'search') fetchUsers();
     if (activeTab === 'give-tasks') {
       fetchTeamTasks();
       fetchHubResources();
@@ -447,6 +424,41 @@ export default function TeamLeadDashboard() {
     }
   };
 
+  const handleReviewSubmission = async (taskId, studentId, action, reviewNotes = '') => {
+    const key = `${taskId}_${studentId}`;
+    try {
+      setReviewingKey(key);
+      const res = await fetch(`${API_BASE_URL}/teamlead/tasks/${taskId}/review/${studentId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ action, reviewNotes }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(
+          action === 'accept'
+            ? 'Work accepted and marked completed! Progress updated.'
+            : 'Revision feedback sent to member.',
+          'success'
+        );
+        setRevisionFeedbackPrompt(null);
+        setRevisionFeedbackText('');
+        fetchTeamTasks();
+      } else {
+        showToast(data.message || 'Failed to review submission', 'error');
+      }
+    } catch (err) {
+      console.error('Review submission error:', err);
+      showToast('Network error while reviewing submission', 'error');
+    } finally {
+      setReviewingKey(null);
+    }
+  };
+
   const toggleDeliverable = (item) => {
     if (taskDeliverables.includes(item)) {
       setTaskDeliverables((prev) => prev.filter((d) => d !== item));
@@ -459,64 +471,6 @@ export default function TeamLeadDashboard() {
     if (customDeliverableInput.trim() && !taskDeliverables.includes(customDeliverableInput.trim())) {
       setTaskDeliverables((prev) => [...prev, customDeliverableInput.trim()]);
       setCustomDeliverableInput('');
-    }
-  };
-
-  // Send Invitation Handler
-  const handleSendInvite = async () => {
-    if (!inviteModalUser) return;
-    try {
-      setInvitingUserId(inviteModalUser._id);
-      const res = await fetch(`${API_BASE_URL}/teamlead/invite`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          userId: inviteModalUser._id,
-          message: inviteMessage,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message || `Invitation sent to ${inviteModalUser.name}!`, 'success');
-        setInviteModalUser(null);
-        setInviteMessage('');
-        fetchMyTeam();
-        fetchUsers();
-      } else {
-        showToast(data.message || 'Failed to send invitation.', 'error');
-      }
-    } catch (err) {
-      console.error('Invite error:', err);
-      showToast('Failed to send invitation.', 'error');
-    } finally {
-      setInvitingUserId(null);
-    }
-  };
-
-  // Cancel Invitation Handler
-  const handleCancelInvite = async (invitationId, recipientName) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/teamlead/invitations/${invitationId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`Invitation to ${recipientName || 'user'} cancelled.`, 'success');
-        fetchMyTeam();
-        fetchUsers();
-      } else {
-        showToast(data.message || 'Failed to cancel invitation.', 'error');
-      }
-    } catch (err) {
-      console.error('Cancel invite error:', err);
-      showToast('Error cancelling invitation.', 'error');
     }
   };
 
@@ -708,48 +662,7 @@ export default function TeamLeadDashboard() {
             <nav className="mt-2 space-y-1">
               <SidebarLink
                 link={{
-                  href: '/teamlead?tab=roster',
-                  label: 'Team Roster',
-                  icon: <Users className="w-5 h-5" />,
-                  badge: `${totalCount}/${maxMembers}`,
-                }}
-                isActive={activeTab === 'roster'}
-                onClick={() => {
-                  handleTabChange('roster');
-                  setMobileSidebarOpen(false);
-                }}
-              />
-
-              <SidebarLink
-                link={{
-                  href: '/teamlead?tab=search',
-                  label: 'Search & Add Users',
-                  icon: <Search className="w-5 h-5" />,
-                }}
-                isActive={activeTab === 'search'}
-                onClick={() => {
-                  handleTabChange('search');
-                  setMobileSidebarOpen(false);
-                }}
-              />
-
-              <SidebarLink
-                link={{
-                  href: '/teamlead?tab=invitations',
-                  label: 'Pending Invitations',
-                  icon: <Send className="w-5 h-5" />,
-                  badge: pendingInvitations.length > 0 ? pendingInvitations.length : undefined,
-                }}
-                isActive={activeTab === 'invitations'}
-                onClick={() => {
-                  handleTabChange('invitations');
-                  setMobileSidebarOpen(false);
-                }}
-              />
-
-              <SidebarLink
-                link={{
-                  href: '/teamlead?tab=give-tasks',
+                  href: '/teamlead/tasks',
                   label: 'Give Tasks to Students',
                   icon: <CheckSquare className="w-5 h-5" />,
                   badge: teamTasks.length > 0 ? teamTasks.length : undefined,
@@ -763,7 +676,21 @@ export default function TeamLeadDashboard() {
 
               <SidebarLink
                 link={{
-                  href: '/teamlead?tab=resources',
+                  href: '/teamlead/roster',
+                  label: 'Team Roster',
+                  icon: <Users className="w-5 h-5" />,
+                  badge: `${totalCount}/${maxMembers}`,
+                }}
+                isActive={activeTab === 'roster'}
+                onClick={() => {
+                  handleTabChange('roster');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/teamlead/resources',
                   label: 'Learning Resources',
                   icon: <BookOpen className="w-5 h-5" />,
                   badge: hubResources.length > 0 ? hubResources.length : undefined,
@@ -876,7 +803,7 @@ export default function TeamLeadDashboard() {
             {team.name}: {team.track || 'Engineering Track'}
           </h1>
           <p className="text-xs text-[#66645E] mt-1">
-            Build and manage your 9-member team roster. Search across total users, send join requests, and coordinate your members.
+            Build and manage your 9-member team roster. Coordinate members, assign project deliverables, and review student progress.
           </p>
         </div>
 
@@ -955,7 +882,7 @@ export default function TeamLeadDashboard() {
             <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
               <span>
-                Your team has reached the 9-member limit. To invite new members, you must remove an existing member first.
+                Your team has reached the 9-member limit.
               </span>
             </div>
           )}
@@ -982,53 +909,14 @@ export default function TeamLeadDashboard() {
           </div>
 
           <div className="pt-4 border-t border-[#E0DDD0] flex items-center justify-between text-xs text-[#66645E]">
-            <span>Pending Requests:</span>
-            <span className="font-bold text-[#1C1B1A] font-mono">{pendingInvitations.length}</span>
+            <span>Assigned Tasks:</span>
+            <span className="font-bold text-[#1C1B1A] font-mono">{teamTasks.length}</span>
           </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[#E0DDD0] pb-2">
-        <button
-          onClick={() => handleTabChange('roster')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'roster'
-              ? 'bg-[#1C1B1A] text-white shadow-xs'
-              : 'bg-white hover:bg-[#F2EFE6] text-[#66645E] border border-[#E0DDD0]'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>Team Roster ({totalCount} / {maxMembers})</span>
-        </button>
-
-        <button
-          onClick={() => handleTabChange('search')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'search'
-              ? 'bg-[#1C1B1A] text-white shadow-xs'
-              : 'bg-white hover:bg-[#F2EFE6] text-[#66645E] border border-[#E0DDD0]'
-          }`}
-        >
-          <Search className="w-3.5 h-3.5" />
-          <span>Search Users & Add to Team</span>
-        </button>
-
-        <button
-          onClick={() => handleTabChange('invitations')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
-            activeTab === 'invitations'
-              ? 'bg-[#1C1B1A] text-white shadow-xs'
-              : 'bg-white hover:bg-[#F2EFE6] text-[#66645E] border border-[#E0DDD0]'
-          }`}
-        >
-          <Send className="w-3.5 h-3.5" />
-          <span>Pending Invitations ({pendingInvitations.length})</span>
-          {pendingInvitations.length > 0 && (
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          )}
-        </button>
-
         <button
           onClick={() => handleTabChange('give-tasks')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
@@ -1044,6 +932,18 @@ export default function TeamLeadDashboard() {
               {teamTasks.length}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('roster')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === 'roster'
+              ? 'bg-[#1C1B1A] text-white shadow-xs'
+              : 'bg-white hover:bg-[#F2EFE6] text-[#66645E] border border-[#E0DDD0]'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>Team Roster ({totalCount} / {maxMembers})</span>
         </button>
 
         <button
@@ -1064,15 +964,11 @@ export default function TeamLeadDashboard() {
         </button>
 
         <button
-          onClick={() => handleTabChange('student-dashboard')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
-            activeTab === 'student-dashboard'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-blue-50/70 hover:bg-blue-100 text-blue-800 border border-blue-200'
-          }`}
+          onClick={() => navigate('/student')}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-blue-50/70 hover:bg-blue-100 text-blue-800 border border-blue-200 transition-all cursor-pointer ml-auto"
         >
-          <GraduationCap className="w-3.5 h-3.5 text-current" />
-          <span>Student Dashboard</span>
+          <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
+          <span>Go to Student Dashboard</span>
         </button>
       </div>
 
@@ -1207,266 +1103,15 @@ export default function TeamLeadDashboard() {
                 <Users className="w-8 h-8 text-[#9E9C94]" />
                 <p className="text-sm font-semibold text-[#1C1B1A]">No team members added yet</p>
                 <p className="text-xs text-[#66645E] max-w-sm">
-                  Search across all registered students in the cohort and invite them to fill your {availableSlots} available slot{availableSlots === 1 ? '' : 's'}.
+                  Team members will appear here once allocated to your cohort team.
                 </p>
-                <button
-                  onClick={() => setActiveTab('search')}
-                  className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
-                >
-                  <Search className="w-3.5 h-3.5" />
-                  <span>Start Searching Users</span>
-                </button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ================= TAB 2: SEARCH USERS & ADD TO TEAM ================= */}
-      {activeTab === 'search' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text- font-bold text-[#1C1B1A]">
-                Search Users & Add to Your Team
-              </h3>
-              <p className="text-xs text-[#66645E] mt-0.5">
-                Search total registered users by name, email, branch, or roll number. Invite members up to your 9-member limit.
-              </p>
-            </div>
-
-            <div className="text-xs font-mono font-bold text-[#1C1B1A] bg-[#F2EFE6] px-3.5 py-1.5 rounded-xl border border-[#E0DDD0]">
-              Capacity: {totalCount} / {maxMembers} ({availableSlots} slot{availableSlots === 1 ? '' : 's'} remaining)
-            </div>
-          </div>
-
-          {/* Search Controls */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-[#66645E] absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, email, roll number, or branch..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A] shadow-2xs"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#66645E] hover:text-[#1C1B1A]"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="py-2.5 px-3.5 rounded-xl border border-[#E0DDD0] bg-white text-xs font-medium text-[#1C1B1A] shadow-2xs cursor-pointer"
-              >
-                <option value="all">All Users</option>
-                <option value="available">Available (No Team)</option>
-                <option value="assigned">Already in a Team</option>
-              </select>
-
-              <button
-                onClick={fetchUsers}
-                disabled={searching}
-                className="px-4 py-2.5 rounded-xl bg-[#F2EFE6] hover:bg-[#E5E2D8] border border-[#E0DDD0] text-xs font-medium text-[#1C1B1A] cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${searching ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-          </div>
-
-          {/* Results List */}
-          {searching ? (
-            <div className="p-12 text-center text-xs text-[#66645E] flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Searching total user database...</span>
-            </div>
-          ) : searchResults.length === 0 ? (
-            <div className="p-12 text-center rounded-2xl border border-dashed border-[#D0CDBE] bg-[#FDFCF9]">
-              <Users className="w-8 h-8 text-[#9E9C94] mx-auto mb-2" />
-              <p className="text-xs font-medium text-[#1C1B1A]">No users found matching your search</p>
-              <p className="text-[11px] text-[#66645E] mt-1">Try adjusting your search terms or filters.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {searchResults.map((u) => (
-                <div
-                  key={u._id}
-                  className="p-4 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs space-y-3 flex flex-col justify-between hover:border-[#1C1B1A]/40 transition-colors"
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div className="w-9 h-9 rounded-full bg-[#EFECE3] text-[#1C1B1A] flex items-center justify-center font-bold text-xs font-mono">
-                        {u.name ? u.name.slice(0, 2).toUpperCase() : 'U'}
-                      </div>
-
-                      {u.isPendingInvite ? (
-                        <span className="text-[10px] font-mono font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                          Invite Pending
-                        </span>
-                      ) : u.inTeam ? (
-                        <span className="text-[10px] font-mono font-semibold text-[#66645E] bg-[#F2EFE6] px-2 py-0.5 rounded-full">
-                          In {u.teamName || 'Team'}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          Available
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-2.5 space-y-0.5">
-                      <div className="text-xs font-bold text-[#1C1B1A] truncate">{u.name}</div>
-                      <div className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
-                        <a href={`mailto:${u.email}`} className="hover:underline truncate">{u.email}</a>
-                      </div>
-                      {(u.phone || u.phoneNumber) && (
-                        <div className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
-                          <a href={`tel:${u.phone || u.phoneNumber}`} className="hover:underline font-medium">
-                            {u.phone || u.phoneNumber}
-                          </a>
-                        </div>
-                      )}
-                      {(u.branch || u.year || u.rollNumber) && (
-                        <div className="text-[10px] text-[#88867E] mt-1 font-mono">
-                          {u.branch || 'Eng'} {u.year ? `• Year ${u.year}` : ''} {u.rollNumber ? `• ${u.rollNumber}` : ''}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-[#E0DDD0]">
-                    {u.isPendingInvite ? (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[11px] text-amber-700 font-medium">Invitation sent</span>
-                        <button
-                          onClick={() => handleCancelInvite(u.pendingInviteId, u.name)}
-                          className="text-[11px] text-rose-600 hover:underline cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : isFull ? (
-                      <button
-                        disabled
-                        className="w-full py-2 px-3 rounded-xl bg-gray-100 text-gray-400 text-xs font-medium cursor-not-allowed text-center"
-                      >
-                        Team Full (9/9 Limit)
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setInviteModalUser(u);
-                          setInviteMessage(`Hi ${u.name}, I would love for you to join ${team.name}!`);
-                        }}
-                        className="w-full py-2 px-3 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>Invite to Team</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ================= TAB 3: SENT INVITATIONS ================= */}
-      {activeTab === 'invitations' && (
-        <div className="space-y-6">
-          <div>
-            <h3 className="text- font-bold text-[#1C1B1A]">
-              Sent Team Invitations
-            </h3>
-            <p className="text-xs text-[#66645E] mt-0.5">
-              Users must accept your invitation in their Student Portal to officially join your team.
-            </p>
-          </div>
-
-          {pendingInvitations.length === 0 ? (
-            <div className="p-12 text-center rounded-2xl border border-dashed border-[#D0CDBE] bg-[#FDFCF9]">
-              <Send className="w-8 h-8 text-[#9E9C94] mx-auto mb-2" />
-              <p className="text-xs font-medium text-[#1C1B1A]">No pending invitations</p>
-              <p className="text-[11px] text-[#66645E] mt-1">
-                Go to the "Search Users" tab to find and invite students to your team.
-              </p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-[#E0DDD0] overflow-hidden shadow-2xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#F2EFE6] border-b border-[#E0DDD0] text-[10px] font-mono uppercase text-[#66645E]">
-                    <tr>
-                      <th className="py-3 px-4">Invited User</th>
-                      <th className="py-3 px-4">Details</th>
-                      <th className="py-3 px-4">Date Sent</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E0DDD0]">
-                    {pendingInvitations.map((inv) => {
-                      const target = inv.invitedUserId;
-                      return (
-                        <tr key={inv._id} className="hover:bg-[#FDFCF9]">
-                          <td className="py-3.5 px-4">
-                            <div className="font-bold text-[#1C1B1A]">{target?.name || 'Student'}</div>
-                            <div className="text-[11px] text-[#66645E] font-mono">{target?.email}</div>
-                            {(target?.phone || target?.phoneNumber) && (
-                              <div className="text-[10px] text-emerald-800 font-mono flex items-center gap-1 mt-0.5">
-                                <Phone className="w-2.5 h-2.5 text-emerald-600" />
-                                <span>{target?.phone || target?.phoneNumber}</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 text-[11px] text-[#66645E]">
-                            {target?.branch || 'N/A'} {target?.year ? `• Year ${target.year}` : ''}
-                          </td>
-                          <td className="py-3.5 px-4 text-[11px] text-[#66645E] font-mono">
-                            {new Date(inv.createdAt).toLocaleDateString('en-IN', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold text-amber-800 bg-amber-50 border border-amber-200">
-                              <Clock className="w-3 h-3" />
-                              Pending Acceptance
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() => handleCancelInvite(inv._id, target?.name)}
-                              className="px-3 py-1 rounded-lg text-rose-600 hover:bg-rose-50 text-xs font-medium cursor-pointer"
-                            >
-                              Cancel Invite
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ================= TAB 4: GIVE TASKS TO STUDENTS ================= */}
+      {/* ================= GIVE TASKS TO STUDENTS ================= */}
       {activeTab === 'give-tasks' && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2013,42 +1658,205 @@ export default function TeamLeadDashboard() {
                       </button>
 
                       {isExpanded && (
-                        <div className="mt-3 p-4 bg-white rounded-xl border border-[#E0DDD0] space-y-2 animate-in fade-in">
-                          <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] block">
-                            Member Submission Roster:
-                          </span>
+                        <div className="mt-3 p-4 bg-white rounded-xl border border-[#E0DDD0] space-y-3 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono font-bold uppercase text-[#66645E]">
+                              Member Deliverables & Submission Roster ({team.members?.length || 0} Members):
+                            </span>
+                            <span className="text-[10px] text-[#88867E] font-mono">
+                              Click submitted Google Drive links to inspect member work
+                            </span>
+                          </div>
+
                           <div className="divide-y divide-[#E0DDD0]/60">
                             {(team.members || []).map((m) => {
                               const assignment = (t.assignments || []).find(
                                 (a) => String(a.studentId?._id || a.studentId) === String(m._id)
                               );
                               const status = assignment ? assignment.status : 'pending';
+                              const submissions = assignment?.submissions || [];
+                              const hasSubmissions = submissions.length > 0 && submissions.some((s) => Boolean(s.link));
+                              const key = `${t._id}_${m._id}`;
+                              const isReviewing = reviewingKey === key;
+                              const isFeedbackOpen = revisionFeedbackPrompt?.taskId === t._id && revisionFeedbackPrompt?.studentId === m._id;
+
                               return (
-                                <div key={m._id} className="py-2 flex items-center justify-between text-xs">
-                                  <div>
-                                    <span className="font-semibold text-[#1C1B1A]">{m.name}</span>
-                                    <span className="text-[11px] text-[#66645E] font-mono ml-2">({m.rollNumber || 'No Roll'})</span>
-                                    <span className="text-[10px] text-[#88867E] ml-2 uppercase">
-                                      {m.memberType ? m.memberType.replace('_', ' ') : 'Developer'}
-                                    </span>
+                                <div key={m._id} className="py-3 space-y-2 text-xs">
+                                  {/* Member Header Row */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-7 h-7 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-[10px]">
+                                        {m.name ? m.name.slice(0, 2).toUpperCase() : 'ST'}
+                                      </div>
+                                      <div>
+                                        <span className="font-bold text-[#1C1B1A]">{m.name}</span>
+                                        <span className="text-[11px] text-[#66645E] font-mono ml-2">({m.rollNumber || 'No Roll'})</span>
+                                        <span className="text-[10px] text-[#88867E] ml-2 uppercase font-mono">
+                                          {m.memberType ? m.memberType.replace('_', ' ') : 'Developer'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Status Badge & Primary Action */}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {status === 'completed' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          ✓ Completed &amp; Accepted
+                                        </span>
+                                      ) : status === 'submitted' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-blue-800 bg-blue-50 border border-blue-200 animate-pulse">
+                                          <Clock className="w-3 h-3 text-blue-600" />
+                                          Deliverables Submitted (Needs Review)
+                                        </span>
+                                      ) : status === 'revision_requested' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200">
+                                          <AlertCircle className="w-3 h-3 text-amber-600" />
+                                          Revision Requested
+                                        </span>
+                                      ) : status === 'in_progress' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200">
+                                          <Clock className="w-3 h-3" />
+                                          In Progress
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-gray-600 bg-gray-100 border border-gray-200">
+                                          Pending Submission
+                                        </span>
+                                      )}
+
+                                      {/* Accept & Mark Completed Action Button */}
+                                      {status !== 'completed' ? (
+                                        <button
+                                          type="button"
+                                          disabled={isReviewing}
+                                          onClick={() => handleReviewSubmission(t._id, m._id, 'accept')}
+                                          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[11px] font-semibold transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                                        >
+                                          {isReviewing ? (
+                                            <RefreshCw className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <CheckCircle2 className="w-3 h-3" />
+                                          )}
+                                          <span>Accept &amp; Mark Completed</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          disabled={isReviewing}
+                                          onClick={() => handleReviewSubmission(t._id, m._id, 'request_revision', 'Re-opened by Team Lead')}
+                                          className="text-[10px] font-mono text-[#88867E] hover:text-rose-600 hover:underline cursor-pointer"
+                                        >
+                                          Re-open / Request Changes
+                                        </button>
+                                      )}
+
+                                      {/* Request Revision button when submitted */}
+                                      {status === 'submitted' && !isFeedbackOpen && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setRevisionFeedbackPrompt({ taskId: t._id, studentId: m._id, studentName: m.name });
+                                            setRevisionFeedbackText('');
+                                          }}
+                                          className="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-medium transition cursor-pointer"
+                                        >
+                                          Request Revision
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
-                                  <div>
-                                    {status === 'completed' ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200">
-                                        <CheckCircle2 className="w-3 h-3" />
-                                        Completed
-                                      </span>
-                                    ) : status === 'in_progress' ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200">
-                                        <Clock className="w-3 h-3" />
-                                        In Progress
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-gray-600 bg-gray-100 border border-gray-200">
-                                        Pending
-                                      </span>
-                                    )}
-                                  </div>
+
+                                  {/* Submitted Google Drive / Docs / Presentation Links */}
+                                  {hasSubmissions && (
+                                    <div className="p-3 bg-[#FBF9F3] rounded-xl border border-[#E0DDD0]/80 space-y-2">
+                                      <div className="flex items-center justify-between text-[11px] text-[#66645E] font-mono">
+                                        <span className="font-semibold text-[#1C1B1A] flex items-center gap-1">
+                                          <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                          <span>Submitted Deliverables:</span>
+                                        </span>
+                                        {assignment?.submittedAt && (
+                                          <span>Submitted on {new Date(assignment.submittedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                        )}
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {submissions.map((sub, sIdx) => {
+                                          if (!sub.link) return null;
+                                          const isDrive = sub.link.includes('drive.google.com') || sub.link.includes('docs.google.com');
+                                          const isDoc = sub.deliverableName.toLowerCase().includes('doc') || sub.deliverableName.toLowerCase().includes('spec');
+                                          const isPres = sub.deliverableName.toLowerCase().includes('demo') || sub.deliverableName.toLowerCase().includes('presentation');
+
+                                          return (
+                                            <div
+                                              key={sIdx}
+                                              className="p-2.5 bg-white rounded-lg border border-[#E0DDD0] flex items-center justify-between gap-2 shadow-2xs hover:border-[#1C1B1A]/40 transition"
+                                            >
+                                              <div className="min-w-0 flex items-center gap-2">
+                                                <div className={`w-6 h-6 rounded flex items-center justify-center shrink-0 ${isPres ? 'bg-amber-100 text-amber-800' : isDoc ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                                                  <FileText className="w-3.5 h-3.5" />
+                                                </div>
+                                                <div className="truncate">
+                                                  <div className="font-semibold text-[#1C1B1A] text-[11px] truncate">{sub.deliverableName}</div>
+                                                  <div className="text-[10px] text-[#66645E] font-mono truncate">{sub.link}</div>
+                                                </div>
+                                              </div>
+
+                                              <a
+                                                href={sub.link}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#1C1B1A] hover:bg-black text-white text-[10px] font-semibold transition cursor-pointer"
+                                              >
+                                                <span>{isDrive ? 'Open Drive' : 'View Link'}</span>
+                                                <ExternalLink className="w-3 h-3" />
+                                              </a>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+
+                                      {assignment?.submissionNotes && (
+                                        <div className="text-[11px] text-[#66645E] bg-white p-2 rounded-lg border border-[#E0DDD0]">
+                                          <strong className="text-[#1C1B1A]">Student Notes: </strong>
+                                          {assignment.submissionNotes}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Inline Feedback Box for Requesting Revision */}
+                                  {isFeedbackOpen && (
+                                    <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 space-y-2">
+                                      <div className="text-[11px] font-semibold text-amber-900">
+                                        Send Revision Feedback to {m.name}:
+                                      </div>
+                                      <textarea
+                                        rows={2}
+                                        value={revisionFeedbackText}
+                                        onChange={(e) => setRevisionFeedbackText(e.target.value)}
+                                        placeholder="e.g. Please update the Google Drive permissions to 'Anyone with link can view', or complete Section 3 of the Doc..."
+                                        className="w-full text-xs p-2 rounded-lg border border-amber-300 bg-white text-[#1C1B1A] focus:outline-none focus:border-amber-500"
+                                      />
+                                      <div className="flex items-center justify-end gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setRevisionFeedbackPrompt(null)}
+                                          className="px-3 py-1 rounded-lg text-xs text-[#66645E] hover:bg-black/5 cursor-pointer"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={isReviewing || !revisionFeedbackText.trim()}
+                                          onClick={() => handleReviewSubmission(t._id, m._id, 'request_revision', revisionFeedbackText)}
+                                          className="px-3 py-1 rounded-lg bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                                        >
+                                          Send Feedback &amp; Request Changes
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -2380,73 +2188,7 @@ export default function TeamLeadDashboard() {
         </div>
       )}
 
-      {/* Invite Confirmation Modal */}
-      {inviteModalUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-[#FDFCF9] border border-[#E0DDD0] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E0DDD0]">
-              <h4 className="text- font-bold text-[#1C1B1A]">
-                Invite to {team.name}
-              </h4>
-              <button
-                onClick={() => setInviteModalUser(null)}
-                className="w-7 h-7 rounded-full bg-[#F2EFE6] flex items-center justify-center text-[#1C1B1A] cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="p-3 bg-white rounded-xl border border-[#E0DDD0] flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs">
-                {inviteModalUser.name ? inviteModalUser.name.slice(0, 2).toUpperCase() : 'U'}
-              </div>
-              <div className="truncate">
-                <div className="text-xs font-bold text-[#1C1B1A] truncate">{inviteModalUser.name}</div>
-                <div className="text-[11px] text-[#66645E] font-mono truncate">{inviteModalUser.email}</div>
-                {inviteModalUser.branch && (
-                  <div className="text-[10px] text-[#88867E]">
-                    {inviteModalUser.branch} {inviteModalUser.year ? `• Year ${inviteModalUser.year}` : ''}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-mono uppercase text-[#66645E] block mb-1">
-                Personal Invitation Note (Optional)
-              </label>
-              <textarea
-                value={inviteMessage}
-                onChange={(e) => setInviteMessage(e.target.value)}
-                rows={3}
-                placeholder="Include a short welcome message..."
-                className="w-full p-3 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A]"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                onClick={() => setInviteModalUser(null)}
-                className="px-4 py-2 rounded-xl bg-[#F2EFE6] hover:bg-[#E5E2D8] text-xs font-medium text-[#1C1B1A] cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendInvite}
-                disabled={invitingUserId === inviteModalUser._id}
-                className="px-5 py-2 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-              >
-                {invitingUserId === inviteModalUser._id ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5" />
-                )}
-                <span>Send Invitation</span>
-              </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Interactive Mark as Completed Prompt Modal */}
         {promptCompletionResource && (

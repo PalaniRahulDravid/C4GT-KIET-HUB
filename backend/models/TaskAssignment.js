@@ -18,13 +18,59 @@ const taskAssignmentSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Status is required'],
       enum: {
-        values: ['pending', 'in_progress', 'completed', 'not_completed'],
-        message: 'Status must be pending, in_progress, completed, or not_completed',
+        values: ['pending', 'in_progress', 'submitted', 'completed', 'not_completed', 'revision_requested'],
+        message: 'Status must be pending, in_progress, submitted, completed, not_completed, or revision_requested',
       },
       default: 'pending',
       index: true,
     },
     submissionUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    submissions: [
+      {
+        deliverableName: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        link: {
+          type: String,
+          trim: true,
+          default: '',
+        },
+        fileUrl: {
+          type: String,
+          trim: true,
+          default: '',
+        },
+        submittedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    submissionNotes: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    submittedAt: {
+      type: Date,
+      default: null,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
+    reviewNotes: {
       type: String,
       trim: true,
       default: '',

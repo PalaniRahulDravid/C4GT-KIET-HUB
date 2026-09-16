@@ -72,7 +72,7 @@ export default function App() {
 
             {/* Team Lead Dashboard: strictly Team Lead only */}
             <Route
-              path="teamlead"
+              path="teamlead/*"
               element={
                 <ProtectedRoute allowedRoles={['teamlead', 'team_lead']}>
                   <TeamLeadDashboard />
@@ -80,7 +80,7 @@ export default function App() {
               }
             />
             <Route
-              path="team-lead"
+              path="team-lead/*"
               element={
                 <ProtectedRoute allowedRoles={['teamlead', 'team_lead']}>
                   <TeamLeadDashboard />

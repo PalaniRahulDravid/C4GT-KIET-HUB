@@ -429,7 +429,9 @@ const getTeamTasks = async (req, res) => {
     const assignments = await TaskAssignment.find({
       taskId: { $in: taskIds },
       studentId: { $in: memberIds },
-    }).populate('studentId', 'name rollNumber email memberType');
+    })
+      .populate('studentId', 'name rollNumber email memberType avatar')
+      .populate('reviewedBy', 'name email avatar role');
 
     const tasksWithMembersProgress = tasks.map((t) => {
       const tObj = t.toObject();
@@ -439,6 +441,7 @@ const getTeamTasks = async (req, res) => {
       tObj.assignments = taskAssignments;
       tObj.totalAssigned = memberIds.length;
       tObj.completedCount = taskAssignments.filter((a) => a.status === 'completed').length;
+      tObj.submittedCount = taskAssignments.filter((a) => a.status === 'submitted').length;
       return tObj;
     });
 
@@ -452,6 +455,102 @@ const getTeamTasks = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch team tasks',
+    });
+  }
+};
+
+/**
+ * @desc    Team Lead review student deliverables submission (Accept & Mark Completed or Request Revision)
+ * @route   POST /api/teamlead/tasks/:taskId/review/:studentId
+ * @access  Private (Team Lead / Admin)
+ */
+const reviewTaskSubmission = async (req, res) => {
+  try {
+    const { taskId, studentId } = req.params;
+    const { action, reviewNotes } = req.body; // 'accept' or 'request_revision'
+
+    if (!['accept', 'request_revision'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid action. Must be 'accept' or 'request_revision'",
+      });
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    const studentUser = await User.findById(studentId);
+    if (!studentUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
+    let assignment = await TaskAssignment.findOne({ taskId: task._id, studentId: studentUser._id });
+    if (!assignment) {
+      assignment = new TaskAssignment({
+        taskId: task._id,
+        studentId: studentUser._id,
+        status: action === 'accept' ? 'completed' : 'revision_requested',
+      });
+    } else {
+      assignment.status = action === 'accept' ? 'completed' : 'revision_requested';
+    }
+
+    assignment.reviewedBy = req.user._id;
+    assignment.reviewedAt = new Date();
+    if (reviewNotes !== undefined) {
+      assignment.reviewNotes = reviewNotes ? reviewNotes.trim() : '';
+    }
+
+    if (action === 'accept') {
+      assignment.completedAt = new Date();
+    } else {
+      assignment.completedAt = null;
+    }
+
+    await assignment.save();
+
+    // Dispatch notification to student
+    try {
+      await Notification.create({
+        studentId: studentUser._id,
+        taskId: task._id,
+        title: action === 'accept' ? `Task Approved: ${task.title}` : `Changes Requested: ${task.title}`,
+        message:
+          action === 'accept'
+            ? `Team Lead ${req.user.name} reviewed and accepted your deliverables! Task is marked Completed.`
+            : `Team Lead ${req.user.name} reviewed your submission and requested updates: ${reviewNotes || 'Please review deliverables.'}`,
+        type: action === 'accept' ? 'task_completed' : 'task_assigned',
+        assignedBy: req.user.name || 'Team Lead',
+      });
+    } catch (notifErr) {
+      // Continue
+    }
+
+    const populatedAssignment = await TaskAssignment.findById(assignment._id)
+      .populate('studentId', 'name rollNumber email memberType avatar')
+      .populate('reviewedBy', 'name email avatar role');
+
+    res.status(200).json({
+      success: true,
+      message:
+        action === 'accept'
+          ? `Work accepted and marked as completed for ${studentUser.name}`
+          : `Revision requested from ${studentUser.name}`,
+      assignment: populatedAssignment,
+    });
+  } catch (error) {
+    console.error('Error reviewing task submission:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to review task submission',
     });
   }
 };
@@ -599,4 +698,5 @@ module.exports = {
   getTeamTasks,
   createTeamTask,
   deleteTeamTask,
+  reviewTaskSubmission,
 };

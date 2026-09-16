@@ -46,10 +46,12 @@ const getStudentTasks = async (req, res) => {
     const teamNumber = await getStudentTeamNumber(req.user);
 
     // Fetch explicit assignments for student
-    const assignments = await TaskAssignment.find({ studentId });
+    const assignments = await TaskAssignment.find({ studentId }).populate('reviewedBy', 'name email avatar role');
     const assignmentMap = {};
+    const fullAssignmentMap = {};
     assignments.forEach((a) => {
       assignmentMap[a.taskId.toString()] = a.status;
+      fullAssignmentMap[a.taskId.toString()] = a;
     });
 
     const explicitTaskIds = assignments.map((a) => a.taskId);
@@ -95,11 +97,12 @@ const getStudentTasks = async (req, res) => {
         .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
     }
 
-
-    // Attach student specific status to each task
+    // Attach student specific status and assignment details to each task
     const tasksWithStatus = tasks.map((t) => {
       const taskObj = t.toObject();
-      taskObj.status = assignmentMap[t._id.toString()] || 'pending';
+      const assignment = fullAssignmentMap[t._id.toString()] || null;
+      taskObj.status = assignment ? assignment.status : 'pending';
+      taskObj.assignment = assignment;
       return taskObj;
     });
 
@@ -117,6 +120,107 @@ const getStudentTasks = async (req, res) => {
 };
 
 /**
+ * @desc    Submit task deliverables (e.g. Google Drive links for Doc, Presentation, repo, notes)
+ * @route   POST /api/student/tasks/:taskId/submit
+ * @access  Private (Authenticated User)
+ */
+const submitTaskDeliverables = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { submissions, submissionNotes } = req.body;
+    const studentId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid task ID',
+      });
+    }
+
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    // Format deliverables array
+    const cleanSubmissions = Array.isArray(submissions)
+      ? submissions.map((s) => ({
+          deliverableName: s.deliverableName || 'Deliverable',
+          link: s.link ? s.link.trim() : '',
+          fileUrl: s.fileUrl ? s.fileUrl.trim() : '',
+          submittedAt: new Date(),
+        }))
+      : [];
+
+    let assignment = await TaskAssignment.findOne({ taskId: task._id, studentId });
+    if (!assignment) {
+      assignment = new TaskAssignment({
+        taskId: task._id,
+        studentId,
+        status: 'submitted',
+        submissions: cleanSubmissions,
+        submissionNotes: submissionNotes ? submissionNotes.trim() : '',
+        submittedAt: new Date(),
+      });
+    } else {
+      assignment.status = 'submitted';
+      assignment.submissions = cleanSubmissions;
+      if (submissionNotes !== undefined) {
+        assignment.submissionNotes = submissionNotes ? submissionNotes.trim() : '';
+      }
+      assignment.submittedAt = new Date();
+    }
+
+    await assignment.save();
+
+    // Find student's team and team lead to dispatch notification
+    const studentUser = await User.findById(studentId);
+    let team = null;
+    if (studentUser && studentUser.teamId) {
+      team = await Team.findById(studentUser.teamId);
+    }
+    if (!team) {
+      team = await Team.findOne({ members: studentId });
+    }
+
+    if (team && team.teamLeadId) {
+      try {
+        await Notification.create({
+          studentId: team.teamLeadId,
+          taskId: task._id,
+          teamId: team._id,
+          title: `Deliverables Submitted: ${task.title}`,
+          message: `${studentUser.name || 'A team member'} submitted task deliverables (Doc/Presentation links) for review.`,
+          type: 'submission_received',
+          assignedBy: studentUser.name || 'Student',
+        });
+      } catch (notifErr) {
+        // Continue
+      }
+    }
+
+    const populatedAssignment = await TaskAssignment.findById(assignment._id)
+      .populate('studentId', 'name rollNumber email memberType')
+      .populate('reviewedBy', 'name email avatar role');
+
+    res.status(200).json({
+      success: true,
+      message: 'Deliverables submitted successfully. Awaiting Team Lead review.',
+      assignment: populatedAssignment,
+    });
+  } catch (error) {
+    console.error('Error submitting deliverables:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to submit task deliverables',
+    });
+  }
+};
+
+/**
  * @desc    Update task status for logged-in student
  * @route   PATCH /api/student/tasks/:taskId/status
  * @access  Private (Authenticated User)
@@ -127,7 +231,7 @@ const updateStudentTaskStatus = async (req, res) => {
     const { status } = req.body;
     const studentId = req.user._id;
 
-    const allowedStatuses = ['pending', 'in_progress', 'completed', 'not_completed'];
+    const allowedStatuses = ['pending', 'in_progress', 'submitted', 'completed', 'not_completed', 'revision_requested'];
     if (!status || !allowedStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -735,4 +839,5 @@ module.exports = {
   getStudentTeam,
   getStudentInvitations,
   respondToTeamInvitation,
+  submitTaskDeliverables,
 };

@@ -55,6 +55,9 @@ import {
   Eye,
   Mail,
   Phone,
+  Send,
+  AlertTriangle,
+  Share2,
 } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -138,6 +141,12 @@ export default function StudentDashboard() {
   const [completionPromptResource, setCompletionPromptResource] = useState(null);
   const [uploadResourceModalOpen, setUploadResourceModalOpen] = useState(false);
 
+  // Deliverables Submission State
+  const [submissionDeliverables, setSubmissionDeliverables] = useState({});
+  const [submissionNotes, setSubmissionNotes] = useState('');
+  const [submittingDeliverables, setSubmittingDeliverables] = useState(false);
+  const [submissionSuccessMessage, setSubmissionSuccessMessage] = useState(null);
+
   // YouTube Helper & Time Format Utilities
   const isYouTubeUrl = (url) => {
     if (!url || typeof url !== 'string') return false;
@@ -197,6 +206,77 @@ export default function StudentDashboard() {
       setTasks([]);
     } finally {
       setLoadingTasks(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedOverviewTask) {
+      const existing = {};
+      const subs = selectedOverviewTask.assignment?.submissions || [];
+      subs.forEach((s) => {
+        if (s.deliverableName) {
+          existing[s.deliverableName] = s.link || s.fileUrl || '';
+        }
+      });
+      setSubmissionDeliverables(existing);
+      setSubmissionNotes(selectedOverviewTask.assignment?.submissionNotes || '');
+      setSubmissionSuccessMessage(null);
+    }
+  }, [selectedOverviewTask]);
+
+  const handleSubmitDeliverables = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedOverviewTask) return;
+
+    try {
+      setSubmittingDeliverables(true);
+      const reqDeliverables =
+        Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
+          ? selectedOverviewTask.deliverables
+          : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'];
+
+      const submissionsPayload = reqDeliverables.map((dName) => {
+        const name = typeof dName === 'string' ? dName : dName.name || 'Deliverable';
+        return {
+          deliverableName: name,
+          link: (submissionDeliverables[name] || '').trim(),
+        };
+      });
+
+      const res = await fetch(`${API_BASE_URL}/student/tasks/${selectedOverviewTask._id}/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          submissions: submissionsPayload,
+          submissionNotes,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSubmissionSuccessMessage('Work submitted successfully! Your Team Lead has been notified for review.');
+        fetchStudentTasks();
+        setSelectedOverviewTask((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'submitted',
+                assignment: data.assignment,
+              }
+            : null
+        );
+      } else {
+        alert(data.message || 'Failed to submit deliverables');
+      }
+    } catch (err) {
+      console.error('Submit deliverables error:', err);
+      alert('Network error while submitting deliverables');
+    } finally {
+      setSubmittingDeliverables(false);
     }
   };
 
@@ -1047,6 +1127,8 @@ export default function StudentDashboard() {
   const renderTaskCard = (task, idx, type) => {
     if (!task) return null;
     const isCompleted = task.status === 'completed';
+    const isSubmitted = task.status === 'submitted';
+    const isRevision = task.status === 'revision_requested';
     const isLeadTask = type === 'teamlead' || isTeamLeadTask(task);
     const accentColor = isLeadTask ? '#10b981' : '#7c3aed';
 
@@ -1064,13 +1146,17 @@ export default function StudentDashboard() {
               {task.title}
             </h4>
             <span
-              className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-full ${
+              className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-full border ${
                 isCompleted
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-amber-50 text-amber-700'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : isSubmitted
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : isRevision
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
               }`}
             >
-              {isCompleted ? '✓ Done' : 'In Progress'}
+              {isCompleted ? '✓ Completed' : isSubmitted ? '⏳ Awaiting Review' : isRevision ? '⚠️ Revision Needed' : 'In Progress'}
             </span>
           </div>
 
@@ -1252,6 +1338,176 @@ export default function StudentDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* ================= SUBMIT DELIVERABLES SECTION (Requirement: Doc & Presentation Google Drive Links) ================= */}
+            <div className="space-y-3 p-5 bg-gradient-to-br from-emerald-50/70 via-[#FDFCF9] to-blue-50/60 rounded-2xl border-2 border-emerald-200/80 shadow-xs">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="text-xs font-mono font-bold uppercase text-[#1C1B1A] flex items-center gap-2">
+                  <UploadCloud className="w-4 h-4 text-emerald-600" />
+                  <span>Submit Required Deliverables (Google Drive &amp; Project Links):</span>
+                </div>
+                <span className="text-[10px] font-mono text-emerald-800 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold">
+                  Google Drive / Docs / Slides
+                </span>
+              </div>
+
+              <p className="text-xs text-[#66645E] leading-relaxed">
+                Please upload your documentation, presentations, or demo videos to Google Drive, ensure link sharing is set to <strong className="text-[#1C1B1A]">"Anyone with the link can view"</strong>, and paste the URLs below. Your Team Lead will review and mark your milestone completed.
+              </p>
+
+              {/* Status Alert Banner */}
+              {selectedOverviewTask.status === 'completed' ? (
+                <div className="p-3 bg-emerald-100/80 rounded-xl border border-emerald-300 text-xs text-emerald-900 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">✓ Task Approved &amp; Marked Completed!</div>
+                    <div className="text-[11px] text-emerald-800 mt-0.5">
+                      {selectedOverviewTask.assignment?.reviewedBy?.name
+                        ? `Reviewed and accepted by ${selectedOverviewTask.assignment.reviewedBy.name}`
+                        : 'Reviewed and accepted by your Team Lead'}
+                      {selectedOverviewTask.assignment?.reviewNotes && ` — "${selectedOverviewTask.assignment.reviewNotes}"`}
+                    </div>
+                  </div>
+                </div>
+              ) : selectedOverviewTask.status === 'submitted' ? (
+                <div className="p-3 bg-blue-100/80 rounded-xl border border-blue-300 text-xs text-blue-900 flex items-start gap-2.5">
+                  <Clock className="w-4 h-4 text-blue-700 shrink-0 mt-0.5 animate-pulse" />
+                  <div>
+                    <div className="font-bold">Deliverables Submitted — Awaiting Team Lead Review</div>
+                    <div className="text-[11px] text-blue-800 mt-0.5">
+                      Your Google Drive links are submitted. Once your Team Lead inspects and accepts them, your progress will update automatically. You can update your links below anytime.
+                    </div>
+                  </div>
+                </div>
+              ) : selectedOverviewTask.status === 'revision_requested' ? (
+                <div className="p-3 bg-amber-100/80 rounded-xl border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">Team Lead Requested Updates / Revision:</div>
+                    <div className="text-[11px] text-amber-800 mt-0.5">
+                      {selectedOverviewTask.assignment?.reviewNotes || 'Please check your submitted links and update your deliverables below.'}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Submission Inputs for each deliverable */}
+              <form onSubmit={handleSubmitDeliverables} className="space-y-3 pt-1">
+                <div className="space-y-2.5">
+                  {(Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
+                    ? selectedOverviewTask.deliverables
+                    : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation']
+                  ).map((delivItem, dIdx) => {
+                    const dName = typeof delivItem === 'string' ? delivItem : delivItem.name || 'Deliverable';
+                    const isDoc = dName.toLowerCase().includes('doc') || dName.toLowerCase().includes('spec');
+                    const isPres = dName.toLowerCase().includes('demo') || dName.toLowerCase().includes('presentation');
+                    const isGit = dName.toLowerCase().includes('repo') || dName.toLowerCase().includes('pull') || dName.toLowerCase().includes('github');
+                    const currentVal = submissionDeliverables[dName] || '';
+
+                    return (
+                      <div key={dIdx} className="p-3 bg-white border border-[#E0DDD0] rounded-xl space-y-1.5 shadow-2xs">
+                        <div className="flex items-center justify-between text-xs">
+                          <label className="font-bold text-[#1C1B1A] flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${isPres ? 'bg-amber-500' : isDoc ? 'bg-blue-500' : 'bg-emerald-500'}`} />
+                            <span>{dName}</span>
+                            {isDoc && (
+                              <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                                Google Drive Doc
+                              </span>
+                            )}
+                            {isPres && (
+                              <span className="text-[10px] font-mono text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                Google Drive Presentation
+                              </span>
+                            )}
+                          </label>
+                          {currentVal && (
+                            <a
+                              href={currentVal}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-emerald-700 hover:underline inline-flex items-center gap-1 font-mono font-medium"
+                            >
+                              <span>Preview Link</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="relative">
+                          <input
+                            type="url"
+                            value={currentVal}
+                            onChange={(e) =>
+                              setSubmissionDeliverables((prev) => ({
+                                ...prev,
+                                [dName]: e.target.value,
+                              }))
+                            }
+                            placeholder={
+                              isDoc
+                                ? 'https://docs.google.com/document/d/... (Google Drive Doc shareable link)'
+                                : isPres
+                                ? 'https://docs.google.com/presentation/d/... (Google Drive Slides shareable link)'
+                                : isGit
+                                ? 'https://github.com/... (GitHub repository or PR link)'
+                                : 'https://... (Google Drive or project web URL)'
+                            }
+                            className="w-full text-xs px-3 py-2 rounded-lg border border-[#E0DDD0] bg-[#FDFCF9] text-[#1C1B1A] font-mono focus:outline-none focus:border-emerald-600 transition"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Optional Notes */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono font-bold text-[#66645E] uppercase block">
+                    Submission Remarks / Notes for Team Lead (Optional):
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={submissionNotes}
+                    onChange={(e) => setSubmissionNotes(e.target.value)}
+                    placeholder="e.g. Completed documentation draft on Google Docs and demo presentation deck for sprint review..."
+                    className="w-full text-xs p-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:outline-none focus:border-emerald-600 transition"
+                  />
+                </div>
+
+                {/* Submit button */}
+                <div className="flex items-center justify-between pt-1">
+                  {submissionSuccessMessage && (
+                    <span className="text-xs font-mono font-semibold text-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{submissionSuccessMessage}</span>
+                    </span>
+                  )}
+                  <div className="ml-auto">
+                    <button
+                      type="submit"
+                      disabled={submittingDeliverables}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {submittingDeliverables ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                      <span>
+                        {selectedOverviewTask.status === 'completed'
+                          ? 'Update Deliverables Links'
+                          : selectedOverviewTask.status === 'submitted'
+                          ? 'Update Submitted Links'
+                          : selectedOverviewTask.status === 'revision_requested'
+                          ? 'Resubmit Updated Work'
+                          : 'Submit Deliverables for Team Lead Review'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </form>
             </div>
 
             {/* Connected Study Resources & Materials (Direct connect with uploaded resources so students can click, see, and download) */}
@@ -2972,193 +3228,6 @@ export default function StudentDashboard() {
           )}
         </main>
       </div>
-
-      {/* ==================== SELECTED TASK OVERVIEW MODAL ==================== */}
-      {selectedOverviewTask && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl relative">
-            <button
-              type="button"
-              onClick={() => setSelectedOverviewTask(null)}
-              className="absolute top-5 right-5 p-2 rounded-full hover:bg-black/5 text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="space-y-2 pr-8">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#1C1B1A] text-white px-2.5 py-0.5 rounded-full">
-                  Task Overview
-                </span>
-                {selectedOverviewTask.topic && (
-                  <span className="text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
-                    Domain: {selectedOverviewTask.topic}
-                  </span>
-                )}
-                <span
-                  className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${
-                    selectedOverviewTask.status === 'completed'
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : 'bg-amber-50 text-amber-800 border-amber-200'
-                  }`}
-                >
-                  {selectedOverviewTask.status === 'completed' ? '✓ Completed' : 'Pending / In Progress'}
-                </span>
-              </div>
-              <h2 className="text- font-bold text-[#1C1B1A]">
-                {selectedOverviewTask.title}
-              </h2>
-            </div>
-
-            <div className="space-y-3 bg-[#F4F1E8]/60 p-4 rounded-xl border border-[#E0DDD0]">
-              <h4 className="text-xs font-mono font-bold text-[#1C1B1A] uppercase tracking-wider">
-                Task Specifications &amp; Description
-              </h4>
-              <p className="text-xs text-[#66645E] leading-relaxed whitespace-pre-line">
-                {selectedOverviewTask.description || 'No detailed description specified.'}
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 text-xs font-mono border-t border-[#E0DDD0]">
-                <div>
-                  <span className="text-[#66645E] text-[10px] block">Deadline:</span>
-                  <span className="font-bold text-[#1C1B1A]">{formatDate(selectedOverviewTask.deadline)}</span>
-                </div>
-                <div>
-                  <span className="text-[#66645E] text-[10px] block">Priority:</span>
-                  <span className="font-bold text-[#1C1B1A]">{selectedOverviewTask.priority || 'Normal'}</span>
-                </div>
-                <div>
-                  <span className="text-[#66645E] text-[10px] block">Created By:</span>
-                  <span className="font-bold text-[#1C1B1A]">{selectedOverviewTask.createdBy?.name || 'Admin'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Resources List in Overview */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-mono font-bold text-[#1C1B1A] uppercase tracking-wider flex items-center justify-between">
-                <span>Assigned Task Resources ({Array.isArray(selectedOverviewTask.deliverables) ? selectedOverviewTask.deliverables.length : 4})</span>
-                <span className="text-[10px] font-normal text-[#66645E]">50%+ watch time required for videos</span>
-              </h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {(Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
-                  ? selectedOverviewTask.deliverables
-                  : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation']
-                ).map((item, idx) => {
-                  const itemName = typeof item === 'string' ? item : item.name || 'Resource';
-                  const key = `${selectedOverviewTask._id}_res-${idx}`;
-                  const prog = resourceProgressMap[key];
-                  const isDone = Boolean(prog && prog.isCompleted);
-
-                  return (
-                    <div
-                      key={idx}
-                      className="p-3 bg-white border border-[#E0DDD0] rounded-xl flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <BookOpen className="w-4 h-4 text-[#1C1B1A] shrink-0" />
-                        <span className="font-semibold text-[#1C1B1A] truncate">{String(itemName)}</span>
-                      </div>
-                      <span
-                        className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border ${
-                          isDone
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : 'bg-[#EEECDF] text-[#1C1B1A] border-[#E0DDD0]'
-                        }`}
-                      >
-                        {isDone ? '✓ Completed' : 'Pending'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Connected Study Resources & Materials */}
-            {Array.isArray(selectedOverviewTask.relatedResources) && selectedOverviewTask.relatedResources.length > 0 && (
-              <div className="space-y-2.5 p-4 bg-gradient-to-r from-sky-50 via-[#FDFCF9] to-indigo-50/40 rounded-2xl border border-sky-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-mono font-bold uppercase text-sky-950 flex items-center gap-1.5">
-                    <UploadCloud className="w-4 h-4 text-sky-600" />
-                    <span>Attached Cloudinary Materials & Links ({selectedOverviewTask.relatedResources.length}):</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-sky-700 bg-white px-2 py-0.5 rounded-full border border-sky-200">
-                    Direct Download / Open
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {selectedOverviewTask.relatedResources.map((resItem) => {
-                    if (!resItem || !resItem._id) return null;
-                    const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
-                    return (
-                      <div
-                        key={resItem._id}
-                        className="p-3 bg-white border border-sky-200 rounded-xl flex items-center justify-between gap-3 shadow-xs hover:border-sky-400 transition group"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
-                            {getTaskResourceIcon(resItem.type)}
-                          </div>
-                          <div className="truncate">
-                            <div className="text-xs font-bold text-[#1C1B1A] truncate">{resItem.title}</div>
-                            <div className="text-[10px] text-[#66645E] font-mono truncate">
-                              {resItem.topic || 'Resource'} {resItem.fileFormat ? `• ${resItem.fileFormat.toUpperCase()}` : ''}
-                            </div>
-                          </div>
-                        </div>
-
-                        <a
-                          href={resItem.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={isFile}
-                          onClick={() => handleDownloadOrOpenResource(resItem)}
-                          className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-                        >
-                          {isFile ? (
-                            <>
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Download</span>
-                            </>
-                          ) : (
-                            <>
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              <span>Open</span>
-                            </>
-                          )}
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E0DDD0]">
-              <button
-                type="button"
-                onClick={() => setSelectedOverviewTask(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#66645E] hover:bg-black/5 transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedResourceTaskId(selectedOverviewTask._id);
-                  setActiveNav('resources');
-                  setSelectedOverviewTask(null);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold flex items-center gap-2 shadow-2xs transition-colors cursor-pointer"
-              >
-                <span>View Task Resources</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ==================== ACTIVE MEDIA / VIDEO VIEWER MODAL ==================== */}
       {activeMediaResource && (

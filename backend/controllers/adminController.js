@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Team = require('../models/Team');
 const Task = require('../models/Task');
+const TaskAssignment = require('../models/TaskAssignment');
 
 /**
  * @desc    Get all registered users (Admin only)
@@ -164,10 +165,47 @@ const getTeams = async (req, res) => {
       .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
       .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
 
+    // Fetch all published tasks to compute team progress
+    const allTasks = await Task.find().select('_id assignedTeams');
+    const allAssignments = await TaskAssignment.find().select('taskId studentId status');
+
+    const enrichedTeams = teams.map((teamDoc) => {
+      const teamObj = teamDoc.toObject();
+      const teamNumber = teamObj.teamNumber;
+      const memberIds = (teamObj.members || []).map((m) => (m._id ? m._id.toString() : m.toString()));
+
+      // Tasks assigned to this team
+      const teamTasks = allTasks.filter((t) =>
+        Array.isArray(t.assignedTeams) && t.assignedTeams.includes(teamNumber)
+      );
+      const teamTaskIds = teamTasks.map((t) => t._id.toString());
+
+      // Assignments for this team's members on this team's tasks
+      const teamAssignments = allAssignments.filter(
+        (a) =>
+          teamTaskIds.includes(a.taskId.toString()) &&
+          memberIds.includes(a.studentId.toString())
+      );
+
+      const totalExpected = teamTasks.length * Math.max(memberIds.length, 1);
+      const completedCount = teamAssignments.filter((a) => a.status === 'completed').length;
+      const submittedCount = teamAssignments.filter((a) => a.status === 'submitted').length;
+      const progressPercentage =
+        totalExpected > 0 ? Math.min(100, Math.round((completedCount / totalExpected) * 100)) : 0;
+
+      teamObj.tasksCount = teamTasks.length;
+      teamObj.totalExpectedAssignments = totalExpected;
+      teamObj.completedAssignments = completedCount;
+      teamObj.submittedAssignments = submittedCount;
+      teamObj.progressPercentage = progressPercentage;
+
+      return teamObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: teams.length,
-      teams,
+      count: enrichedTeams.length,
+      teams: enrichedTeams,
     });
   } catch (error) {
     res.status(500).json({
@@ -469,10 +507,25 @@ const getTasks = async (req, res) => {
       }
     }
 
+    const taskIds = tasks.map((t) => t._id);
+    const taskAssignments = await TaskAssignment.find({ taskId: { $in: taskIds } })
+      .populate('studentId', 'name rollNumber email avatar')
+      .populate('reviewedBy', 'name email avatar');
+
+    const tasksWithStats = tasks.map((t) => {
+      const tObj = t.toObject ? t.toObject() : t;
+      const relatedAssignments = taskAssignments.filter((a) => a.taskId.toString() === t._id.toString());
+      tObj.totalAssignments = relatedAssignments.length;
+      tObj.completedCount = relatedAssignments.filter((a) => a.status === 'completed').length;
+      tObj.submittedCount = relatedAssignments.filter((a) => a.status === 'submitted').length;
+      tObj.assignments = relatedAssignments;
+      return tObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: tasks.length,
-      tasks,
+      count: tasksWithStats.length,
+      tasks: tasksWithStats,
     });
   } catch (error) {
     res.status(500).json({
