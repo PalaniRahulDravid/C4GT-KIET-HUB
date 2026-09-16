@@ -463,7 +463,7 @@ export default function TeamLeadDashboard() {
         <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-center mx-auto">
           <AlertCircle className="w-7 h-7" />
         </div>
-        <h2 className="font-['Instrument_Serif',serif] text-3xl font-bold text-[#1C1B1A]">
+        <h2 className="text- font-bold text-[#1C1B1A]">
           No Team Assigned Yet
         </h2>
         <p className="text-xs text-[#66645E] max-w-md mx-auto leading-relaxed">
@@ -656,7 +656,7 @@ export default function TeamLeadDashboard() {
                 <span className="text-[#9E9C94]">/</span>
                 <span className="text-[#1C1B1A] font-semibold">{getPageTitle()}</span>
               </div>
-              <h1 className="font-['Instrument_Serif',serif] text-2xl sm:text-[28px] lg:text-[30px] font-semibold text-[#1C1B1A] tracking-tight leading-none">
+              <h1 className="text-2xl sm:text-[28px] lg:text-[30px] font-bold text-[#1C1B1A] tracking-tight leading-none">
                 {team.name}: {team.track || 'Engineering Track'}
               </h1>
             </div>
@@ -696,7 +696,7 @@ export default function TeamLeadDashboard() {
             </span>
             <span className="text-xs text-[#66645E]">Cohort 2026 – 2027</span>
           </div>
-          <h1 className="font-['Instrument_Serif',serif] text-3xl sm:text-4xl font-bold text-[#1C1B1A] tracking-tight">
+          <h1 className="font-bold tracking-tight text-3xl sm:text-4xl font-bold text-[#1C1B1A] tracking-tight">
             {team.name}: {team.track || 'Engineering Track'}
           </h1>
           <p className="text-xs text-[#66645E] mt-1">
@@ -888,7 +888,7 @@ export default function TeamLeadDashboard() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+              <h3 className="text- font-bold text-[#1C1B1A]">
                 Current Team Members
               </h3>
               <p className="text-xs text-[#66645E] mt-0.5">
@@ -1034,7 +1034,7 @@ export default function TeamLeadDashboard() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+              <h3 className="text- font-bold text-[#1C1B1A]">
                 Search Users & Add to Your Team
               </h3>
               <p className="text-xs text-[#66645E] mt-0.5">
@@ -1193,7 +1193,7 @@ export default function TeamLeadDashboard() {
       {activeTab === 'invitations' && (
         <div className="space-y-6">
           <div>
-            <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+            <h3 className="text- font-bold text-[#1C1B1A]">
               Sent Team Invitations
             </h3>
             <p className="text-xs text-[#66645E] mt-0.5">
@@ -1284,7 +1284,7 @@ export default function TeamLeadDashboard() {
                 </span>
                 <span className="text-xs text-[#66645E]">Team 6 • {team.track || 'Engineering Track'}</span>
               </div>
-              <h3 className="font-['Instrument_Serif',serif] text-3xl font-bold text-[#1C1B1A]">
+              <h3 className="text- font-bold text-[#1C1B1A]">
                 Give Tasks to Team Members
               </h3>
               <p className="text-xs text-[#66645E] mt-0.5">
@@ -1504,7 +1504,7 @@ export default function TeamLeadDashboard() {
               <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center mx-auto border border-amber-200">
                 <CheckSquare className="w-6 h-6" />
               </div>
-              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+              <h4 className="text- font-bold text-[#1C1B1A]">
                 No Tasks Assigned to Your Team Yet
               </h4>
               <p className="text-xs text-[#66645E] max-w-md mx-auto leading-relaxed">
@@ -1579,7 +1579,7 @@ export default function TeamLeadDashboard() {
 
                     {/* Title & Description */}
                     <div>
-                      <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                      <h4 className="text- font-bold text-[#1C1B1A]">
                         {t.title}
                       </h4>
                       <p className="text-xs text-[#66645E] mt-1 leading-relaxed whitespace-pre-wrap">
@@ -1701,7 +1701,7 @@ export default function TeamLeadDashboard() {
                 </span>
                 <span className="text-xs text-blue-900 font-medium">Team Lead & Enrolled Student</span>
               </div>
-              <h3 className="font-['Instrument_Serif',serif] text-3xl font-bold text-[#1C1B1A]">
+              <h3 className="text- font-bold text-[#1C1B1A]">
                 Student Learning Workspace
               </h3>
               <p className="text-xs text-[#66645E]">
@@ -1757,7 +1757,7 @@ export default function TeamLeadDashboard() {
           {/* Student Tasks Preview */}
           <div className="p-6 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] space-y-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+              <h4 className="text- font-bold text-[#1C1B1A]">
                 My Assigned Learning Tasks
               </h4>
               <Link
@@ -1805,7 +1805,7 @@ export default function TeamLeadDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="bg-[#FDFCF9] border border-[#E0DDD0] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#E0DDD0]">
-              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+              <h4 className="text- font-bold text-[#1C1B1A]">
                 Invite to {team.name}
               </h4>
               <button

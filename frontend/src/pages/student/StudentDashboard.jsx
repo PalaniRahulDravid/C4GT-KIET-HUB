@@ -993,7 +993,7 @@ export default function StudentDashboard() {
                   {selectedOverviewTask.status === 'completed' ? '✓ Completed' : 'Pending / In Progress'}
                 </span>
               </div>
-              <h2 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">
+              <h2 className="text- font-bold text-[#1C1B1A]">
                 {selectedOverviewTask.title}
               </h2>
             </div>
@@ -1136,7 +1136,7 @@ export default function StudentDashboard() {
             ) : (
               <div className="space-y-4 p-6 bg-[#F4F1E8]/60 border border-[#E0DDD0] rounded-xl text-center space-y-3">
                 <FileCode className="w-10 h-10 text-[#1C1B1A] mx-auto" />
-                <h4 className="font-serif text-xl font-bold text-[#1C1B1A]">{activeMediaResource.name}</h4>
+                <h4 className="font-sans text-xl font-bold text-[#1C1B1A]">{activeMediaResource.name}</h4>
                 <p className="text-xs text-[#66645E] max-w-md mx-auto leading-relaxed">
                   Resource spec opened and verified. Viewing this document has automatically recorded your completion progress in MongoDB Atlas.
                 </p>
@@ -1254,7 +1254,7 @@ export default function StudentDashboard() {
                 <span className="text-[#9E9C94]">/</span>
                 <span className="text-[#1C1B1A] font-semibold">{pageInfo.breadcrumb}</span>
               </div>
-              <h1 className="font-['Instrument_Serif',serif] text-2xl sm:text-[28px] lg:text-[30px] font-semibold text-[#1C1B1A] tracking-tight leading-none">
+              <h1 className="text-2xl sm:text-[28px] lg:text-[30px] font-bold text-[#1C1B1A] tracking-tight leading-none">
                 {pageInfo.title}
               </h1>
             </div>
@@ -1283,7 +1283,7 @@ export default function StudentDashboard() {
                   <div className="p-4 border-b border-[#E0DDD0] flex items-center justify-between bg-[#F4F1E8]/70">
                     <div className="flex items-center gap-2">
                       <Bell className="w-4 h-4 text-[#1C1B1A]" />
-                      <span className="font-serif text-lg font-bold text-[#1C1B1A]">Notifications</span>
+                      <span className="font-sans text-lg font-bold text-[#1C1B1A]">Notifications</span>
                       {unreadNotificationsCount > 0 && (
                         <span className="text-[10px] font-mono font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full border border-rose-200">
                           {unreadNotificationsCount} Unread
@@ -1501,7 +1501,7 @@ export default function StudentDashboard() {
                     <Sparkles className="w-3.5 h-3.5 text-[#1C1B1A]" />
                     Learning Platform Workspace
                   </div>
-                  <h2 className="font-['Instrument_Serif',serif] text-3xl sm:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
+                  <h2 className="font-bold tracking-tight text-3xl sm:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
                     Welcome back, {user?.name || 'Student'}!
                   </h2>
                   <p className="text-[#66645E] text-sm leading-relaxed">
@@ -1531,7 +1531,7 @@ export default function StudentDashboard() {
                               Capacity: {(inv.teamId?.members?.length || 0) + (inv.teamId?.teamLeadId ? 1 : 0)} / {inv.teamId?.maxMembers || 9}
                             </span>
                           </div>
-                          <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                          <h3 className="text- font-bold text-[#1C1B1A]">
                             You have been invited to join {inv.teamId?.name || 'a Team'}!
                           </h3>
                           <p className="text-xs text-[#66645E]">
@@ -1588,7 +1588,7 @@ export default function StudentDashboard() {
                             ACTIVE MEMBER
                           </span>
                         </div>
-                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                        <h3 className="text- font-bold text-[#1C1B1A]">
                           {studentTeam.name} • {studentTeam.track || 'Engineering Track'}
                         </h3>
                       </div>
@@ -1800,7 +1800,7 @@ export default function StudentDashboard() {
                             </span>
                           )}
                         </div>
-                        <h3 className="font-['Instrument_Serif',serif] text-2xl sm:text-3xl font-semibold text-[#1C1B1A] mt-1">
+                        <h3 className="font-bold tracking-tight text-2xl sm:text-3xl font-semibold text-[#1C1B1A] mt-1">
                           {typeof priorityTask.title === 'string' ? priorityTask.title : 'Engineering Sprint Task'}
                         </h3>
                       </div>
@@ -1866,7 +1866,7 @@ export default function StudentDashboard() {
               <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
                 <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                    <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
                       <BookOpen className="w-5 h-5 text-[#1C1B1A]" />
                       My Tasks Overview
                     </h3>
@@ -1957,7 +1957,7 @@ export default function StudentDashboard() {
                                   <div className="space-y-1 min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                       <span className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-serif">
+                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-sans">
                                         {typeof t.title === 'string' ? t.title : 'Task Item'}
                                       </h4>
                                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-purple-100 text-purple-800 border border-purple-200">
@@ -2028,7 +2028,7 @@ export default function StudentDashboard() {
                                   <div className="space-y-1 min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                       <span className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-serif">
+                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-sans">
                                         {typeof t.title === 'string' ? t.title : 'Task Item'}
                                       </h4>
                                       <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -2085,7 +2085,7 @@ export default function StudentDashboard() {
                   <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                        <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
                           <TrendingUp className="w-5 h-5 text-[#1C1B1A]" />
                           Overall Progress
                         </h3>
@@ -2115,7 +2115,7 @@ export default function StudentDashboard() {
                   <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
                     <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
                       <div>
-                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                        <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
                           <Calendar className="w-5 h-5 text-[#1C1B1A]" />
                           Upcoming Deadlines
                         </h3>
@@ -2159,7 +2159,7 @@ export default function StudentDashboard() {
                   <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
                     <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
                       <div>
-                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                        <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
                           <Activity className="w-5 h-5 text-[#1C1B1A]" />
                           Recent Activity Log
                         </h3>
@@ -2299,7 +2299,7 @@ export default function StudentDashboard() {
               <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
                 <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
-                    <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
+                    <h3 className="text-xl sm:text-2xl font-bold text-[#1C1B1A] tracking-tight flex items-center gap-2">
                       <TrendingUp className="w-5 h-5 text-[#1C1B1A]" />
                       Progress &amp; Completion Tracking
                     </h3>
@@ -2307,7 +2307,7 @@ export default function StudentDashboard() {
                       Real-time subject/domain breakdown and automatic completion tracking.
                     </p>
                   </div>
-                  <span className="text-xs font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] border border-[#E0DDD0] px-3 py-1 rounded-full">
+                  <span className="text-xs font-semibold text-[#1C1B1A] bg-[#EEECDF] border border-[#E0DDD0] px-3.5 py-1 rounded-full shadow-2xs">
                     {completedTasksCount} of {totalTasks} Completed ({overallProgressPercentage}%)
                   </span>
                 </div>
@@ -2315,7 +2315,7 @@ export default function StudentDashboard() {
                 {/* REQUIREMENT 2: BAR GRAPH SHOWING TASK PROGRESS BY SUBJECT/DOMAIN */}
                 <div className="p-6 sm:p-8 space-y-6">
                   <div className="space-y-1">
-                    <h4 className="text-sm font-mono font-bold text-[#1C1B1A] uppercase tracking-wider">
+                    <h4 className="text-xs font-bold text-[#66645E] uppercase tracking-wider">
                       Subject / Domain Task Progress Bar Graph
                     </h4>
                     <p className="text-xs text-[#66645E]">
@@ -2332,15 +2332,15 @@ export default function StudentDashboard() {
                       <div className="space-y-4">
                         {subjectList.map((item, idx) => (
                           <div key={idx} className="space-y-2">
-                            <div className="flex items-center justify-between text-xs font-mono">
-                              <span className="font-bold text-[#1C1B1A]">{item.subject}</span>
-                              <span className="text-[#66645E]">
-                                <strong>{item.completed}</strong> / {item.total} Tasks ({item.percentage}%)
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-semibold text-sm text-[#1C1B1A]">{item.subject}</span>
+                              <span className="text-[#66645E] font-medium">
+                                <strong className="text-[#1C1B1A] font-bold">{item.completed}</strong> / {item.total} Tasks ({item.percentage}%)
                               </span>
                             </div>
 
                             {/* Stacked Bar Graph Visual */}
-                            <div className="w-full bg-[#E0DDD0] h-4 rounded-full overflow-hidden flex shadow-inner">
+                            <div className="w-full bg-[#E0DDD0] h-3.5 rounded-full overflow-hidden flex shadow-inner">
                               {item.completed > 0 && (
                                 <div
                                   className="bg-emerald-600 h-full transition-all duration-500"
@@ -2361,7 +2361,7 @@ export default function StudentDashboard() {
                       </div>
 
                       {/* Legend */}
-                      <div className="flex items-center gap-6 pt-3 border-t border-[#E0DDD0] text-xs font-mono text-[#66645E]">
+                      <div className="flex items-center gap-6 pt-3 border-t border-[#E0DDD0] text-xs font-medium text-[#66645E]">
                         <div className="flex items-center gap-2">
                           <span className="w-3 h-3 rounded-sm bg-emerald-600 inline-block" />
                           <span>Completed Tasks</span>
@@ -2382,28 +2382,28 @@ export default function StudentDashboard() {
                   <div key={idx} className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs space-y-4 flex flex-col justify-between">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
                           Domain Track
                         </span>
-                        <span className="text-xs font-mono font-bold text-[#1C1B1A]">
+                        <span className="text-xs font-bold text-[#1C1B1A]">
                           {item.percentage}% Done
                         </span>
                       </div>
-                      <h4 className="font-serif text-xl font-bold text-[#1C1B1A] pt-1">{item.subject}</h4>
+                      <h4 className="text-lg font-bold text-[#1C1B1A] pt-1 tracking-tight leading-snug">{item.subject}</h4>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono pt-2">
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs pt-2">
                       <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200">
                         <div className="font-bold text-base">{item.completed}</div>
-                        <div className="text-[10px]">Completed</div>
+                        <div className="text-[11px] font-medium">Completed</div>
                       </div>
                       <div className="p-2.5 bg-amber-50 text-amber-800 rounded-xl border border-amber-200">
                         <div className="font-bold text-base">{item.inProgress}</div>
-                        <div className="text-[10px]">In Progress</div>
+                        <div className="text-[11px] font-medium">In Progress</div>
                       </div>
                       <div className="p-2.5 bg-[#EEECDF] text-[#1C1B1A] rounded-xl border border-[#E0DDD0]">
                         <div className="font-bold text-base">{item.pending}</div>
-                        <div className="text-[10px]">Pending</div>
+                        <div className="text-[11px] font-medium">Pending</div>
                       </div>
                     </div>
 
@@ -2450,7 +2450,7 @@ export default function StudentDashboard() {
                   {selectedOverviewTask.status === 'completed' ? '✓ Completed' : 'Pending / In Progress'}
                 </span>
               </div>
-              <h2 className="font-['Instrument_Serif',serif] text-3xl font-bold text-[#1C1B1A]">
+              <h2 className="text- font-bold text-[#1C1B1A]">
                 {selectedOverviewTask.title}
               </h2>
             </div>
@@ -2565,7 +2565,7 @@ export default function StudentDashboard() {
                   Task: {activeMediaResource.task?.title}
                 </span>
               </div>
-              <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+              <h3 className="text- font-bold text-[#1C1B1A]">
                 {activeMediaResource.name}
               </h3>
             </div>

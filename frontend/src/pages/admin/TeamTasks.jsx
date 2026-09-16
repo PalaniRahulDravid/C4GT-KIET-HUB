@@ -345,7 +345,7 @@ export default function TeamTasks() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">
+          <h2 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">
             Next Tasks for Teams
           </h2>
           <p className="text-xs text-[#66645E] mt-1">
@@ -377,7 +377,7 @@ export default function TeamTasks() {
       {isFormVisible && (
         <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 sm:p-8 shadow-2xs space-y-6">
           <div className="pb-4 border-b border-[#E0DDD0]">
-            <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">
+            <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">
               Publish Next Team Task
             </h3>
             <p className="text-xs text-[#66645E] mt-0.5">
@@ -548,7 +548,7 @@ export default function TeamTasks() {
         <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">
+              <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">
                 Published Team Tasks
               </h3>
               <span className="px-2.5 py-0.5 text-xs font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
@@ -651,7 +651,7 @@ export default function TeamTasks() {
           <div className="bg-[#FFFDF8] border border-[#E2DDD0] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-[#E0DDD0]">
               <div>
-                <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">
+                <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">
                   Select Related Resources
                 </h3>
                 <p className="text-xs text-[#66645E]">Choose from existing resources or add a custom resource link.</p>
@@ -809,7 +809,7 @@ export default function TeamTasks() {
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#FFFDF8] border border-[#E0DDD0] rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
-            <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">
+            <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">
               Delete Task?
             </h3>
             <p className="text-xs text-[#66645E] leading-relaxed">

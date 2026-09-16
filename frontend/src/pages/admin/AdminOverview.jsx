@@ -155,7 +155,7 @@ export default function AdminOverview() {
             <span className="w-1.5 h-1.5 rounded-full bg-[#1C1B1A]"></span>
             Administration Workspace
           </div>
-          <h2 className="font-['Instrument_Serif',serif] text-3xl sm:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
+          <h2 className="font-bold tracking-tight text-3xl sm:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
             Welcome to C4GT Hub Administration
           </h2>
           <p className="text-[#66645E] text-sm leading-relaxed">
@@ -249,7 +249,7 @@ export default function AdminOverview() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">Admin Operations</h3>
+            <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">Admin Operations</h3>
             <p className="text-xs text-[#66645E]">Quick access to primary management modules.</p>
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function AdminOverview() {
       <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
         <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
           <div>
-            <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">Recent Registered Users</h3>
+            <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">Recent Registered Users</h3>
             <p className="text-xs text-[#66645E]">Latest user accounts synced from Google OAuth.</p>
           </div>
           <Link

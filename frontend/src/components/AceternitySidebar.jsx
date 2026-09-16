@@ -161,7 +161,7 @@ export function SidebarLink({ link, isActive = false, className = '', onClick })
             opacity: animate ? (open ? 1 : 0) : 1,
           }}
           transition={{ duration: 0.14 }}
-          className="ml-auto text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-neutral-700/80 text-neutral-200 border border-neutral-600 leading-tight whitespace-nowrap"
+          className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-700/80 text-neutral-200 border border-neutral-600 leading-tight whitespace-nowrap"
         >
           {link.badge}
         </motion.span>
@@ -192,11 +192,11 @@ export function SidebarLogo({ logo, className = '' }) {
         className="flex-col min-w-0 overflow-hidden"
       >
         <div className="flex items-center gap-2">
-          <span className="font-serif font-bold text-white text-[15px] tracking-tight whitespace-nowrap leading-tight">
+          <span className="font-bold text-white text-[15px] tracking-tight whitespace-nowrap leading-tight">
             {logo.label}
           </span>
           {logo.badge && (
-            <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-white text-neutral-900 tracking-wider">
+            <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-white text-neutral-900 tracking-wider">
               {logo.badge}
             </span>
           )}
@@ -224,7 +224,7 @@ export function SidebarSectionLabel({ label, className = '' }) {
       transition={{ duration: 0.14 }}
       className={`items-center justify-between px-3 py-1.5 mt-3 mb-1 select-none overflow-hidden ${className}`}
     >
-      <span className="text-[10px] font-mono font-semibold tracking-widest text-neutral-500 uppercase whitespace-nowrap">
+      <span className="text-[10px] font-semibold tracking-widest text-neutral-400 uppercase whitespace-nowrap">
         {label}
       </span>
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
@@ -264,16 +264,16 @@ export function SidebarUser({ user, getInitials, onProfileClick, onLogout, class
           <div className="font-semibold text-xs text-white truncate leading-tight w-full">
             {user?.name || 'Student Account'}
           </div>
-          <div className="text-[10px] text-neutral-400 font-mono truncate leading-tight w-full mt-0.5">
+          <div className="text-[10px] text-neutral-400 truncate leading-tight w-full mt-0.5">
             {user?.email || 'student@c4gt.in'}
           </div>
           <div className="flex items-center gap-1.5 mt-1">
             {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-              <span className="inline-block px-1.5 py-0.2 text-[8px] font-mono font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-700 leading-none">
+              <span className="inline-block px-1.5 py-0.5 text-[8px] font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-700 leading-none">
                 LEAD
               </span>
             )}
-            <span className="inline-block px-1.5 py-0.2 text-[8px] font-mono font-semibold rounded bg-neutral-700 text-neutral-300 leading-none">
+            <span className="inline-block px-1.5 py-0.5 text-[8px] font-semibold rounded bg-neutral-700 text-neutral-300 leading-none">
               STUDENT
             </span>
             <span className="text-[9px] text-neutral-300 underline font-medium hover:text-white leading-none">

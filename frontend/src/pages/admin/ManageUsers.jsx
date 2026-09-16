@@ -213,7 +213,7 @@ export default function ManageUsers() {
       {/* Workspace Section Heading & Refresh Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">
+          <h2 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">
             User Management &amp; Permissions
           </h2>
           <p className="text-xs text-[#66645E] mt-1">
@@ -371,7 +371,7 @@ export default function ManageUsers() {
         <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">{getTableTitle()}</h3>
+              <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">{getTableTitle()}</h3>
               <span className="px-2.5 py-0.5 text-xs font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
                 {filteredUsers.length}
               </span>

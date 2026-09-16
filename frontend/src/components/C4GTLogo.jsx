@@ -24,7 +24,7 @@ export default function C4GTLogo({
 
       {/* C4GT KIET HUB Brand Text */}
       {showText && (
-        <span className={`font-bold text-[18px] tracking-tight font-serif leading-none ${isDark ? 'text-white' : 'text-[#1C1B1A]'}`}>
+        <span className={`font-bold text-[18px] tracking-tight leading-none ${isDark ? 'text-white' : 'text-[#1C1B1A]'}`}>
           C4GT KIET HUB
         </span>
       )}

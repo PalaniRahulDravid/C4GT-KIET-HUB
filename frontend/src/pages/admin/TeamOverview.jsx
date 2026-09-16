@@ -193,7 +193,7 @@ export default function TeamOverview() {
       {/* Section Heading & Refresh */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">{getSectionTitle()}</h2>
+          <h2 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">{getSectionTitle()}</h2>
           <p className="text-xs text-[#66645E] mt-1">
             Manage all 9 cohort teams. Every team has a strict capacity limit of <strong>9 members</strong>. Assign Team Leads so they can search users and build their roster.
           </p>
@@ -409,7 +409,7 @@ export default function TeamOverview() {
                   <span className="w-6 h-6 rounded-lg bg-[#1C1B1A] text-white flex items-center justify-center text-xs font-bold font-mono">
                     {viewingTeam.teamNumber}
                   </span>
-                  <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                  <h3 className="font-bold tracking-tight text-2xl font-bold text-[#1C1B1A]">
                     {viewingTeam.name} Roster
                   </h3>
                 </div>

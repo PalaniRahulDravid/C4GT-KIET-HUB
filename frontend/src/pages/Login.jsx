@@ -86,8 +86,8 @@ export default function Login() {
               <Sparkles className="w-3 h-3 text-amber-300" />
               Cohort 2026 – 2027
             </div>
-            <h1 className="font-['Instrument_Serif',serif] text-3xl sm:text-4xl font-bold text-[#1C1B1A] tracking-tight">
-              Sign In to C4GT HUB
+            <h1 className="text-3xl sm:text-4xl font-bold text-[#1C1B1A] tracking-tight">
+              Sign In to KIET HUB
             </h1>
             <p className="text-xs text-[#66645E]">
               Enter your Roll Number and Password to access your team and student dashboard.

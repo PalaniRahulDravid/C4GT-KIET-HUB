@@ -183,7 +183,7 @@ export default function AdminLayout() {
                 <span className="text-[#9E9C94]">/</span>
                 <span className="text-[#1C1B1A] font-semibold">{pageInfo.breadcrumb}</span>
               </div>
-              <h1 className="font-['Instrument_Serif',serif] text-2xl sm:text-[28px] lg:text-[30px] font-semibold text-[#1C1B1A] tracking-tight leading-none">
+              <h1 className="font-bold tracking-tight text-2xl sm:text-[28px] lg:text-[30px] font-semibold text-[#1C1B1A] tracking-tight leading-none">
                 {pageInfo.title}
               </h1>
             </div>

@@ -351,7 +351,7 @@ export default function Batches() {
               )}
             </div>
 
-            <h2 className="font-['Instrument_Serif',serif] text-3xl sm:text-4xl font-semibold text-[#1C1B1A]">
+            <h2 className="font-bold tracking-tight text-3xl sm:text-4xl font-semibold text-[#1C1B1A]">
               {selectedTeam
                 ? `${selectedTeam.name} Workspace`
                 : selectedBatch
@@ -401,7 +401,7 @@ export default function Batches() {
                       </span>
                     </div>
 
-                    <h3 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A] group-hover:text-black">
+                    <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A] group-hover:text-black">
                       Batch {b.year}
                     </h3>
                     <p className="text-xs text-[#66645E] mt-2">
@@ -436,7 +436,7 @@ export default function Batches() {
             <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <span className="text-xs font-mono font-semibold uppercase text-[#66645E]">Selected Batch</span>
-                <h3 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">Batch {selectedBatch.year}</h3>
+                <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">Batch {selectedBatch.year}</h3>
                 <p className="text-xs text-[#66645E] mt-1">9 Teams • 42 Enrolled Students • 78% Avg Performance</p>
               </div>
 
@@ -491,7 +491,7 @@ export default function Batches() {
             <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <span className="text-xs font-mono font-semibold uppercase text-[#66645E]">Batch {selectedBatch?.year}</span>
-                <h3 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">{selectedTeam.name} Details</h3>
+                <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">{selectedTeam.name} Details</h3>
                 <p className="text-xs text-[#66645E] mt-1">{selectedTeam.track}</p>
               </div>
 
@@ -566,7 +566,7 @@ export default function Batches() {
                 {/* Team Members Sections (Junior developer 4 & Senior developers 5) */}
                 <div className="space-y-8 pt-2">
                   <div className="flex items-center justify-between pb-3 border-b border-[#E2DDD0]">
-                    <h3 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">
+                    <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">
                       Team members
                     </h3>
                     <span className="text-xs font-mono font-bold text-[#1C1B1A] bg-[#EEECDF] px-3 py-1 rounded-full border border-[#E0DDD0]">
@@ -577,7 +577,7 @@ export default function Batches() {
                   {/* SECTION 1: JUNIOR DEVELOPER (4) */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                      <h4 className="font-bold tracking-tight text-2xl font-bold text-[#1C1B1A]">
                         Junior developer (4)
                       </h4>
                       <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
@@ -614,7 +614,7 @@ export default function Batches() {
                   {/* SECTION 2: SENIOR DEVELOPERS (5) */}
                   <div className="space-y-4 pt-2">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                      <h4 className="font-bold tracking-tight text-2xl font-bold text-[#1C1B1A]">
                         Senior developers (5)
                       </h4>
                       <span className="text-[11px] font-mono font-bold text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
@@ -670,7 +670,7 @@ export default function Batches() {
             {activeTab === 'performance' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-7 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs">
-                  <h4 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] mb-4">Weekly Task Completion Trend</h4>
+                  <h4 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A] mb-4">Weekly Task Completion Trend</h4>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={performanceTimeData}>
@@ -686,7 +686,7 @@ export default function Batches() {
 
                 <div className="lg:col-span-5 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs flex flex-col justify-between">
                   <div>
-                    <h4 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] mb-2">Completion Status</h4>
+                    <h4 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A] mb-2">Completion Status</h4>
                     <div className="h-48 flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -708,7 +708,7 @@ export default function Batches() {
             {activeTab === 'tasks' && (
               <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">Team Tasks List</h4>
+                  <h4 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">Team Tasks List</h4>
                   <div className="flex items-center gap-2">
                     {['all', 'pending', 'completed', 'overdue'].map((f) => (
                       <button
@@ -752,7 +752,7 @@ export default function Batches() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#E0DDD0]">
-              <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A]">Initialize New Batch</h3>
+              <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">Initialize New Batch</h3>
               <button onClick={() => setCreateModalOpen(false)} className="text-[#66645E] hover:text-[#1C1B1A] cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
