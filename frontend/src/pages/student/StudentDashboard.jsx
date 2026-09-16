@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
 import C4GTLogo from '../../components/C4GTLogo';
@@ -57,8 +57,21 @@ export default function StudentDashboard() {
     }
   }, [searchParams]);
 
-  // Active Sidebar Navigation State: ONLY Overview, My Tasks, Resources, Progress
-  const [activeNav, setActiveNav] = useState('dashboard'); // 'dashboard' | 'my-tasks' | 'resources' | 'progress'
+  // Active Sidebar Navigation — derived from URL path (no local state needed)
+  const location = useLocation();
+  const activeNav = (() => {
+    const p = location.pathname;
+    if (p.includes('/student/my-tasks')) return 'my-tasks';
+    if (p.includes('/student/progress')) return 'progress';
+    return 'dashboard';
+  })();
+
+  // Redirect bare /student to /student/overview
+  useEffect(() => {
+    if (location.pathname === '/student' || location.pathname === '/student/') {
+      navigate('/student/overview', { replace: true });
+    }
+  }, [location.pathname]);
 
   // Student Tasks & Resources State
   const [tasks, setTasks] = useState([]);
@@ -70,9 +83,6 @@ export default function StudentDashboard() {
 
   // MY TASKS -> Selected Task Overview Modal State
   const [selectedOverviewTask, setSelectedOverviewTask] = useState(null);
-
-  // RESOURCES -> Selected Task Filter State
-  const [selectedResourceTaskId, setSelectedResourceTaskId] = useState('all');
 
   // AUTOMATIC TASK COMPLETION -> Resource Progress State (Persisted from MongoDB)
   const [resourceProgressMap, setResourceProgressMap] = useState({});
@@ -814,28 +824,25 @@ export default function StudentDashboard() {
     return name.slice(0, 2).toUpperCase();
   }
 
-  // Exact 4 Student Sidebar Items
+  // 3 Student Sidebar Items (Resources removed)
   const sidebarNavItems = [
     {
       id: 'dashboard',
+      path: '/student/overview',
       name: 'Overview',
       description: 'Overview & learning workspace',
       icon: <LayoutDashboard className="w-4.5 h-4.5" />,
     },
     {
       id: 'my-tasks',
+      path: '/student/my-tasks',
       name: 'My Tasks',
       description: 'All assigned tasks & specs',
       icon: <CheckSquare className="w-4.5 h-4.5" />,
     },
     {
-      id: 'resources',
-      name: 'Resources',
-      description: 'Deliverables & reference links',
-      icon: <FolderKanban className="w-4.5 h-4.5" />,
-    },
-    {
       id: 'progress',
+      path: '/student/progress',
       name: 'Progress',
       description: 'Status & completion tracking',
       icon: <TrendingUp className="w-4.5 h-4.5" />,
@@ -845,117 +852,85 @@ export default function StudentDashboard() {
   const getPageInfo = () => {
     switch (activeNav) {
       case 'my-tasks':
-        return { breadcrumb: 'My Tasks', title: 'My Tasks (Admin & Team Lead)' };
-      case 'resources':
-        return { breadcrumb: 'Resources', title: 'My Task Resources' };
+        return { breadcrumb: 'My Tasks', title: 'My Tasks' };
       case 'progress':
-        return { breadcrumb: 'Progress', title: 'Progress & Completion Tracking' };
+        return { breadcrumb: 'Progress', title: 'Progress' };
       case 'dashboard':
       default:
-        return { breadcrumb: 'Overview', title: 'Student Dashboard Overview' };
+        return { breadcrumb: 'Overview', title: 'Overview' };
     }
   };
 
   const pageInfo = getPageInfo();
 
-  // Helper renderer for consistent, interactive task cards
+  // Helper renderer for consistent, interactive task cards — clean simple design
   const renderTaskCard = (task, idx, type) => {
     if (!task) return null;
     const isCompleted = task.status === 'completed';
     const isLeadTask = type === 'teamlead' || isTeamLeadTask(task);
+    const accentColor = isLeadTask ? '#10b981' : '#7c3aed';
 
     return (
       <div
         key={task._id || idx}
         onClick={() => setSelectedOverviewTask(task)}
-        className={`p-5 rounded-2xl border bg-white hover:border-[#1C1B1A]/40 transition-all space-y-3 shadow-2xs cursor-pointer group ${
-          isLeadTask ? 'border-emerald-200/90 hover:border-emerald-500/60' : 'border-purple-200/90 hover:border-purple-500/60'
-        }`}
+        className="bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:shadow-md transition-all cursor-pointer group overflow-hidden"
+        style={{ borderLeft: `4px solid ${accentColor}` }}
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className={`w-2.5 h-2.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            <h4 className="text-base font-bold text-[#1C1B1A] font-serif tracking-wide group-hover:text-black">
+        <div className="p-5">
+          {/* Title + Status row */}
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h4 className="text-[15px] font-semibold text-gray-900 leading-snug flex-1">
               {task.title}
             </h4>
             <span
-              className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-md border ${
-                isLeadTask
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-purple-50 text-purple-800 border-purple-200'
-              }`}
-            >
-              {isLeadTask ? 'Team Lead Task' : 'Admin Task'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {task.priority && (
-              <span className="px-2.5 py-0.5 text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
-                {task.priority} Priority
-              </span>
-            )}
-            <span
-              className={`inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border ${
+              className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-full ${
                 isCompleted
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-amber-50 text-amber-800 border-amber-200'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-amber-50 text-amber-700'
               }`}
             >
-              {isCompleted ? (
-                <>
-                  <CheckCircle2 className="w-3 h-3 text-emerald-700" /> Completed
-                </>
-              ) : (
-                <>
-                  <Clock className="w-3 h-3 text-amber-700" /> Pending / In Progress
-                </>
-              )}
+              {isCompleted ? '✓ Done' : 'In Progress'}
             </span>
           </div>
-        </div>
 
-        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{task.description}</p>
+          {/* Description */}
+          {task.description && (
+            <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4">
+              {task.description}
+            </p>
+          )}
 
-        <div className="flex flex-wrap items-center justify-between pt-3 border-t border-[#E0DDD0] text-xs text-[#66645E] gap-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            {task.topic && (
-              <span className="bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium border border-[#E0DDD0]">
-                Domain: {task.topic}
+          {/* Footer */}
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+            <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+              {task.topic && (
+                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
+                  {task.topic}
+                </span>
+              )}
+              <span>
+                By <strong className="text-gray-700">{task.createdBy?.name || (isLeadTask ? 'Team Lead' : 'Admin')}</strong>
               </span>
-            )}
-            <span>
-              Assigned by:{' '}
-              <strong className="text-[#1C1B1A]">
-                {task.createdBy?.name || (isLeadTask ? 'Team Lead' : 'Platform Admin')}
-              </strong>
-              {isLeadTask && studentTeam?.name && (
-                <span className="ml-1 text-[11px] text-[#66645E]">({studentTeam.name})</span>
-              )}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-[#1C1B1A] font-semibold font-mono">
-              <Calendar className="w-3.5 h-3.5 text-[#66645E]" />
-              Due: {formatDate(task.deadline)}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedOverviewTask(task);
-              }}
-              className="px-3.5 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer flex items-center gap-1"
-            >
-              <span>Open Overview</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-gray-400 font-mono">
+                Due {formatDate(task.deadline)}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setSelectedOverviewTask(task); }}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-black transition-colors cursor-pointer"
+              >
+                View
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   };
+
 
   return (
     <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-[#F7F5EE] font-sans antialiased text-[#1C1B1A] select-none overflow-hidden">
@@ -1082,7 +1057,7 @@ export default function StudentDashboard() {
                 onClick={() => {
                   setSelectedResourceTaskId(selectedOverviewTask._id);
                   setSelectedOverviewTask(null);
-                  setActiveNav('resources');
+                  navigate('/student/resources');
                 }}
                 className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-[#1C1B1A] text-white hover:bg-black transition-colors shadow-2xs flex items-center gap-2 cursor-pointer"
               >
@@ -1226,13 +1201,10 @@ export default function StudentDashboard() {
             {sidebarNavItems.map((item) => {
               const isActive = activeNav === item.id;
               return (
-                <button
+                <Link
                   key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveNav(item.id);
-                    setMobileSidebarOpen(false);
-                  }}
+                  to={item.path}
+                  onClick={() => setMobileSidebarOpen(false)}
                   className={`relative w-full flex items-start gap-3 p-3 rounded-xl transition-all duration-150 border text-left cursor-pointer ${
                     isActive
                       ? 'bg-white text-[#1C1B1A] font-semibold shadow-2xs border-[#E0DDD0]'
@@ -1262,7 +1234,7 @@ export default function StudentDashboard() {
                       {item.description}
                     </div>
                   </div>
-                </button>
+                </Link>
               );
             })}
           </nav>
@@ -1948,18 +1920,6 @@ export default function StudentDashboard() {
                           Open Task Specs
                         </button>
                       )}
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedResourceTaskId(priorityTask._id);
-                          setActiveNav('resources');
-                        }}
-                        className="bg-white text-[#1C1B1A] hover:bg-[#F8F6F0] font-semibold text-xs rounded-xl px-4 py-2.5 flex items-center gap-1.5 border border-[#E0DDD0] shadow-2xs transition-all cursor-pointer"
-                      >
-                        <span>View Task Resources</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -2010,7 +1970,7 @@ export default function StudentDashboard() {
 
                     <button
                       type="button"
-                      onClick={() => setActiveNav('my-tasks')}
+                      onClick={() => navigate('/student/my-tasks')}
                       className="text-xs font-semibold text-[#1C1B1A] hover:underline flex items-center gap-1 cursor-pointer pl-1"
                     >
                       View All <ChevronRight className="w-3.5 h-3.5" />
@@ -2292,61 +2252,6 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                 </div>
-
-                {/* RIGHT COLUMN: RECENT RESOURCES & ADMIN MESSAGES */}
-                <div className="space-y-6">
-                  
-                  {/* RECENT RESOURCES PREVIEW */}
-                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                    <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
-                      <div>
-                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
-                          <FolderKanban className="w-5 h-5 text-[#1C1B1A]" />
-                          Recent Resources &amp; Specs
-                        </h3>
-                        <p className="text-xs text-[#66645E] mt-0.5">
-                          Assigned deliverable specs and repository links.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setActiveNav('resources')}
-                        className="text-xs font-semibold text-[#1C1B1A] hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        View All <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="p-6 space-y-3">
-                      {recentResourcesPreview.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
-                          No resources available.
-                        </div>
-                      ) : (
-                        recentResourcesPreview.map((resItem, idx) => (
-                          <div key={idx} className="p-3.5 bg-white border border-[#E0DDD0] rounded-xl flex items-center justify-between hover:border-[#1C1B1A]/40 transition-colors shadow-2xs text-xs">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <FileCode className="w-4 h-4 text-[#1C1B1A] shrink-0" />
-                              <div className="truncate">
-                                <div className="font-bold text-[#1C1B1A] truncate">{resItem.name}</div>
-                                <div className="text-[10px] text-[#66645E] truncate">{resItem.taskTitle}</div>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => openMediaResource(resItem.taskObj, resItem.name, resItem.resourceIndex)}
-                              className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-1 rounded-md border border-[#E0DDD0] shrink-0 cursor-pointer hover:bg-[#1C1B1A] hover:text-white transition-colors flex items-center gap-1"
-                            >
-                              <Eye className="w-3 h-3" />
-                              <span>View Spec</span>
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                </div>
               </div>
 
             </div>
@@ -2354,160 +2259,94 @@ export default function StudentDashboard() {
 
           {/* TAB 2: MY TASKS (DIVIDED INTO ADMIN TASKS & TEAM LEAD TASKS) */}
           {activeNav === 'my-tasks' && (
-            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
-              {/* Top Controls Bar with Section Filters */}
-              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="max-w-[1240px] mx-auto space-y-6 animate-in fade-in duration-200">
+              {/* Filter Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-['Instrument_Serif',serif] text-2xl sm:text-3xl font-semibold text-[#1C1B1A] flex items-center gap-2.5">
-                    <BookOpen className="w-6 h-6 text-[#1C1B1A]" />
-                    My Assigned Tasks
-                  </h3>
-                  <p className="text-xs text-[#66645E] mt-1">
-                    Sprint deliverables divided between <strong>Admin Curriculum Tasks</strong> and <strong>Team Lead Tasks</strong>.
-                  </p>
+                  <h2 className="text-xl font-semibold text-gray-900">My Tasks</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">All tasks assigned to you by Admin and Team Lead.</p>
                 </div>
-
-                {/* Section Filter Pills */}
-                <div className="flex items-center gap-2 bg-[#F2EFE6] p-1.5 rounded-xl border border-[#E0DDD0] self-start md:self-auto flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setTaskFilter('all')}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      taskFilter === 'all'
-                        ? 'bg-[#1C1B1A] text-white shadow-2xs'
-                        : 'text-[#66645E] hover:text-[#1C1B1A]'
-                    }`}
-                  >
-                    All Tasks ({totalTasks})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTaskFilter('admin')}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      taskFilter === 'admin'
-                        ? 'bg-purple-700 text-white shadow-2xs'
-                        : 'text-[#66645E] hover:text-purple-900'
-                    }`}
-                  >
-                    <span>Admin Tasks</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      taskFilter === 'admin' ? 'bg-white/20 text-white' : 'bg-[#E0DDD0] text-[#1C1B1A]'
+                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+                  <button type="button" onClick={() => setTaskFilter('all')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                      taskFilter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}>
-                      {adminTasks.length}
-                    </span>
+                    All <span className="ml-1 text-xs text-gray-400">({totalTasks})</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setTaskFilter('teamlead')}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      taskFilter === 'teamlead'
-                        ? 'bg-emerald-700 text-white shadow-2xs'
-                        : 'text-[#66645E] hover:text-emerald-900'
-                    }`}
-                  >
-                    <span>Team Lead Tasks</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      taskFilter === 'teamlead' ? 'bg-white/20 text-white' : 'bg-[#E0DDD0] text-[#1C1B1A]'
+                  <button type="button" onClick={() => setTaskFilter('admin')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                      taskFilter === 'admin' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}>
-                      {teamLeadTasks.length}
-                    </span>
+                    Admin <span className="ml-1 text-xs text-gray-400">({adminTasks.length})</span>
+                  </button>
+                  <button type="button" onClick={() => setTaskFilter('teamlead')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                      taskFilter === 'teamlead' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}>
+                    Team Lead <span className="ml-1 text-xs text-gray-400">({teamLeadTasks.length})</span>
                   </button>
                 </div>
               </div>
 
               {loadingTasks ? (
-                <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-12 text-center text-[#66645E] flex items-center justify-center gap-2 text-sm shadow-2xs">
-                  <Loader2 className="w-5 h-5 animate-spin text-[#1C1B1A]" />
-                  <span>Loading assigned tasks...</span>
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-gray-500 flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading tasks...</span>
                 </div>
               ) : safeTasks.length === 0 ? (
-                <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-12 text-center text-[#66645E] shadow-2xs">
-                  <p className="text-base font-semibold text-[#1C1B1A]">No tasks assigned currently.</p>
-                  <p className="text-xs mt-1">Admin and Team Lead tasks will appear here once assigned.</p>
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+                  <p className="text-base font-semibold text-gray-800">No tasks assigned yet.</p>
+                  <p className="text-sm text-gray-400 mt-1">Tasks from Admin and Team Lead will appear here.</p>
                 </div>
               ) : (
-                <div className="space-y-8">
-                  {/* ================= SECTION 1: ADMIN TASKS ================= */}
+                <div className="space-y-6">
+                  {/* SECTION 1: ADMIN TASKS */}
                   {(taskFilter === 'all' || taskFilter === 'admin') && (
-                    <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                      <div className="p-5 sm:p-6 border-b border-[#E0DDD0] bg-gradient-to-r from-purple-50/50 via-[#FDFCF9] to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-900 flex items-center justify-center border border-purple-200 shadow-2xs shrink-0">
-                            <Award className="w-5 h-5 text-purple-700" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
-                                Admin Tasks
-                              </h4>
-                              <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-md bg-purple-100 text-purple-800 border border-purple-200">
-                                Cohort Curriculum
-                              </span>
-                            </div>
-                            <p className="text-xs text-[#66645E] mt-0.5">
-                              Core learning specifications, milestone reviews & platform deliverables published by Admins.
-                            </p>
-                          </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-purple-600 shrink-0" />
+                          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Admin Tasks</h3>
+                          <span className="text-xs text-gray-400">({adminTasks.length})</span>
                         </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="px-3 py-1 rounded-full text-xs font-mono font-semibold bg-purple-50 text-purple-900 border border-purple-200">
-                            {adminTasks.filter((t) => t.status === 'completed').length} / {adminTasks.length} Completed
-                          </span>
+                        <span className="text-xs text-gray-400">
+                          {adminTasks.filter((t) => t.status === 'completed').length} of {adminTasks.length} completed
+                        </span>
+                      </div>
+                      {adminTasks.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-gray-400 bg-gray-50 rounded-xl border border-slate-200">
+                          No Admin tasks assigned yet.
                         </div>
-                      </div>
-
-                      <div className="p-5 sm:p-6 space-y-4">
-                        {adminTasks.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
-                            No Admin tasks assigned to your track yet.
-                          </div>
-                        ) : (
-                          adminTasks.map((task, idx) => renderTaskCard(task, idx, 'admin'))
-                        )}
-                      </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {adminTasks.map((task, idx) => renderTaskCard(task, idx, 'admin'))}
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* ================= SECTION 2: TEAM LEAD TASKS ================= */}
+                  {/* SECTION 2: TEAM LEAD TASKS */}
                   {(taskFilter === 'all' || taskFilter === 'teamlead') && (
-                    <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                      <div className="p-5 sm:p-6 border-b border-[#E0DDD0] bg-gradient-to-r from-emerald-50/50 via-[#FDFCF9] to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-900 flex items-center justify-center border border-emerald-200 shadow-2xs shrink-0">
-                            <Users className="w-5 h-5 text-emerald-700" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
-                                Team Lead Tasks
-                              </h4>
-                              <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                Team Sprint
-                              </span>
-                            </div>
-                            <p className="text-xs text-[#66645E] mt-0.5">
-                              Team-specific sprint tasks, feature reviews & coordination action items assigned by your Team Lead.
-                            </p>
-                          </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0" />
+                          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Team Lead Tasks</h3>
+                          <span className="text-xs text-gray-400">({teamLeadTasks.length})</span>
                         </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="px-3 py-1 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200">
-                            {teamLeadTasks.filter((t) => t.status === 'completed').length} / {teamLeadTasks.length} Completed
-                          </span>
+                        <span className="text-xs text-gray-400">
+                          {teamLeadTasks.filter((t) => t.status === 'completed').length} of {teamLeadTasks.length} completed
+                        </span>
+                      </div>
+                      {teamLeadTasks.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-gray-400 bg-gray-50 rounded-xl border border-slate-200">
+                          No Team Lead tasks assigned yet.
                         </div>
-                      </div>
-
-                      <div className="p-5 sm:p-6 space-y-4">
-                        {teamLeadTasks.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
-                            No Team Lead tasks assigned to your team yet.
-                          </div>
-                        ) : (
-                          teamLeadTasks.map((task, idx) => renderTaskCard(task, idx, 'teamlead'))
-                        )}
-                      </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {teamLeadTasks.map((task, idx) => renderTaskCard(task, idx, 'teamlead'))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2515,162 +2354,6 @@ export default function StudentDashboard() {
             </div>
           )}
 
-
-          {/* TAB 3: RESOURCES (Filtered by Task or View All) */}
-          {activeNav === 'resources' && (
-            <div className="max-w-[1240px] mx-auto bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden animate-in fade-in duration-200">
-              <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <h3 className="font-['Instrument_Serif',serif] text-2xl font-semibold text-[#1C1B1A] flex items-center gap-2">
-                    <FolderKanban className="w-5 h-5 text-[#1C1B1A]" />
-                    My Task Resources &amp; Deliverables
-                  </h3>
-                  <p className="text-xs text-[#66645E] mt-0.5">
-                    Click any resource item to open media, watch video lessons, or verify deliverable specifications.
-                  </p>
-                </div>
-
-                {/* Filter Dropdown for Selected Task */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-semibold text-[#66645E]">Filter Task:</span>
-                  <select
-                    value={selectedResourceTaskId}
-                    onChange={(e) => setSelectedResourceTaskId(e.target.value)}
-                    className="text-xs font-mono bg-white border border-[#E0DDD0] rounded-xl px-3 py-1.5 text-[#1C1B1A] shadow-2xs focus:outline-none focus:border-[#1C1B1A]"
-                  >
-                    <option value="all">All Task Resources ({totalTasks})</option>
-                    {safeTasks.map((t) => (
-                      <option key={t._id} value={t._id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
-                {loadingTasks ? (
-                  <div className="p-8 text-center text-[#66645E] flex items-center justify-center gap-2 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-[#1C1B1A]" />
-                    <span>Loading task resources...</span>
-                  </div>
-                ) : safeTasks.length === 0 ? (
-                  <div className="p-8 text-center text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0] text-xs">
-                    No task resources currently available.
-                  </div>
-                ) : (
-                  safeTasks
-                    .filter((task) => selectedResourceTaskId === 'all' || String(task._id) === String(selectedResourceTaskId))
-                    .map((task, idx) => {
-                      if (!task) return null;
-                      const isExpanded = selectedResourceTaskId !== 'all' || Boolean(expandedResources[task._id]);
-                      const deliverables = Array.isArray(task.deliverables) && task.deliverables.length > 0
-                        ? task.deliverables
-                        : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'];
-
-                      return (
-                        <div
-                          key={task._id || idx}
-                          className="rounded-2xl border border-[#E0DDD0] bg-white overflow-hidden transition-all shadow-2xs"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleTaskResources(task._id)}
-                            className="w-full p-5 flex items-center justify-between text-left hover:bg-[#F8F6F0] transition-colors cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3.5">
-                              <div className="p-2.5 bg-[#EEECDF] text-[#1C1B1A] rounded-xl border border-[#E0DDD0] shrink-0">
-                                <BookOpen className="w-4.5 h-4.5" />
-                              </div>
-                              <div>
-                                <h4 className="text-base font-bold text-[#1C1B1A] font-serif">{task.title}</h4>
-                                <p className="text-[11px] text-[#66645E]">{task.topic || 'Engineering Track'}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] px-3 py-1 rounded-lg border border-[#E0DDD0]">
-                                {deliverables.length} Resources
-                              </span>
-                              {isExpanded ? (
-                                <ChevronDown className="w-4 h-4 text-[#1C1B1A]" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-[#66645E]" />
-                              )}
-                            </div>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="p-5 bg-[#F4F1E8]/60 border-t border-[#E0DDD0] space-y-3 animate-in fade-in duration-150">
-                              <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#66645E] mb-2 flex items-center justify-between">
-                                <span>Assigned Deliverables &amp; Reference Links:</span>
-                                <span>Click to View / Watch Resource</span>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {deliverables.map((item, dIdx) => {
-                                  let itemName = 'Deliverable Spec';
-                                  if (typeof item === 'string') {
-                                    itemName = item;
-                                  } else if (item && typeof item === 'object') {
-                                    itemName = item.name || item.title || item.label || 'Deliverable Spec';
-                                  }
-                                  const itemLower = String(itemName).toLowerCase();
-                                  const rId = `res-${dIdx}`;
-                                  const key = `${task._id}_${rId}`;
-                                  const progressObj = resourceProgressMap[key];
-                                  const isResourceCompleted = Boolean(progressObj && progressObj.isCompleted);
-
-                                  return (
-                                    <div
-                                      key={dIdx}
-                                      onClick={() => openMediaResource(task, itemName, dIdx)}
-                                      className="p-3.5 bg-white border border-[#E0DDD0] rounded-xl flex items-center justify-between hover:border-[#1C1B1A]/60 transition-all shadow-2xs cursor-pointer group"
-                                    >
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        {itemLower.includes('code') || itemLower.includes('repo') ? (
-                                          <FileCode className="w-4 h-4 text-[#1C1B1A] shrink-0" />
-                                        ) : itemLower.includes('pull') || itemLower.includes('request') ? (
-                                          <FileText className="w-4 h-4 text-emerald-700 shrink-0" />
-                                        ) : itemLower.includes('demo') || itemLower.includes('video') ? (
-                                          <Video className="w-4 h-4 text-[#1C1B1A] shrink-0" />
-                                        ) : (
-                                          <ExternalLink className="w-4 h-4 text-[#66645E] shrink-0" />
-                                        )}
-                                        <div className="truncate">
-                                          <div className="text-xs font-bold text-[#1C1B1A] truncate group-hover:underline">
-                                            {String(itemName)}
-                                          </div>
-                                          <div className="text-[10px] text-[#66645E] truncate">
-                                            {isResourceCompleted ? '✓ Resource Completed' : 'Click to open & view'}
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        {isResourceCompleted ? (
-                                          <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
-                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Done
-                                          </span>
-                                        ) : (
-                                          <span className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-1 rounded-md border border-[#E0DDD0] flex items-center gap-1 group-hover:bg-[#1C1B1A] group-hover:text-white transition-colors">
-                                            <Eye className="w-3 h-3" /> View
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-          )}
 
           {/* TAB 4: PROGRESS (Requirement 2: Subject/Domain Bar Graph & Breakdown) */}
           {activeNav === 'progress' && (

@@ -59,8 +59,9 @@ export default function App() {
             />
 
             {/* Student Dashboard: Accessible to Students and Team Leads (who are also students) */}
+            {/* "student/*" matches /student, /student/overview, /student/my-tasks, etc. */}
             <Route
-              path="student"
+              path="student/*"
               element={
                 <ProtectedRoute allowedRoles={['student', 'user', 'teamlead', 'team_lead']}>
                   <StudentDashboard />
