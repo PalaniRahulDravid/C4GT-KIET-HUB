@@ -1,6 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Layers, Users, Award, RefreshCw, CheckCircle2, UserCheck, AlertCircle, ArrowRight, X, Search } from 'lucide-react';
+import {
+  Layers,
+  Users,
+  Award,
+  RefreshCw,
+  CheckCircle2,
+  UserCheck,
+  AlertCircle,
+  ArrowRight,
+  X,
+  Search,
+  UserPlus,
+  Trash2,
+  ChevronRight,
+  ShieldAlert,
+} from 'lucide-react';
 
 export default function TeamOverview() {
   const { token, apiBaseUrl } = useAuth();
@@ -8,17 +23,13 @@ export default function TeamOverview() {
   const [eligibleUsers, setEligibleUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState('all'); // 'all' | 'assigned' | 'pending'
-  const [selectedLeads, setSelectedLeads] = useState({});
   const [assigningId, setAssigningId] = useState(null);
+  const [viewingTeam, setViewingTeam] = useState(null);
   const [toast, setToast] = useState({
     message: 'Cohort teams loaded from MongoDB Atlas.',
     type: 'success',
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const [searchModalTeam, setSearchModalTeam] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchFilter, setSearchFilter] = useState('all');
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -32,30 +43,6 @@ export default function TeamOverview() {
     7: 'Mobile Application Development Track',
     8: 'Cybersecurity & Network Defense Track',
     9: 'Data Engineering & Analytics Track',
-  };
-
-  const getDefaultEligibleUsers = () => [
-    { _id: 'u-1', name: 'platform', email: 'rsdeducationplatform@gmail.com', role: 'user' },
-    { _id: 'u-2', name: 'Swamy Rayudu', email: 'swamyrayudu91@gmail.com', role: 'teamlead' },
-    { _id: 'u-3', name: 'palani rahul dravid', email: 'rahuldravidpalani2005@gmail.com', role: 'admin' },
-    { _id: 'u-[#]', name: 'Surendra Chennamalli', email: 'surendrachennamalli177@gmail.com', role: 'admin' },
-    { _id: 'u-6', name: 'Khub Team2', email: 'khubteam2@gmail.com', role: 'user' },
-  ];
-
-  const getDefaultTeams = () => {
-    return Array.from({ length: 9 }, (_, i) => {
-      const num = i + 1;
-      const isTeam1 = num === 1;
-      return {
-        _id: `team-${num}`,
-        teamNumber: num,
-        name: `Team ${num}`,
-        track: trackNames[num],
-        teamLeadId: isTeam1
-          ? { _id: 'u-2', name: 'Swamy Rayudu', email: 'swamyrayudu91@gmail.com', role: 'teamlead' }
-          : null,
-      };
-    });
   };
 
   const showToast = (message, type = 'success') => {
@@ -74,11 +61,12 @@ export default function TeamOverview() {
         const teamsData = await teamsRes.json();
         if (teamsData.success && Array.isArray(teamsData.teams)) {
           setTeams(teamsData.teams);
-        } else {
-          setTeams(getDefaultTeams());
+          // If modal open, update selected team
+          if (viewingTeam) {
+            const updatedView = teamsData.teams.find((t) => t._id === viewingTeam._id);
+            if (updatedView) setViewingTeam(updatedView);
+          }
         }
-      } else {
-        setTeams(getDefaultTeams());
       }
 
       const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
@@ -89,16 +77,10 @@ export default function TeamOverview() {
         const usersData = await usersRes.json();
         if (usersData.success && Array.isArray(usersData.users)) {
           setEligibleUsers(usersData.users);
-        } else {
-          setEligibleUsers(getDefaultEligibleUsers());
         }
-      } else {
-        setEligibleUsers(getDefaultEligibleUsers());
       }
     } catch (err) {
       console.error('Failed to load data:', err);
-      setTeams(getDefaultTeams());
-      setEligibleUsers(getDefaultEligibleUsers());
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -112,18 +94,12 @@ export default function TeamOverview() {
   const handleRefreshTeams = () => {
     setIsRefreshing(true);
     fetchData();
-    showToast('Refreshed teams from MongoDB Atlas.');
-  };
-
-  const handleSelectLead = (teamId, userId) => {
-    setSelectedLeads((prev) => ({ ...prev, [teamId]: userId }));
+    showToast('Refreshed teams and members from MongoDB Atlas.');
   };
 
   const handleAssignLead = async (teamId, teamNumber, userIdToAssign) => {
     try {
       setAssigningId(teamId);
-      const chosenUser = eligibleUsers.find((u) => u._id === userIdToAssign);
-
       const res = await fetch(`${API_BASE_URL}/admin/teams/${teamId}/lead`, {
         method: 'PATCH',
         credentials: 'include',
@@ -131,7 +107,7 @@ export default function TeamOverview() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ teamLeadId: userIdToAssign }),
+        body: JSON.stringify({ teamLeadId: userIdToAssign || null }),
       });
 
       const data = await res.json();
@@ -139,23 +115,42 @@ export default function TeamOverview() {
         setTeams((prev) =>
           prev.map((t) => (t._id === teamId || t.teamNumber === teamNumber ? data.team : t))
         );
+        if (viewingTeam && viewingTeam._id === teamId) {
+          setViewingTeam(data.team);
+        }
+        showToast(`Team Lead ${userIdToAssign ? 'assigned' : 'removed'} for Team ${teamNumber}.`, 'success');
       } else {
-        setTeams((prev) =>
-          prev.map((t) =>
-            t._id === teamId || t.teamNumber === teamNumber
-              ? { ...t, teamLeadId: chosenUser || { _id: userIdToAssign, name: 'Lead' } }
-              : t
-          )
-        );
+        showToast(data.message || 'Failed to update team lead.', 'error');
       }
-
-      showToast(`Lead assigned to Team ${teamNumber} successfully.`, 'success');
-      setSearchModalTeam(null);
     } catch (err) {
       console.error('Failed to assign team lead:', err);
-      showToast('Lead assigned successfully.', 'success');
+      showToast('Error assigning team lead.', 'error');
     } finally {
       setAssigningId(null);
+    }
+  };
+
+  const handleRemoveMember = async (teamId, memberId, memberName) => {
+    if (!confirm(`Are you sure you want to remove ${memberName} from this team?`)) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/teams/${teamId}/members/${memberId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (data.success && data.team) {
+        setTeams((prev) => prev.map((t) => (t._id === teamId ? data.team : t)));
+        if (viewingTeam && viewingTeam._id === teamId) {
+          setViewingTeam(data.team);
+        }
+        showToast(`${memberName} removed from team.`, 'success');
+      } else {
+        showToast(data.message || 'Failed to remove member.', 'error');
+      }
+    } catch (err) {
+      console.error('Failed to remove member:', err);
+      showToast('Error removing member.', 'error');
     }
   };
 
@@ -171,17 +166,34 @@ export default function TeamOverview() {
   const getSectionTitle = () => {
     if (selectedFilter === 'assigned') return 'Teams With Assigned Leads';
     if (selectedFilter === 'pending') return 'Teams Awaiting Lead Assignment';
-    return 'Overview of Cohort Teams';
+    return 'Overview of Cohort Teams (1 – 9)';
   };
 
   return (
     <div className="max-w-[1240px] mx-auto space-y-6">
+      {/* Toast Alert */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border transition-all text-xs font-medium animate-in fade-in slide-in-from-bottom-5 ${
+            toast.type === 'error'
+              ? 'bg-rose-900 text-white border-rose-700'
+              : 'bg-[#1C1B1A] text-white border-black/20'
+          }`}
+        >
+          {toast.type === 'error' ? <AlertCircle className="w-4 h-4 text-rose-400" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-white/60 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Section Heading & Refresh */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="font-['Instrument_Serif',serif] text-3xl font-semibold text-[#1C1B1A]">{getSectionTitle()}</h2>
           <p className="text-xs text-[#66645E] mt-1">
-            Track cohort teams, assign designated Team Leads, and manage cohort readiness.
+            Manage all 9 cohort teams. Every team has a strict capacity limit of <strong>9 members</strong>. Assign Team Leads so they can search users and build their roster.
           </p>
         </div>
 
@@ -207,10 +219,10 @@ export default function TeamOverview() {
         >
           <div>
             <span className={`text-[10px] font-mono font-semibold tracking-wider uppercase ${selectedFilter === 'all' ? 'text-[#CCCCCC]' : 'text-[#66645E]'}`}>
-              ALL COHORT TEAMS
+              TOTAL TEAMS
             </span>
-            <div className="text-3xl font-bold mt-1">{teams.length}</div>
-            <p className={`text-xs mt-0.5 ${selectedFilter === 'all' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Teams 1 through 9</p>
+            <div className="text-3xl font-bold mt-1">{teams.length || 9}</div>
+            <p className={`text-xs mt-0.5 ${selectedFilter === 'all' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Teams 1 through 9 (Limit: 9/team)</p>
           </div>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedFilter === 'all' ? 'bg-white/10 text-white' : 'bg-[#EEECDF] text-[#1C1B1A]'}`}>
             <Layers className="w-5 h-5" />
@@ -230,7 +242,7 @@ export default function TeamOverview() {
               ASSIGNED LEADS
             </span>
             <div className="text-3xl font-bold mt-1">{assignedCount}</div>
-            <p className={`text-xs mt-0.5 ${selectedFilter === 'assigned' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Mentors active</p>
+            <p className={`text-xs mt-0.5 ${selectedFilter === 'assigned' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Active Team Leads</p>
           </div>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedFilter === 'assigned' ? 'bg-white/10 text-white' : 'bg-[#EEECDF] text-[#1C1B1A]'}`}>
             <UserCheck className="w-5 h-5" />
@@ -250,7 +262,7 @@ export default function TeamOverview() {
               PENDING LEADS
             </span>
             <div className="text-3xl font-bold mt-1">{pendingCount}</div>
-            <p className={`text-xs mt-0.5 ${selectedFilter === 'pending' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Awaiting assignment</p>
+            <p className={`text-xs mt-0.5 ${selectedFilter === 'pending' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Requires Assignment</p>
           </div>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedFilter === 'pending' ? 'bg-white/10 text-white' : 'bg-[#EEECDF] text-[#1C1B1A]'}`}>
             <Award className="w-5 h-5" />
@@ -258,50 +270,248 @@ export default function TeamOverview() {
         </div>
       </div>
 
-      {/* Teams Grid */}
+      {/* Teams Grid (9 Teams) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {displayedTeams.map((t) => (
-          <div key={t._id} className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs space-y-4 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">{t.name}</span>
-                {t.teamLeadId ? (
-                  <span className="text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    Lead Assigned
+        {displayedTeams.map((t) => {
+          const membersCount = Array.isArray(t.members) ? t.members.length : 0;
+          const totalCount = membersCount + (t.teamLeadId ? 1 : 0);
+          const maxLimit = t.maxMembers || 9;
+          const pct = Math.min(100, Math.round((totalCount / maxLimit) * 100));
+
+          return (
+            <div
+              key={t._id}
+              className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition-shadow"
+            >
+              <div>
+                {/* Header: Name & Status */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-[#1C1B1A] text-white flex items-center justify-center text-xs font-bold font-mono">
+                      {t.teamNumber}
+                    </span>
+                    <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">{t.name}</span>
+                  </div>
+
+                  {t.teamLeadId ? (
+                    <span className="text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Lead Active
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      Need Lead
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs font-medium text-[#66645E] mt-2">
+                  {t.track || trackNames[t.teamNumber] || 'Engineering Track'}
+                </p>
+
+                {/* Team Capacity Progress */}
+                <div className="mt-4 p-3 bg-white rounded-xl border border-[#E0DDD0]/80">
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="text-[11px] font-mono text-[#66645E]">Team Capacity</span>
+                    <span className="font-mono font-bold text-[#1C1B1A]">
+                      {totalCount} / {maxLimit} Members
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-[#EFECE3] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        totalCount >= maxLimit ? 'bg-rose-500' : 'bg-[#1C1B1A]'
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-[#88867E] mt-1">
+                    <span>{t.teamLeadId ? '1 Lead' : '0 Lead'}</span>
+                    <span>{membersCount} Members</span>
+                  </div>
+                </div>
+
+                {/* Team Lead Card */}
+                <div className="mt-3 p-3 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase text-[#66645E]">Designated Lead</span>
+                    {t.teamLeadId && (
+                      <span className="text-[9px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-1.5 py-0.2 rounded">
+                        PROMOTED
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-bold text-[#1C1B1A] mt-1 truncate">
+                    {t.teamLeadId?.name || 'No Lead Assigned Yet'}
+                  </p>
+                  {t.teamLeadId?.email ? (
+                    <p className="text-[11px] text-[#66645E] font-mono truncate">{t.teamLeadId.email}</p>
+                  ) : (
+                    <p className="text-[11px] text-amber-700 italic mt-0.5">Select a user below to assign as Lead</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions: Assign Lead & View Roster */}
+              <div className="pt-3 border-t border-[#E0DDD0] space-y-2">
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-[#66645E] block mb-1">
+                    Assign / Change Lead
+                  </label>
+                  <select
+                    onChange={(e) => handleAssignLead(t._id, t.teamNumber, e.target.value)}
+                    value={t.teamLeadId?._id || ''}
+                    disabled={assigningId === t._id}
+                    className="w-full py-2 px-3 text-xs rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium cursor-pointer shadow-2xs hover:border-[#1C1B1A]/40 transition-colors"
+                  >
+                    <option value="">-- No Lead (Unassigned) --</option>
+                    {eligibleUsers.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.name} ({u.email}) {u.role === 'admin' ? '[Admin]' : u.role === 'teamlead' ? '[Lead]' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => setViewingTeam(t)}
+                  className="w-full py-2 px-3 text-xs rounded-xl bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] text-[#1C1B1A] font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Users className="w-3.5 h-3.5 text-[#66645E]" />
+                  <span>View Team Roster ({membersCount})</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Team Roster Details Modal */}
+      {viewingTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-[#FDFCF9] border border-[#E0DDD0] rounded-2xl max-w-xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between bg-white">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-[#1C1B1A] text-white flex items-center justify-center text-xs font-bold font-mono">
+                    {viewingTeam.teamNumber}
                   </span>
+                  <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                    {viewingTeam.name} Roster
+                  </h3>
+                </div>
+                <p className="text-xs text-[#66645E] mt-1">
+                  {viewingTeam.track || trackNames[viewingTeam.teamNumber]} • Limit: 9 Members Max
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingTeam(null)}
+                className="w-8 h-8 rounded-full bg-[#F2EFE6] hover:bg-[#E5E2D8] flex items-center justify-center text-[#1C1B1A] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5">
+              {/* Team Lead Card */}
+              <div>
+                <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#66645E]">
+                  Team Lead (1)
+                </span>
+                {viewingTeam.teamLeadId ? (
+                  <div className="mt-2 p-3.5 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs">
+                        {viewingTeam.teamLeadId.name ? viewingTeam.teamLeadId.name.slice(0, 2).toUpperCase() : 'TL'}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-[#1C1B1A] flex items-center gap-2">
+                          {viewingTeam.teamLeadId.name}
+                          <span className="text-[9px] font-mono bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                            LEAD
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-[#66645E] font-mono">{viewingTeam.teamLeadId.email}</div>
+                      </div>
+                    </div>
+                  </div>
                 ) : (
-                  <span className="text-[10px] font-mono font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                    Pending Lead
-                  </span>
+                  <div className="mt-2 p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>No Team Lead assigned yet. Select a lead from the dropdown to assign.</span>
+                  </div>
                 )}
               </div>
 
-              <p className="text-xs font-medium text-[#66645E] mt-1">{t.track}</p>
+              {/* Members List */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#66645E]">
+                    Team Members ({Array.isArray(viewingTeam.members) ? viewingTeam.members.length : 0} / 8 slots)
+                  </span>
+                  <span className="text-xs font-mono font-bold text-[#1C1B1A]">
+                    Total Team Size: {(viewingTeam.members?.length || 0) + (viewingTeam.teamLeadId ? 1 : 0)} / 9
+                  </span>
+                </div>
 
-              <div className="mt-4 p-3 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] text-xs">
-                <span className="text-[10px] font-mono uppercase text-[#66645E]">Team Lead</span>
-                <p className="font-bold text-[#1C1B1A] mt-0.5">{t.teamLeadId?.name || 'Unassigned'}</p>
-                {t.teamLeadId?.email && <p className="text-[11px] text-[#66645E] font-mono">{t.teamLeadId.email}</p>}
+                {!viewingTeam.members || viewingTeam.members.length === 0 ? (
+                  <div className="p-6 rounded-xl border border-dashed border-[#D0CDBE] text-center bg-white">
+                    <Users className="w-6 h-6 text-[#9E9C94] mx-auto mb-2" />
+                    <p className="text-xs font-medium text-[#1C1B1A]">No team members joined yet</p>
+                    <p className="text-[11px] text-[#66645E] mt-1">
+                      Once the Team Lead is assigned, they can search across users in their portal and invite members to join!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {viewingTeam.members.map((m, idx) => (
+                      <div
+                        key={m._id || idx}
+                        className="p-3 bg-white rounded-xl border border-[#E0DDD0] flex items-center justify-between hover:border-[#1C1B1A]/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[#EFECE3] text-[#1C1B1A] flex items-center justify-center font-bold text-xs font-mono">
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-[#1C1B1A]">{m.name || 'Student Member'}</div>
+                            <div className="text-[11px] text-[#66645E] font-mono">{m.email}</div>
+                            {(m.branch || m.year) && (
+                              <div className="text-[10px] text-[#88867E]">
+                                {m.branch} • Year {m.year}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleRemoveMember(viewingTeam._id, m._id, m.name)}
+                          title="Remove member from team"
+                          className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="pt-3 border-t border-[#E0DDD0]">
-              <select
-                onChange={(e) => handleAssignLead(t._id, t.teamNumber, e.target.value)}
-                defaultValue={t.teamLeadId?._id || ''}
-                className="w-full py-2 px-3 text-xs rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium cursor-pointer shadow-2xs"
+            {/* Modal Footer */}
+            <div className="p-4 bg-[#F2EFE6] border-t border-[#E0DDD0] flex justify-end">
+              <button
+                onClick={() => setViewingTeam(null)}
+                className="px-4 py-2 rounded-xl bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
               >
-                <option value="">+ Assign / Change Lead...</option>
-                {eligibleUsers.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.email})
-                  </option>
-                ))}
-              </select>
+                Close
+              </button>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+

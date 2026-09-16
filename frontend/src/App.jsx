@@ -48,11 +48,11 @@ export default function App() {
               }
             />
 
-            {/* Student Dashboard: strictly Student only */}
+            {/* Student Dashboard: Accessible to Students and Team Leads (who are also students) */}
             <Route
               path="student"
               element={
-                <ProtectedRoute allowedRoles={['student', 'user']}>
+                <ProtectedRoute allowedRoles={['student', 'user', 'teamlead', 'team_lead']}>
                   <StudentDashboard />
                 </ProtectedRoute>
               }
@@ -98,8 +98,8 @@ export default function App() {
             <Route path="batches" element={<Batches />} />
             <Route path="batches/:batchId" element={<Batches />} />
             <Route path="batches/:batchId/team/:teamId" element={<Batches />} />
-            {/* Redirect legacy /admin/teams to /admin/batches */}
-            <Route path="teams" element={<Navigate to="/admin/batches" replace />} />
+            {/* /admin/teams - Dedicated 9 Cohort Teams & Lead Assignment */}
+            <Route path="teams" element={<TeamOverview />} />
             {/* /admin/tasks - Next Tasks for Teams */}
             <Route path="tasks" element={<TeamTasks />} />
           </Route>

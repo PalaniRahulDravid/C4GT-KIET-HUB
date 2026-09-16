@@ -291,6 +291,108 @@ const updateProfile = async (req, res) => {
 };
 
 /**
+ * @desc    Login with Roll Number & Password (or Admin identifier & Password)
+ * @route   POST /api/auth/login
+ * @access  Public
+ */
+const loginWithRollNumber = async (req, res) => {
+  try {
+    const { identifier, rollNumber, password } = req.body;
+    const loginId = (rollNumber || identifier || '').trim();
+    const loginPassword = (password || '').trim();
+
+    if (!loginId || !loginPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide both Roll Number and Password',
+      });
+    }
+
+    const isSpecialAdminId = ['admin@', 'admin'].includes(loginId.toLowerCase());
+
+    // Find user by rollNumber (uppercase) or email (lowercase)
+    const user = await User.findOne({
+      $or: [
+        { rollNumber: loginId.toUpperCase() },
+        { rollNumber: loginId },
+        { rollNumber: loginId.toLowerCase() },
+        { email: loginId.toLowerCase() },
+        ...(isSpecialAdminId ? [{ rollNumber: 'ADMIN@' }, { email: 'admin@c4gt-kiet.in' }, { role: 'admin' }] : []),
+      ],
+    }).select('+password');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials. No user found with this Roll Number.',
+      });
+    }
+
+    // Verify password
+    let isMatch = false;
+
+    // 1. Try bcrypt match if user has hashed password
+    if (user.password) {
+      isMatch = await user.matchPassword(loginPassword);
+    }
+
+    // 2. Direct match fallback: default password is their rollNumber
+    if (!isMatch && user.rollNumber && loginPassword.toUpperCase() === user.rollNumber.toUpperCase()) {
+      isMatch = true;
+      user.password = loginPassword;
+      await user.save();
+    }
+
+    // 3. If admin credentials (admin@, ADMIN@, admin123, or admin)
+    if (
+      !isMatch &&
+      user.role === 'admin' &&
+      (loginPassword.toLowerCase() === 'admin@' ||
+        loginPassword === 'admin@' ||
+        loginPassword === 'ADMIN@' ||
+        loginPassword.toLowerCase() === 'admin123' ||
+        loginPassword.toLowerCase() === 'admin')
+    ) {
+      isMatch = true;
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid password. Default password is your Roll Number.',
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken(user);
+
+    // Set HTTP-only Cookie
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    console.log(`User logged in via Roll Number: ${user.name} (${user.rollNumber || user.email}) [${user.role}]`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user: formatUserResponse(user),
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Login failed due to server error',
+    });
+  }
+};
+
+/**
  * @desc    Clear authentication cookie
  * @route   POST /api/auth/logout
  * @access  Public
@@ -311,6 +413,7 @@ const logout = async (req, res) => {
 };
 
 module.exports = {
+  loginWithRollNumber,
   googleAuth,
   getMe,
   updateProfile,

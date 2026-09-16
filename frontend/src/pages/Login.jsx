@@ -1,21 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { useAuth, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
 import C4GTLogo from '../components/C4GTLogo';
-import { motion } from 'motion/react';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Eye, EyeOff, Lock, User, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function Login() {
-  const { user, isAuthenticated, loginWithGoogle, loading } = useAuth();
+  const { user, isAuthenticated, loginWithRollNumber, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const googleBtnRef = useRef(null);
-  const isInitializedRef = useRef(false);
 
-  const DEFAULT_GOOGLE_CLIENT_ID = '37964450681-qjr64dq42neav1q5jbpbeo0pcgtgpfi0.apps.googleusercontent.com';
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+  const [rollNumber, setRollNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   const resolveRedirectPath = (authUser, fromPath) => {
     const dest = getDashboardPath(authUser?.role);
@@ -23,217 +21,175 @@ export default function Login() {
 
     const role = authUser?.role ? String(authUser.role).toLowerCase().trim() : 'student';
     if (role === 'admin' && fromPath.startsWith('/admin')) return fromPath;
-    if ((role === 'teamlead' || role === 'team_lead') && (fromPath.startsWith('/teamlead') || fromPath.startsWith('/team-lead'))) return fromPath;
+    if (
+      (role === 'teamlead' || role === 'team_lead') &&
+      (fromPath.startsWith('/teamlead') ||
+        fromPath.startsWith('/team-lead') ||
+        fromPath.startsWith('/student'))
+    )
+      return fromPath;
     if ((role === 'student' || role === 'user') && fromPath.startsWith('/student')) return fromPath;
 
     return dest;
   };
 
-  // Synchronously prevent authenticated users from viewing or accessing the login page
+  // If already authenticated, redirect to appropriate workspace
   if (!loading && isAuthenticated && user) {
-    if (!isStudentProfileComplete(user) && user.role !== 'admin' && user.role !== 'teamlead' && user.role !== 'team_lead') {
+    if (
+      !isStudentProfileComplete(user) &&
+      user.role !== 'admin' &&
+      user.role !== 'teamlead' &&
+      user.role !== 'team_lead'
+    ) {
       return <Navigate to="/complete-profile" replace />;
     }
     const targetPath = resolveRedirectPath(user, location.state?.from?.pathname);
     return <Navigate to={targetPath} replace />;
   }
 
-  // Initialize official Google Identity Services (GIS) button
-  useEffect(() => {
-    if (typeof window === 'undefined' || !googleClientId) return;
-    if (isInitializedRef.current) return;
-
-    const initializeGoogle = () => {
-      if (isInitializedRef.current) return;
-      if (window.google?.accounts?.id && googleBtnRef.current) {
-        try {
-          isInitializedRef.current = true;
-          window.google.accounts.id.initialize({
-            client_id: googleClientId,
-            callback: async (response) => {
-              if (response.credential) {
-                setSubmitting(true);
-                setError(null);
-                try {
-                  const loggedInUser = await loginWithGoogle(response.credential);
-                  if (!isStudentProfileComplete(loggedInUser) && loggedInUser.role !== 'admin' && loggedInUser.role !== 'teamlead' && loggedInUser.role !== 'team_lead') {
-                    navigate('/complete-profile', { replace: true });
-                  } else {
-                    const dest = resolveRedirectPath(loggedInUser, location.state?.from?.pathname);
-                    navigate(dest, { replace: true });
-                  }
-                } catch (err) {
-                  setError(err.message || 'Google authentication failed');
-                } finally {
-                  setSubmitting(false);
-                }
-              }
-            },
-          });
-
-          // Dynamic width to perfectly fit on all mobile & desktop screen sizes
-          const currentWidth = googleBtnRef.current?.offsetWidth || 400;
-          const calculatedWidth = Math.min(Math.max(currentWidth, 240), 400);
-
-          window.google.accounts.id.renderButton(googleBtnRef.current, {
-            theme: 'outline',
-            size: 'large',
-            type: 'standard',
-            shape: 'rectangular',
-            text: 'continue_with',
-            width: calculatedWidth,
-          });
-        } catch (err) {
-          console.error('Google button render error:', err);
-        }
-      }
-    };
-
-    if (window.google?.accounts?.id) {
-      initializeGoogle();
-    } else {
-      const timer = setInterval(() => {
-        if (window.google?.accounts?.id) {
-          clearInterval(timer);
-          initializeGoogle();
-        }
-      }, 250);
-      return () => clearInterval(timer);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!rollNumber.trim() || !password.trim()) {
+      setError('Please enter both your Roll Number and Password.');
+      return;
     }
-  }, [googleClientId, loginWithGoogle, navigate, location]);
 
-  const handleCustomBtnClick = () => {
-    if (window.google?.accounts?.id) {
-      try {
-        window.google.accounts.id.prompt();
-      } catch (e) {
-        console.error('Google prompt trigger error:', e);
-      }
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const loggedInUser = await loginWithRollNumber(rollNumber.trim(), password.trim());
+      const dest = resolveRedirectPath(loggedInUser, location.state?.from?.pathname);
+      navigate(dest, { replace: true });
+    } catch (err) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#F9F8F3] text-[#1C1B1A] font-sans antialiased selection:bg-[#1C1B1A] selection:text-white flex flex-col justify-center items-center p-5 sm:p-10 relative overflow-x-hidden">
-      {/* Subtle Ambient Background Lighting */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-12 left-1/4 w-[600px] h-[500px] rounded-full bg-[#E3EFE1]/40 blur-3xl opacity-70" />
-        <div className="absolute bottom-12 right-1/4 w-[550px] h-[450px] rounded-full bg-[#FBE5DC]/35 blur-3xl opacity-60" />
-      </div>
-
-      {/* Top-Left Back to Home Button (Far Left on Desktop) */}
-      <motion.div
-        initial={{ opacity: 0, x: -15 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.4 }}
-        className="absolute top-6 left-5 sm:top-10 sm:left-12 z-20"
-      >
+    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 bg-[#F9F8F3]">
+      <div className="w-full max-w-md space-y-6">
+        {/* Back Link */}
         <Link
           to="/"
-          className="inline-flex items-center gap-2.5 h-[52px] sm:h-[56px] px-6 text-base sm:text-[17px] font-medium text-[#1C1B1A] bg-[#FFFDF8] hover:bg-[#F5F3EB] border border-[#E2DDD0] rounded-full shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+          className="inline-flex items-center gap-2 text-xs font-medium text-[#66645E] hover:text-[#1C1B1A] transition-colors"
         >
-          <ArrowLeft className="w-5 h-5 text-[#66645E] group-hover:text-[#1C1B1A] group-hover:-translate-x-1 transition-transform" />
-          <span>Back to Home</span>
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to main website</span>
         </Link>
-      </motion.div>
 
-      {/* Main Centered Login Card (Larger: max-w-[580px], padding: 48px-64px) */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="w-full max-w-[580px] z-10 my-auto py-12 sm:py-16"
-      >
-        <div className="bg-[#FFFDF8] border border-[#E2DDD0] rounded-[32px] shadow-sm hover:shadow-md transition-shadow p-8 sm:p-14 text-center relative">
-          {/* C4GT HUB @ KIET Logo */}
-          <div className="mb-8 inline-block">
-            <div className="p-3.5 rounded-2xl bg-white border border-[#E2DDD0] shadow-2xs inline-block">
-              <C4GTLogo showText={false} imgClassName="h-16 sm:h-20" />
+        {/* Login Card */}
+        <div className="bg-[#FDFCF9] rounded-3xl border border-[#E0DDD0] p-8 shadow-sm space-y-6">
+          {/* Logo & Heading */}
+          <div className="text-center space-y-2">
+            <div className="flex justify-center mb-3">
+              <C4GTLogo showText={false} imgClassName="h-14" />
             </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#1C1B1A] text-white text-[10px] font-mono font-bold tracking-wider uppercase">
+              <Sparkles className="w-3 h-3 text-amber-300" />
+              Cohort 2026 – 2027
+            </div>
+            <h1 className="font-['Instrument_Serif',serif] text-3xl sm:text-4xl font-bold text-[#1C1B1A] tracking-tight">
+              Sign In to C4GT HUB
+            </h1>
+            <p className="text-xs text-[#66645E]">
+              Enter your Roll Number and Password to access your team and student dashboard.
+            </p>
           </div>
 
-          {/* Heading & Subtitle */}
-          <h1 className="font-['Instrument_Serif',serif] text-4xl sm:text-5xl text-[#1C1B1A] font-normal tracking-tight leading-tight">
-            Welcome back.
-          </h1>
-          <p className="text-base sm:text-lg text-[#66645E] mt-3 font-normal leading-relaxed">
-            Sign in to continue to C4GT KIET HUB.
-          </p>
+          {/* Error Message */}
+          {error && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2.5 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div className="leading-relaxed">{error}</div>
+            </div>
+          )}
 
-          {/* Google Sign-In Action Area */}
-          <div className="mt-10 space-y-5">
-            <div className="relative w-full">
-              <button
-                type="button"
-                onClick={handleCustomBtnClick}
-                disabled={submitting}
-                className="w-full h-[58px] sm:h-[62px] bg-[#FFFDF8] hover:bg-[#F5F3EB] active:scale-[0.995] border border-[#E2DDD0] hover:border-[#D4CEBF] text-[#1C1B1A] text-base sm:text-lg font-semibold rounded-2xl transition-all flex items-center justify-center gap-3.5 shadow-2xs hover:shadow-xs cursor-pointer group focus:outline-none focus:ring-2 focus:ring-[#1C1B1A]/20 relative overflow-hidden"
-              >
-                {submitting ? (
-                  <div className="flex items-center gap-3 text-[#1C1B1A] font-medium text-base">
-                    <svg className="animate-spin h-5 w-5 text-[#1C1B1A]" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    <span>Authenticating with Google...</span>
-                  </div>
-                ) : (
-                  <>
-                    <svg className="w-6 h-6 transition-transform group-hover:scale-105 shrink-0" viewBox="0 0 24 24">
-                      <path
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        fill="#4285F4"
-                      />
-                      <path
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        fill="#34A853"
-                      />
-                      <path
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                        fill="#FBBC05"
-                      />
-                      <path
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                        fill="#EA4335"
-                      />
-                    </svg>
-                    <span>Continue with Google</span>
-                  </>
-                )}
-              </button>
-
-              {/* Invisible Google GIS rendered button layered over custom button */}
-              <div
-                ref={googleBtnRef}
-                className="absolute inset-0 w-full h-full opacity-0 overflow-hidden cursor-pointer z-10 pointer-events-auto flex items-center justify-center"
-              />
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Roll Number Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                Roll Number
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-[#66645E] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={rollNumber}
+                  onChange={(e) => setRollNumber(e.target.value)}
+                  placeholder="e.g. 23B21A4268 or admin@"
+                  autoFocus
+                  required
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs font-mono text-[#1C1B1A] tracking-wider focus:outline-hidden focus:border-[#1C1B1A] shadow-2xs placeholder:normal-case placeholder:tracking-normal placeholder:font-sans"
+                />
+              </div>
             </div>
 
-            {/* Error Status Alert */}
-            {error && (
-              <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/80 text-rose-800 text-xs sm:text-sm flex items-center justify-center gap-2.5 text-left">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                <span className="leading-tight font-medium">{error}</span>
+            {/* Password Input */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A]">
+                  Password
+                </label>
+                <span className="text-[10px] text-[#88867E]">Default: Roll Number</span>
               </div>
-            )}
-
-            {/* Submitting State Indicator */}
-            {submitting && (
-              <div className="p-4 rounded-xl border border-[#E2DDD0] bg-[#E3EFE1]/40 text-[#2F5233] text-xs sm:text-sm flex items-center justify-center gap-2.5 animate-pulse">
-                <svg className="w-4 h-4 shrink-0 animate-spin text-[#2F5233]" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <span>Authenticating with Google...</span>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[#66645E] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A] shadow-2xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A] p-1"
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* Small Muted Legal / Usage Text */}
-            <p className="text-xs sm:text-sm text-[#8C8A84] text-center leading-relaxed pt-2">
-              By continuing, you agree to use C4GT KIET HUB responsibly for learning and development.
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full py-3 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-70"
+            >
+              {submitting ? (
+                <span>Signing In...</span>
+              ) : (
+                <>
+                  <span>Sign In to Workspace</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Information Callout */}
+          <div className="p-3.5 rounded-2xl bg-[#F2EFE6] border border-[#E0DDD0] text-[11px] text-[#66645E] space-y-1.5 leading-relaxed">
+            <div className="font-semibold text-[#1C1B1A] flex items-center gap-1.5">
+              <span>Login Help</span>
+            </div>
+            <p>
+              • <strong>Students & Leads:</strong> Use your College Roll Number as both username and initial password (e.g. <code className="font-mono text-[#1C1B1A] bg-white px-1 py-0.5 rounded">23B21A4268</code>).
+            </p>
+            <p>
+              • <strong>Team Leads:</strong> Sign in with your Lead Roll Number to automatically view and manage your team.
+            </p>
+            <p>
+              • <strong>Admin:</strong> Predefined login using Roll Number <code className="font-mono text-[#1C1B1A] bg-white px-1 py-0.5 rounded">admin@</code> and password <code className="font-mono text-[#1C1B1A] bg-white px-1 py-0.5 rounded">admin@</code>.
             </p>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

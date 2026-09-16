@@ -96,7 +96,38 @@ export function AuthProvider({ children }) {
     initAuth();
   }, []);
 
-  // Strict Google Sign-In: requires real Google ID credential and sets HTTP-only Cookie
+  // Roll Number & Password Login (Student, Team Lead, and Admin)
+  const loginWithRollNumber = async (rollNumber, password) => {
+    if (!rollNumber || !password) {
+      throw new Error('Please enter both Roll Number and Password.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ rollNumber, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      setUser(null);
+      setToken(null);
+      throw new Error(data.message || 'Login failed. Please check your Roll Number and Password.');
+    }
+
+    setUser(data.user);
+    if (data.token) {
+      setToken(data.token);
+    }
+
+    return data.user;
+  };
+
+  // Strict Google Sign-In (Legacy fallback)
   const loginWithGoogle = async (credential) => {
     if (!credential) {
       throw new Error('Google credential is required. Real Google OAuth is mandatory.');
@@ -194,6 +225,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(user),
     isProfileComplete,
     role: user?.role || null,
+    loginWithRollNumber,
     loginWithGoogle,
     logout,
     refreshUser,

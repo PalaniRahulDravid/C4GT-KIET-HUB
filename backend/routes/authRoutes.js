@@ -1,10 +1,11 @@
 const express = require('express');
-const { googleAuth, getMe, updateProfile, logout } = require('../controllers/authController');
+const { loginWithRollNumber, googleAuth, getMe, updateProfile, logout } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Public routes - strictly real Google authentication
+// Public routes - Roll Number & Password authentication
+router.post('/login', loginWithRollNumber);
 router.post('/google', googleAuth);
 router.post('/logout', logout);
 

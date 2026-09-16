@@ -2,8 +2,12 @@ const mongoose = require('mongoose');
 const Task = require('../models/Task');
 const TaskAssignment = require('../models/TaskAssignment');
 const Team = require('../models/Team');
+const User = require('../models/User');
+const TeamRequest = require('../models/TeamRequest');
+const Notification = require('../models/Notification');
 const StudentActivity = require('../models/StudentActivity');
 const StudentResourceProgress = require('../models/StudentResourceProgress');
+const Resource = require('../models/Resource');
 
 /**
  * Helper to format Date objects to 'YYYY-MM-DD'
@@ -498,6 +502,229 @@ const updateResourceProgress = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get student's current team details & roster
+ * @route   GET /api/student/team
+ * @access  Private (Student / User)
+ */
+const getStudentTeam = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    let team = null;
+
+    if (user && user.teamId) {
+      team = await Team.findById(user.teamId);
+    }
+    if (!team) {
+      team = await Team.findOne({
+        $or: [{ members: req.user._id }, { teamLeadId: req.user._id }],
+      });
+    }
+
+    if (!team) {
+      return res.status(200).json({
+        success: true,
+        hasTeam: false,
+        team: null,
+      });
+    }
+
+    const populatedTeam = await Team.findById(team._id)
+      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber')
+      .populate('members', 'name email avatar role memberType branch year rollNumber status');
+
+    const maxMembers = populatedTeam.maxMembers || 9;
+    const currentMembersCount = (populatedTeam.members ? populatedTeam.members.length : 0) + (populatedTeam.teamLeadId ? 1 : 0);
+
+    res.status(200).json({
+      success: true,
+      hasTeam: true,
+      team: populatedTeam,
+      maxMembers,
+      currentMembersCount,
+    });
+  } catch (error) {
+    console.error('Error fetching student team:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch team',
+    });
+  }
+};
+
+/**
+ * @desc    Get pending team invitations for student
+ * @route   GET /api/student/team-invitations
+ * @access  Private (Student / User)
+ */
+const getStudentInvitations = async (req, res) => {
+  try {
+    const invitations = await TeamRequest.find({
+      invitedUserId: req.user._id,
+      status: 'pending',
+    })
+      .sort({ createdAt: -1 })
+      .populate('teamId', 'name teamNumber track maxMembers members teamLeadId')
+      .populate('teamLeadId', 'name email avatar role memberType');
+
+    res.status(200).json({
+      success: true,
+      count: invitations.length,
+      invitations,
+    });
+  } catch (error) {
+    console.error('Error fetching student invitations:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch invitations',
+    });
+  }
+};
+
+/**
+ * @desc    Accept or decline a team invitation
+ * @route   POST /api/student/team-invitations/:id/respond
+ * @access  Private (Student / User)
+ */
+const respondToTeamInvitation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'accept' | 'reject'
+
+    if (!['accept', 'reject'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Action must be either accept or reject',
+      });
+    }
+
+    const invitation = await TeamRequest.findById(id);
+    if (!invitation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invitation not found',
+      });
+    }
+
+    if (invitation.invitedUserId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to respond to this invitation',
+      });
+    }
+
+    if (invitation.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: `This invitation is already ${invitation.status}`,
+      });
+    }
+
+    const team = await Team.findById(invitation.teamId);
+    if (!team) {
+      return res.status(404).json({
+        success: false,
+        message: 'Associated team no longer exists',
+      });
+    }
+
+    if (action === 'accept') {
+      // Check 9-member team capacity limit
+      const maxLimit = team.maxMembers || 9;
+      const currentTotal = (team.members ? team.members.length : 0) + (team.teamLeadId ? 1 : 0);
+      if (currentTotal >= maxLimit) {
+        invitation.status = 'rejected';
+        invitation.respondedAt = new Date();
+        await invitation.save();
+        return res.status(400).json({
+          success: false,
+          message: `Team ${team.name} has already reached its maximum capacity of ${maxLimit} members.`,
+        });
+      }
+
+      // Add user to team.members if not already present
+      if (!team.members.some((m) => m.toString() === req.user._id.toString())) {
+        team.members.push(req.user._id);
+        await team.save();
+      }
+
+      // Update user document
+      const currentUser = await User.findById(req.user._id);
+      if (currentUser) {
+        currentUser.teamId = team._id;
+        await currentUser.save();
+      }
+
+      // Update invitation status
+      invitation.status = 'accepted';
+      invitation.respondedAt = new Date();
+      await invitation.save();
+
+      // Cancel other pending invitations for this user
+      await TeamRequest.updateMany(
+        {
+          invitedUserId: req.user._id,
+          _id: { $ne: invitation._id },
+          status: 'pending',
+        },
+        {
+          $set: { status: 'cancelled', respondedAt: new Date() },
+        }
+      );
+
+      // Notify Team Lead
+      try {
+        await Notification.create({
+          studentId: team.teamLeadId,
+          teamId: team._id,
+          title: `New Team Member: ${req.user.name}`,
+          message: `${req.user.name} accepted your invitation and joined ${team.name}!`,
+          type: 'team_joined',
+          assignedBy: req.user.name,
+        });
+      } catch (e) {}
+
+      const populatedTeam = await Team.findById(team._id)
+        .populate('teamLeadId', 'name email avatar role memberType')
+        .populate('members', 'name email avatar role memberType branch year rollNumber status');
+
+      return res.status(200).json({
+        success: true,
+        message: `Congratulations! You have joined ${team.name}.`,
+        team: populatedTeam,
+      });
+    } else {
+      // Reject
+      invitation.status = 'rejected';
+      invitation.respondedAt = new Date();
+      await invitation.save();
+
+      // Notify Team Lead
+      try {
+        await Notification.create({
+          studentId: team.teamLeadId,
+          teamId: team._id,
+          title: `Invitation Declined: ${req.user.name}`,
+          message: `${req.user.name} declined the invitation to join ${team.name}.`,
+          type: 'team_left',
+          assignedBy: req.user.name,
+        });
+      } catch (e) {}
+
+      return res.status(200).json({
+        success: true,
+        message: `Invitation to join ${team.name} has been declined.`,
+      });
+    }
+  } catch (error) {
+    console.error('Error responding to invitation:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to respond to invitation',
+    });
+  }
+};
+
 module.exports = {
   getStudentTasks,
   updateStudentTaskStatus,
@@ -505,4 +732,7 @@ module.exports = {
   getStudentStreak,
   getStudentResourceProgress,
   updateResourceProgress,
+  getStudentTeam,
+  getStudentInvitations,
+  respondToTeamInvitation,
 };

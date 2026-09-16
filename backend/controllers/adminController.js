@@ -112,35 +112,57 @@ const getAdminStats = async (req, res) => {
   }
 };
 
+const trackNames = {
+  1: 'Machine Learning & AI Track',
+  2: 'DSA & Problem Solving Track',
+  3: 'Full Stack Web Development Track',
+  4: 'Web3 & Smart Contracts Track',
+  5: 'Cloud & DevOps Automation Track',
+  6: 'Open Source Contributions Track',
+  7: 'Mobile Application Development Track',
+  8: 'Cybersecurity & Network Defense Track',
+  9: 'Data Engineering & Analytics Track',
+};
+
 /**
- * @desc    Get all teams (auto-seeds 9 teams if none exist)
+ * @desc    Get all 9 cohort teams (auto-seeds 9 teams with track names & maxMembers: 9)
  * @route   GET /api/admin/teams
  * @access  Private/Admin
  */
 const getTeams = async (req, res) => {
   try {
-    let teams = await Team.find()
-      .sort({ teamNumber: 1 })
-      .populate('teamLeadId', 'name email avatar role')
-      .populate('members', 'name email avatar role');
-
-    // Auto-seed 9 cohort teams if database is empty
-    if (teams.length === 0) {
-      const seedTeams = [];
-      for (let i = 1; i <= 9; i++) {
-        seedTeams.push({
+    // Ensure all 9 teams (1 through 9) exist with designated tracks and max capacity of 9
+    for (let i = 1; i <= 9; i++) {
+      let team = await Team.findOne({ teamNumber: i });
+      if (!team) {
+        await Team.create({
           name: `Team ${i}`,
           teamNumber: i,
+          track: trackNames[i] || `Track ${i}`,
+          maxMembers: 9,
           teamLeadId: null,
           members: [],
         });
+      } else {
+        let changed = false;
+        if (!team.track) {
+          team.track = trackNames[i] || `Track ${i}`;
+          changed = true;
+        }
+        if (!team.maxMembers) {
+          team.maxMembers = 9;
+          changed = true;
+        }
+        if (changed) {
+          await team.save();
+        }
       }
-      await Team.insertMany(seedTeams);
-      teams = await Team.find()
-        .sort({ teamNumber: 1 })
-        .populate('teamLeadId', 'name email avatar role')
-        .populate('members', 'name email avatar role');
     }
+
+    const teams = await Team.find()
+      .sort({ teamNumber: 1 })
+      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber')
+      .populate('members', 'name email avatar role memberType branch year rollNumber');
 
     res.status(200).json({
       success: true,
@@ -246,6 +268,56 @@ const assignTeamLead = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to assign team lead',
+    });
+  }
+};
+
+/**
+ * @desc    Remove a member from a team (Admin)
+ * @route   DELETE /api/admin/teams/:id/members/:memberId
+ * @access  Private/Admin
+ */
+const removeTeamMember = async (req, res) => {
+  try {
+    const { id: teamId, memberId } = req.params;
+    let team = null;
+
+    if (mongoose.Types.ObjectId.isValid(teamId)) {
+      team = await Team.findById(teamId);
+    }
+    if (!team) {
+      const match = String(teamId).match(/\d+/);
+      if (match) {
+        team = await Team.findOne({ teamNumber: parseInt(match[0], 10) });
+      }
+    }
+
+    if (!team) {
+      return res.status(404).json({ success: false, message: 'Team not found' });
+    }
+
+    team.members = team.members.filter((m) => m && m.toString() !== memberId);
+    await team.save();
+
+    const user = await User.findById(memberId);
+    if (user && user.teamId && user.teamId.toString() === team._id.toString()) {
+      user.teamId = null;
+      await user.save();
+    }
+
+    const updatedTeam = await Team.findById(team._id)
+      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber')
+      .populate('members', 'name email avatar role memberType branch year rollNumber');
+
+    res.status(200).json({
+      success: true,
+      message: 'Member removed from team successfully',
+      team: updatedTeam,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to remove member from team',
     });
   }
 };
@@ -578,6 +650,7 @@ module.exports = {
   getAdminStats,
   getTeams,
   assignTeamLead,
+  removeTeamMember,
   getResources,
   createResource,
   getTasks,

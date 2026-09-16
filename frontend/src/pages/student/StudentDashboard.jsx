@@ -27,6 +27,9 @@ import {
   Menu,
   X,
   User,
+  Users,
+  Award,
+  ShieldCheck,
   ArrowRight,
   Bell,
   Activity,
@@ -67,6 +70,11 @@ export default function StudentDashboard() {
   const [notificationsList, setNotificationsList] = useState([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const notificationsRef = useRef(null);
+
+  // STUDENT COHORT TEAM & TEAM INVITATIONS STATE
+  const [studentTeam, setStudentTeam] = useState(null);
+  const [teamInvitations, setTeamInvitations] = useState([]);
+  const [respondingInviteId, setRespondingInviteId] = useState(null);
 
   // Active Media Viewer Modal State (Video / Document)
   const [activeMediaResource, setActiveMediaResource] = useState(null);
@@ -264,11 +272,76 @@ export default function StudentDashboard() {
     };
   }, []);
 
+  const fetchStudentTeam = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/team`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.hasTeam) {
+          setStudentTeam(data.team);
+        } else {
+          setStudentTeam(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load student team:', err);
+    }
+  };
+
+  const fetchStudentInvitations = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/team-invitations`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.invitations)) {
+          setTeamInvitations(data.invitations);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load team invitations:', err);
+    }
+  };
+
+  const handleRespondInvitation = async (invitationId, action) => {
+    try {
+      setRespondingInviteId(invitationId);
+      const res = await fetch(`${API_BASE_URL}/student/team-invitations/${invitationId}/respond`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchStudentInvitations();
+        fetchStudentTeam();
+        fetchNotifications();
+      } else {
+        alert(data.message || 'Failed to process team invitation');
+      }
+    } catch (err) {
+      console.error('Failed to respond to team invitation:', err);
+    } finally {
+      setRespondingInviteId(null);
+    }
+  };
+
   useEffect(() => {
     fetchStudentTasks();
     fetchStudentStreak();
     fetchResourceProgress();
     fetchNotifications();
+    fetchStudentTeam();
+    fetchStudentInvitations();
   }, [user]);
 
   // Real Session Heartbeat Tracking
@@ -1000,6 +1073,31 @@ export default function StudentDashboard() {
             </button>
           </div>
 
+          {/* DUAL ROLE: TEAM LEAD SWITCH CARD */}
+          {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+            <div className="mb-6 p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 via-[#F7FDF9] to-teal-50 border border-emerald-200/90 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[9px] font-mono font-bold uppercase tracking-wider">
+                  Lead & Student
+                </span>
+                <span className="text-[10px] font-mono text-emerald-800 font-semibold">2 Dashboards Active</span>
+              </div>
+              <p className="text-[11px] text-emerald-950 font-medium leading-tight">
+                You are a Team Lead. Switch anytime to manage your 9-member team roster.
+              </p>
+              <Link
+                to="/teamlead"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer group"
+              >
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>Team Lead Dashboard</span>
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-emerald-200 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
+          )}
+
           {/* Navigation Section Label */}
           <div className="mb-3 px-2 flex items-center justify-between">
             <span className="text-[10px] font-mono font-semibold tracking-widest text-[#66645E] uppercase">Student Workspace</span>
@@ -1084,6 +1182,11 @@ export default function StudentDashboard() {
                   {user?.email || 'student@c4gt.in'}
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
+                  {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                    <span className="inline-block px-1.5 py-0.2 text-[9px] font-mono font-semibold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      LEAD
+                    </span>
+                  )}
                   <span className="inline-block px-1.5 py-0.2 text-[9px] font-mono font-semibold rounded bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
                     STUDENT
                   </span>
@@ -1132,6 +1235,18 @@ export default function StudentDashboard() {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
+            {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+              <Link
+                to="/teamlead"
+                className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                title="Switch to Team Lead Dashboard"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Team Lead Dashboard</span>
+                <ChevronRight className="w-3 h-3" />
+              </Link>
+            )}
+
             {/* Bell Notification Popover Container */}
             <div className="relative" ref={notificationsRef}>
               <button
@@ -1253,6 +1368,133 @@ export default function StudentDashboard() {
                   </p>
                 </div>
               </div>
+
+              {/* TEAM INVITATIONS BANNER (When student has pending invites) */}
+              {teamInvitations && teamInvitations.length > 0 && (
+                <div className="space-y-4">
+                  {teamInvitations.map((inv) => (
+                    <div
+                      key={inv._id}
+                      className="rounded-2xl bg-gradient-to-r from-amber-50 via-[#FFFDF5] to-orange-50 border-2 border-amber-300 p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-5 animate-in slide-in-from-top-3 duration-300"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-[#1C1B1A] text-white flex items-center justify-center flex-shrink-0 font-bold font-mono text-sm shadow-xs">
+                          {inv.teamId?.teamNumber || 'T'}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-mono font-bold uppercase tracking-wider">
+                              Team Invitation
+                            </span>
+                            <span className="text-xs text-[#66645E]">
+                              Capacity: {(inv.teamId?.members?.length || 0) + (inv.teamId?.teamLeadId ? 1 : 0)} / {inv.teamId?.maxMembers || 9}
+                            </span>
+                          </div>
+                          <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                            You have been invited to join {inv.teamId?.name || 'a Team'}!
+                          </h3>
+                          <p className="text-xs text-[#66645E]">
+                            <strong>{inv.teamLeadId?.name || 'Team Lead'}</strong> ({inv.teamLeadId?.email}) invited you to join their team for <strong>{inv.teamId?.track || 'Track'}</strong>.
+                          </p>
+                          {inv.message && (
+                            <div className="text-xs italic text-[#4A4843] bg-white/80 p-2.5 rounded-xl border border-amber-200/80 mt-1">
+                              "{inv.message}"
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 self-end md:self-center flex-shrink-0">
+                        <button
+                          onClick={() => handleRespondInvitation(inv._id, 'reject')}
+                          disabled={respondingInviteId === inv._id}
+                          className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] text-xs font-semibold text-[#66645E] hover:text-rose-600 transition-colors cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                        <button
+                          onClick={() => handleRespondInvitation(inv._id, 'accept')}
+                          disabled={respondingInviteId === inv._id}
+                          className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                        >
+                          {respondingInviteId === inv._id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          )}
+                          <span>Accept & Join Team</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* MY COHORT TEAM WIDGET (When user belongs to a team) */}
+              {studentTeam && (
+                <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E0DDD0]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#1C1B1A] text-white flex items-center justify-center font-bold font-mono text-sm">
+                        {studentTeam.teamNumber}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">
+                            MY COHORT TEAM
+                          </span>
+                          <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.2 rounded-full font-semibold">
+                            ACTIVE MEMBER
+                          </span>
+                        </div>
+                        <h3 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                          {studentTeam.name} • {studentTeam.track || 'Engineering Track'}
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="text-xs font-mono text-[#66645E] bg-[#F2EFE6] px-3 py-1 rounded-xl border border-[#E0DDD0]">
+                      Roster: {(studentTeam.members?.length || 0) + (studentTeam.teamLeadId ? 1 : 0)} / {studentTeam.maxMembers || 9} Members
+                    </div>
+                  </div>
+
+                  {/* Team Lead & Teammates List */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Team Lead */}
+                    <div className="p-3.5 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] text-xs">
+                      <span className="text-[10px] font-mono uppercase text-[#66645E]">Team Lead</span>
+                      <p className="font-bold text-[#1C1B1A] mt-1">{studentTeam.teamLeadId?.name || 'Assigned Lead'}</p>
+                      <p className="text-[11px] text-[#66645E] font-mono">{studentTeam.teamLeadId?.email}</p>
+                    </div>
+
+                    {/* Fellow Members Preview */}
+                    <div className="md:col-span-2 p-3.5 bg-white rounded-xl border border-[#E0DDD0] text-xs">
+                      <span className="text-[10px] font-mono uppercase text-[#66645E]">
+                        Team Members ({(studentTeam.members?.length || 0)} Joined)
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {studentTeam.members && studentTeam.members.length > 0 ? (
+                          studentTeam.members.map((m, idx) => (
+                            <span
+                              key={m._id || idx}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                                m._id === user?._id || m.email === user?.email
+                                  ? 'bg-[#1C1B1A] text-white border-black'
+                                  : 'bg-[#F8F6F0] text-[#1C1B1A] border-[#E0DDD0]'
+                              }`}
+                            >
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              {m.name || 'Student'} {m._id === user?._id ? '(You)' : ''}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-[#88867E] italic">You are the first member to join!</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 2. STATS CARDS GRID */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">

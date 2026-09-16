@@ -40,7 +40,12 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   if (allowedRoles && allowedRoles.length > 0) {
     const normalizedAllowedRoles = allowedRoles.map(normalizeRole);
 
-    if (!normalizedAllowedRoles.includes(userRole)) {
+    // Team Leads are students too! If a route allows 'student', team leads are authorized as well.
+    const isAuthorized =
+      normalizedAllowedRoles.includes(userRole) ||
+      (userRole === 'teamlead' && normalizedAllowedRoles.includes('student'));
+
+    if (!isAuthorized) {
       // Auto-redirect to the user's correct dashboard (handles DB role changes & manual URL entry)
       const dashboardPath = getDashboardPath(user.role);
       return <Navigate to={dashboardPath} replace />;
@@ -84,7 +89,10 @@ export function PublicRoute({ children }) {
       const userRole = normalizeRole(user.role);
       if (
         (userRole === 'admin' && fromPath.startsWith('/admin')) ||
-        (userRole === 'teamlead' && (fromPath.startsWith('/teamlead') || fromPath.startsWith('/team-lead'))) ||
+        (userRole === 'teamlead' &&
+          (fromPath.startsWith('/teamlead') ||
+            fromPath.startsWith('/team-lead') ||
+            fromPath.startsWith('/student'))) ||
         (userRole === 'student' && fromPath.startsWith('/student'))
       ) {
         targetPath = fromPath;

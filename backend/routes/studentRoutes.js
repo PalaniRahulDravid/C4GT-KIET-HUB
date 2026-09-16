@@ -6,6 +6,9 @@ const {
   getStudentStreak,
   getStudentResourceProgress,
   updateResourceProgress,
+  getStudentTeam,
+  getStudentInvitations,
+  respondToTeamInvitation,
 } = require('../controllers/studentController');
 const { protect } = require('../middleware/auth');
 
@@ -33,5 +36,10 @@ router.post('/resource-progress', updateResourceProgress);
 router.get('/notifications', getStudentNotifications);
 router.patch('/notifications/read-all', markAllNotificationsRead);
 router.patch('/notifications/:id/read', markNotificationRead);
+
+// Team & Invitation endpoints
+router.get('/team', getStudentTeam);
+router.get('/team-invitations', getStudentInvitations);
+router.post('/team-invitations/:id/respond', respondToTeamInvitation);
 
 module.exports = router;

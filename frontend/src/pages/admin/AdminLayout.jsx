@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, Home as HomeIcon, ChevronRight } from 'lucide-react';
+import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, Home as HomeIcon, ChevronRight, Award } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
 
 export default function AdminLayout() {
@@ -30,6 +30,12 @@ export default function AdminLayout() {
       icon: <Users className="w-4.5 h-4.5" />,
     },
     {
+      name: 'Cohort Teams (9)',
+      to: '/admin/teams',
+      description: '9 Teams & Lead Assignment',
+      icon: <Award className="w-4.5 h-4.5" />,
+    },
+    {
       name: 'Batches',
       to: '/admin/batches',
       description: 'Academic batches & teams',
@@ -47,7 +53,10 @@ export default function AdminLayout() {
     if (location.pathname === '/admin/users') {
       return { breadcrumb: 'Manage Users', title: 'Manage Users & Permissions' };
     }
-    if (location.pathname.startsWith('/admin/batches') || location.pathname === '/admin/teams') {
+    if (location.pathname === '/admin/teams') {
+      return { breadcrumb: 'Cohort Teams', title: '9 Cohort Teams & Roster Management' };
+    }
+    if (location.pathname.startsWith('/admin/batches')) {
       return { breadcrumb: 'Batches', title: 'Batches Workspace' };
     }
     if (location.pathname === '/admin/tasks') {

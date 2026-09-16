@@ -212,16 +212,29 @@ export default function RootLayout() {
                       )}
 
                       {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-                        <Link
-                          to="/team-lead"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
-                        >
-                          <svg className="w-4 h-4 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
-                          Team Lead Dashboard
-                        </Link>
+                        <>
+                          <Link
+                            to="/teamlead"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                          >
+                            <svg className="w-4 h-4 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Team Lead Dashboard
+                          </Link>
+                          <Link
+                            to="/student"
+                            onClick={() => setDropdownOpen(false)}
+                            className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                          >
+                            <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                            </svg>
+                            Student Dashboard
+                          </Link>
+                        </>
                       )}
 
                       {(user?.role === 'user' || user?.role === 'student' || !user?.role) && (
@@ -309,6 +322,46 @@ export default function RootLayout() {
                   >
                     Role: {getRoleName(user?.role)}
                   </span>
+                </div>
+
+                {/* Mobile Dashboard Links */}
+                <div className="py-1 space-y-1 border-b border-gray-100">
+                  {user?.role === 'admin' && (
+                    <Link
+                      to="/admin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block text-sm font-medium text-purple-700 py-1.5 hover:text-purple-900"
+                    >
+                      Admin Dashboard
+                    </Link>
+                  )}
+                  {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                    <>
+                      <Link
+                        to="/teamlead"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="block text-sm font-medium text-emerald-700 py-1.5 hover:text-emerald-900"
+                      >
+                        Team Lead Dashboard
+                      </Link>
+                      <Link
+                        to="/student"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="block text-sm font-medium text-blue-700 py-1.5 hover:text-blue-900"
+                      >
+                        Student Dashboard
+                      </Link>
+                    </>
+                  )}
+                  {(user?.role === 'user' || user?.role === 'student') && (
+                    <Link
+                      to="/student"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block text-sm font-medium text-blue-700 py-1.5 hover:text-blue-900"
+                    >
+                      Student Dashboard
+                    </Link>
+                  )}
                 </div>
 
                 <button
