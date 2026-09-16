@@ -9,7 +9,7 @@ const config = require('../config/env');
 const protect = async (req, res, next) => {
   let token;
 
-  // Extract from HTTP-only cookie first, then fallback to Authorization header
+  // Extract from HTTP-only cookie first, then Authorization header, then query parameter
   if (req.cookies && req.cookies.token) {
     token = req.cookies.token;
   } else if (
@@ -17,6 +17,8 @@ const protect = async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer ')
   ) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
   }
 
   if (!token) {

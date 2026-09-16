@@ -6,13 +6,18 @@ const {
   toggleResourceCompletion,
   recordResourceDownload,
   deleteResource,
+  streamResourceFile,
 } = require('../controllers/resourceController');
 const { protect, authorize } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 const router = express.Router();
 
-// Require authentication for all resource endpoints
+// Stream or download file directly with Cloudinary bypass
+router.get('/:id/file', streamResourceFile);
+router.get('/:id/download', streamResourceFile);
+
+// Require authentication for all protected management endpoints
 router.use(protect);
 
 // View and filter resources

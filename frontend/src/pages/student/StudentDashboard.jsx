@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
-import ResourceUploadModal from '../../components/ResourceUploadModal';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -11,181 +10,123 @@ import {
   SidebarLogo,
   SidebarSectionLabel,
   SidebarUser,
-  SidebarProvider,
-  useSidebar,
 } from '../../components/AceternitySidebar';
 import {
-  Calendar,
-  BookOpen,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  Loader2,
-  ListTodo,
-  TrendingUp,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Progress } from '../../components/ui/progress';
+import {
   LayoutDashboard,
   CheckSquare,
-  FolderKanban,
-  Flame,
-  ChevronRight,
-  ChevronDown,
+  BookOpen,
+  Users,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
   ExternalLink,
-  FileCode,
   FileText,
   FileSpreadsheet,
   Code2,
   GitBranch,
-  UploadCloud,
   Download,
   Search,
-  Filter,
-  Tag,
-  Video,
-  LogOut,
-  Home,
-  Menu,
-  X,
-  User,
-  Users,
-  Award,
-  ArrowRight,
+  Flame,
   Bell,
-  Activity,
-  PlayCircle,
-  Eye,
-  Mail,
+  LogOut,
+  User,
+  GraduationCap,
+  ChevronRight,
+  ShieldCheck,
+  ArrowRight,
+  Sparkles,
   Phone,
-  Send,
-  AlertTriangle,
+  Mail,
+  Calendar,
+  Layers,
+  X,
+  RefreshCw,
+  Award,
   Share2,
 } from 'lucide-react';
 
 export default function StudentDashboard() {
   const { user, token, logout, apiBaseUrl } = useAuth();
   const navigate = useNavigate();
-
-  // Mobile sidebar visibility toggle state
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
-  // Profile Details Modal State
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const profileDropdownRef = useRef(null);
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  useEffect(() => {
-    if (searchParams.get('profile') === 'true' || searchParams.get('tab') === 'profile') {
-      setShowProfileModal(true);
-    }
-  }, [searchParams]);
+  const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-  // Active Sidebar Navigation — derived from URL path (no local state needed)
-  const location = useLocation();
-  const activeNav = (() => {
-    const p = location.pathname;
+  // Navigation state derived from URL
+  const activeNav = useMemo(() => {
+    const p = location.pathname.toLowerCase();
     if (p.includes('/student/my-tasks')) return 'my-tasks';
-    if (p.includes('/student/progress')) return 'progress';
     if (p.includes('/student/resources')) return 'resources';
-    return 'dashboard';
-  })();
+    if (p.includes('/student/progress')) return 'progress';
+    return 'overview';
+  }, [location.pathname]);
 
   // Redirect bare /student to /student/overview
   useEffect(() => {
     if (location.pathname === '/student' || location.pathname === '/student/') {
       navigate('/student/overview', { replace: true });
     }
-  }, [location.pathname]);
+  }, [location.pathname, navigate]);
 
-  // Student Tasks & Resources State
+  // Mobile sidebar visibility
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Profile modal state
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  // Data states
   const [tasks, setTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(true);
-  const [tasksError, setTasksError] = useState(null);
-  const [expandedResources, setExpandedResources] = useState({});
-  const [taskFilter, setTaskFilter] = useState('all'); // 'all' | 'admin' | 'teamlead'
-  const [overviewTaskFilter, setOverviewTaskFilter] = useState('all'); // 'all' | 'admin' | 'teamlead'
-
-  // MY TASKS -> Selected Task Overview Modal State
-  const [selectedOverviewTask, setSelectedOverviewTask] = useState(null);
-
-  // AUTOMATIC TASK COMPLETION -> Resource Progress State (Persisted from MongoDB)
-  const [resourceProgressMap, setResourceProgressMap] = useState({});
-
-  // BELL NOTIFICATION POPOVER STATE
-  const [notificationsPopoverOpen, setNotificationsPopoverOpen] = useState(false);
-  const [notificationsList, setNotificationsList] = useState([]);
-  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
-  const notificationsRef = useRef(null);
-
-  // STUDENT COHORT TEAM & TEAM INVITATIONS STATE
+  const [streakData, setStreakData] = useState({ currentStreak: 0, todayActiveSeconds: 0 });
   const [studentTeam, setStudentTeam] = useState(null);
   const [teamInvitations, setTeamInvitations] = useState([]);
-  const [respondingInviteId, setRespondingInviteId] = useState(null);
-
-  // Active Media Viewer Modal State (Video / Document)
-  const [activeMediaResource, setActiveMediaResource] = useState(null);
-  const [videoWatchedSecs, setVideoWatchedSecs] = useState(0);
-  const [videoDurSecs, setVideoDurSecs] = useState(120);
-  const videoRef = useRef(null);
-  const lastHtml5TimeRef = useRef(0);
-  const ytPlayerRef = useRef(null);
-
-  // RESOURCE HUB & CLOUDINARY REPOSITORY STATE
   const [hubResources, setHubResources] = useState([]);
   const [loadingHubResources, setLoadingHubResources] = useState(true);
-  const [resourceCategoryFilter, setResourceCategoryFilter] = useState('all');
-  const [resourceTopicFilter, setResourceTopicFilter] = useState('all');
-  const [resourceSearchQuery, setResourceSearchQuery] = useState('');
-  const [resourceStats, setResourceStats] = useState({ total: 0, completed: 0, percentage: 0 });
-  const [availableResourceTopics, setAvailableResourceTopics] = useState([]);
-  const [togglingResourceId, setTogglingResourceId] = useState(null);
-  const [completionPromptResource, setCompletionPromptResource] = useState(null);
-  const [uploadResourceModalOpen, setUploadResourceModalOpen] = useState(false);
 
-  // Deliverables Submission State
+  // Notification state
+  const [notificationsList, setNotificationsList] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationsRef = useRef(null);
+
+  // Task filter & search
+  const [taskStatusFilter, setTaskStatusFilter] = useState('all'); // all, todo, submitted, completed
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
+
+  // Resources search & category
+  const [resourceCategory, setResourceCategory] = useState('all'); // all, docs, code, dsa
+  const [resourceSearch, setResourceSearch] = useState('');
+  const [togglingResourceId, setTogglingResourceId] = useState(null);
+
+  // Task Overview & Deliverables Modal
+  const [selectedTask, setSelectedTask] = useState(null);
   const [submissionDeliverables, setSubmissionDeliverables] = useState({});
   const [submissionNotes, setSubmissionNotes] = useState('');
   const [submittingDeliverables, setSubmittingDeliverables] = useState(false);
   const [submissionSuccessMessage, setSubmissionSuccessMessage] = useState(null);
 
-  // YouTube Helper & Time Format Utilities
-  const isYouTubeUrl = (url) => {
-    if (!url || typeof url !== 'string') return false;
-    return /youtube\.com|youtu\.be/.test(url);
-  };
+  // Check if user has dual teamlead role
+  const isTeamLead = user?.role === 'teamlead' || user?.role === 'team_lead';
 
-  const getYouTubeVideoId = (url) => {
-    if (!url || typeof url !== 'string') return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return match && match[2].length === 11 ? match[2] : null;
-  };
-
-  const formatTimeSecs = (secs) => {
-    const total = Math.max(0, Math.floor(Number(secs) || 0));
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
-
-  // Real 15-Minute Activity Streak State
-  const [streakData, setStreakData] = useState({
-    currentStreak: 0,
-    todayActiveSeconds: 0,
-    todayStreakCompleted: false,
-    weeklyActivity: [],
-  });
-
-  const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  // ---------------------------------------------------------------------------
+  // API Fetching
+  // ---------------------------------------------------------------------------
 
   const fetchStudentTasks = async () => {
     try {
       setLoadingTasks(true);
-      setTasksError(null);
       const res = await fetch(`${API_BASE_URL}/student/tasks`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -194,89 +135,12 @@ export default function StudentDashboard() {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.tasks)) {
           setTasks(data.tasks);
-        } else {
-          setTasks([]);
         }
-      } else {
-        setTasks([]);
       }
     } catch (err) {
-      console.error('Failed to load student tasks:', err);
-      setTasksError('Failed to connect to task service');
-      setTasks([]);
+      console.error('Failed to load tasks:', err);
     } finally {
       setLoadingTasks(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedOverviewTask) {
-      const existing = {};
-      const subs = selectedOverviewTask.assignment?.submissions || [];
-      subs.forEach((s) => {
-        if (s.deliverableName) {
-          existing[s.deliverableName] = s.link || s.fileUrl || '';
-        }
-      });
-      setSubmissionDeliverables(existing);
-      setSubmissionNotes(selectedOverviewTask.assignment?.submissionNotes || '');
-      setSubmissionSuccessMessage(null);
-    }
-  }, [selectedOverviewTask]);
-
-  const handleSubmitDeliverables = async (e) => {
-    if (e) e.preventDefault();
-    if (!selectedOverviewTask) return;
-
-    try {
-      setSubmittingDeliverables(true);
-      const reqDeliverables =
-        Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
-          ? selectedOverviewTask.deliverables
-          : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'];
-
-      const submissionsPayload = reqDeliverables.map((dName) => {
-        const name = typeof dName === 'string' ? dName : dName.name || 'Deliverable';
-        return {
-          deliverableName: name,
-          link: (submissionDeliverables[name] || '').trim(),
-        };
-      });
-
-      const res = await fetch(`${API_BASE_URL}/student/tasks/${selectedOverviewTask._id}/submit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          submissions: submissionsPayload,
-          submissionNotes,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setSubmissionSuccessMessage('Work submitted successfully! Your Team Lead has been notified for review.');
-        fetchStudentTasks();
-        setSelectedOverviewTask((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: 'submitted',
-                assignment: data.assignment,
-              }
-            : null
-        );
-      } else {
-        alert(data.message || 'Failed to submit deliverables');
-      }
-    } catch (err) {
-      console.error('Submit deliverables error:', err);
-      alert('Network error while submitting deliverables');
-    } finally {
-      setSubmittingDeliverables(false);
     }
   };
 
@@ -292,35 +156,50 @@ export default function StudentDashboard() {
           setStreakData({
             currentStreak: Number(data.currentStreak) || 0,
             todayActiveSeconds: Number(data.todayActiveSeconds) || 0,
-            todayStreakCompleted: Boolean(data.todayStreakCompleted),
-            weeklyActivity: Array.isArray(data.weeklyActivity) ? data.weeklyActivity : [],
           });
         }
       }
     } catch (err) {
-      console.error('Failed to load student streak:', err);
+      console.error('Failed to load streak:', err);
     }
   };
 
-  const fetchResourceProgress = async () => {
+  const fetchStudentTeam = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/student/resource-progress`, {
+      const res = await fetch(`${API_BASE_URL}/student/team`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && data.success && Array.isArray(data.progress)) {
-          const pMap = {};
-          data.progress.forEach((p) => {
-            const key = `${p.taskId}_${p.resourceId}`;
-            pMap[key] = p;
-          });
-          setResourceProgressMap(pMap);
+        if (data && data.success && data.hasTeam) {
+          setStudentTeam(data.team);
+        } else {
+          setStudentTeam(null);
         }
       }
     } catch (err) {
-      console.error('Failed to load resource progress:', err);
+      console.error('Failed to load team:', err);
+    }
+  };
+
+  const fetchHubResources = async () => {
+    try {
+      setLoadingHubResources(true);
+      const res = await fetch(`${API_BASE_URL}/resources`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.resources)) {
+          setHubResources(data.resources);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load resources:', err);
+    } finally {
+      setLoadingHubResources(false);
     }
   };
 
@@ -342,161 +221,103 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleMarkNotificationRead = async (notification) => {
-    if (!notification || !notification._id) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/student/notifications/${notification._id}/read`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNotificationsList((prev) =>
-          prev.map((n) => (n._id === notification._id ? { ...n, isRead: true } : n))
-        );
-        if (data && data.unreadCount !== undefined) {
-          setUnreadNotificationsCount(data.unreadCount);
-        } else {
-          setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
-        }
-      }
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err);
-    }
-
-    // Close popover and navigate/open overview modal for target task if available
-    setNotificationsPopoverOpen(false);
-    if (notification.taskId) {
-      const matchedTask = safeTasks.find(
-        (t) => t && (t._id === notification.taskId || String(t._id) === String(notification.taskId))
-      );
-      if (matchedTask) {
-        setSelectedOverviewTask(matchedTask);
-      }
-    }
-  };
-
-  const handleMarkAllNotificationsRead = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/student/notifications/read-all`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
-        setUnreadNotificationsCount(0);
-      }
-    } catch (err) {
-      console.error('Failed to mark all notifications as read:', err);
-    }
-  };
-
-  // Close notifications and profile popover when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-        setNotificationsPopoverOpen(false);
-      }
-      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
-        setProfileDropdownOpen(false);
+    fetchStudentTasks();
+    fetchStudentStreak();
+    fetchStudentTeam();
+    fetchHubResources();
+    fetchNotifications();
+  }, [user]);
+
+  // Close notifications popover on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+        setNotificationsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchStudentTeam = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/student/team`, {
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.hasTeam) {
-          setStudentTeam(data.team);
-        } else {
-          setStudentTeam(null);
+  // Pre-fill deliverables when modal opens
+  useEffect(() => {
+    if (selectedTask) {
+      const existing = {};
+      const subs = selectedTask.assignment?.submissions || [];
+      subs.forEach((s) => {
+        if (s.deliverableName) {
+          existing[s.deliverableName] = s.link || s.fileUrl || '';
         }
-      }
-    } catch (err) {
-      console.error('Failed to load student team:', err);
-    }
-  };
-
-  const fetchStudentInvitations = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/student/team-invitations`, {
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.invitations)) {
-          setTeamInvitations(data.invitations);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load team invitations:', err);
+      setSubmissionDeliverables(existing);
+      setSubmissionNotes(selectedTask.assignment?.submissionNotes || '');
+      setSubmissionSuccessMessage(null);
     }
-  };
+  }, [selectedTask]);
 
-  const handleRespondInvitation = async (invitationId, action) => {
+  // ---------------------------------------------------------------------------
+  // Action Handlers
+  // ---------------------------------------------------------------------------
+
+  const handleSubmitDeliverables = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedTask) return;
+
     try {
-      setRespondingInviteId(invitationId);
-      const res = await fetch(`${API_BASE_URL}/student/team-invitations/${invitationId}/respond`, {
+      setSubmittingDeliverables(true);
+      const reqDeliverables =
+        Array.isArray(selectedTask.deliverables) && selectedTask.deliverables.length > 0
+          ? selectedTask.deliverables
+          : ['Documentation / Spec', 'Demo / Presentation'];
+
+      const submissionsPayload = reqDeliverables.map((dName) => {
+        const name = typeof dName === 'string' ? dName : dName.name || 'Deliverable';
+        return {
+          deliverableName: name,
+          link: (submissionDeliverables[name] || '').trim(),
+        };
+      });
+
+      const res = await fetch(`${API_BASE_URL}/student/tasks/${selectedTask._id}/submit`, {
         method: 'POST',
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ action }),
+        credentials: 'include',
+        body: JSON.stringify({
+          submissions: submissionsPayload,
+          submissionNotes,
+        }),
       });
+
       const data = await res.json();
       if (res.ok && data.success) {
-        fetchStudentInvitations();
-        fetchStudentTeam();
-        fetchNotifications();
+        setSubmissionSuccessMessage('Work submitted successfully! Your Team Lead has been notified.');
+        fetchStudentTasks();
+        setSelectedTask((prev) =>
+          prev
+            ? {
+                ...prev,
+                assignment: {
+                  ...prev.assignment,
+                  status: 'submitted',
+                  submissions: submissionsPayload,
+                  submissionNotes,
+                  submittedAt: new Date().toISOString(),
+                },
+              }
+            : null
+        );
       } else {
-        alert(data.message || 'Failed to process team invitation');
+        alert(data.message || 'Failed to submit deliverables');
       }
     } catch (err) {
-      console.error('Failed to respond to team invitation:', err);
+      console.error('Submit deliverables error:', err);
+      alert('Network error while submitting deliverables');
     } finally {
-      setRespondingInviteId(null);
-    }
-  };
-
-  const fetchHubResources = async () => {
-    try {
-      setLoadingHubResources(true);
-      const res = await fetch(`${API_BASE_URL}/resources`, {
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success && Array.isArray(data.resources)) {
-          setHubResources(data.resources);
-          setResourceStats({
-            total: data.count || 0,
-            completed: data.completedCount || 0,
-            percentage: data.completionPercentage || 0,
-          });
-          if (Array.isArray(data.topics)) {
-            setAvailableResourceTopics(data.topics);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load learning resources:', err);
-    } finally {
-      setLoadingHubResources(false);
+      setSubmittingDeliverables(false);
     }
   };
 
@@ -519,16 +340,6 @@ export default function StudentDashboard() {
             r._id === resource._id ? { ...r, isCompleted: data.isCompleted } : r
           )
         );
-        setResourceStats((prev) => {
-          const newCompleted = data.isCompleted
-            ? prev.completed + 1
-            : Math.max(0, prev.completed - 1);
-          return {
-            ...prev,
-            completed: newCompleted,
-            percentage: prev.total > 0 ? Math.round((newCompleted / prev.total) * 100) : 0,
-          };
-        });
       }
     } catch (err) {
       console.error('Failed to toggle completion:', err);
@@ -537,1164 +348,140 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleDownloadOrOpenResource = async (resource) => {
+  const handleDownloadResource = (resource) => {
     if (!resource || !resource.url) return;
+    fetch(`${API_BASE_URL}/resources/${resource._id}/download`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).catch(() => {});
 
-    // Record download count in background
-    try {
-      fetch(`${API_BASE_URL}/resources/${resource._id}/download`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      setHubResources((prev) =>
-        prev.map((r) =>
-          r._id === resource._id ? { ...r, downloadsCount: (r.downloadsCount || 0) + 1 } : r
-        )
-      );
-    } catch (e) {}
-
-    // Open file or link in a new tab
     window.open(resource.url, '_blank', 'noopener,noreferrer');
-
-    // Prompt user to mark as completed if not completed yet
-    if (!resource.isCompleted) {
-      setCompletionPromptResource(resource);
-    }
   };
 
-  // Filtered Hub Resources
-  const filteredHubResources = hubResources.filter((resItem) => {
-    if (resourceCategoryFilter !== 'all') {
-      if (resourceCategoryFilter === 'files') {
-        if (!['doc', 'excel', 'pdf', 'image'].includes(resItem.type)) return false;
-      } else if (resourceCategoryFilter === 'links') {
-        if (!['git_repo', 'dsa_problem', 'link'].includes(resItem.type)) return false;
-      } else if (resItem.type !== resourceCategoryFilter) {
-        return false;
-      }
-    }
-
-    if (resourceTopicFilter !== 'all' && resItem.topic !== resourceTopicFilter) {
-      return false;
-    }
-
-    if (resourceSearchQuery.trim()) {
-      const q = resourceSearchQuery.toLowerCase().trim();
-      const matchTitle = resItem.title && resItem.title.toLowerCase().includes(q);
-      const matchTopic = resItem.topic && resItem.topic.toLowerCase().includes(q);
-      const matchDesc = resItem.description && resItem.description.toLowerCase().includes(q);
-      const matchFile = resItem.originalFilename && resItem.originalFilename.toLowerCase().includes(q);
-      if (!matchTitle && !matchTopic && !matchDesc && !matchFile) return false;
-    }
-
-    return true;
-  });
-
-  useEffect(() => {
-    fetchStudentTasks();
-    fetchStudentStreak();
-    fetchResourceProgress();
-    fetchNotifications();
-    fetchStudentTeam();
-    fetchStudentInvitations();
-    fetchHubResources();
-  }, [user]);
-
-  // Real Session Heartbeat Tracking
-  useEffect(() => {
-    if (!user) return;
-
-    const sendHeartbeat = async () => {
-      if (document.visibilityState !== 'visible') return;
-      try {
-        const res = await fetch(`${API_BASE_URL}/student/heartbeat`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ incrementSeconds: 30 }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success) {
-            setStreakData((prev) => {
-              const newTodaySecs = Number(data.activeSeconds) || 0;
-              const newIsCompleted = Boolean(data.isStreakCompleted);
-              const updatedWeekly = (prev.weeklyActivity || []).map((day) => {
-                if (day && day.isToday) {
-                  return {
-                    ...day,
-                    activeSeconds: newTodaySecs,
-                    isStreakCompleted: newIsCompleted,
-                  };
-                }
-                return day;
-              });
-
-              const newlyCompleted = newIsCompleted && !prev.todayStreakCompleted;
-              return {
-                ...prev,
-                todayActiveSeconds: newTodaySecs,
-                todayStreakCompleted: newIsCompleted,
-                currentStreak: newlyCompleted ? (prev.currentStreak || 0) + 1 : (prev.currentStreak || 0),
-                weeklyActivity: updatedWeekly,
-              };
-            });
-          }
-        }
-      } catch (err) {
-        // silent heartbeat error catching
-      }
-    };
-
-    const initialTimer = setTimeout(sendHeartbeat, 3000);
-    const interval = setInterval(sendHeartbeat, 30000);
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(interval);
-    };
-  }, [user, token]);
-
-  // Record resource progress & trigger automatic task status updates
-  const recordResourceProgress = async ({
-    taskId,
-    resourceId,
-    resourceType,
-    watchedSeconds = 0,
-    durationSeconds = 120,
-    totalTaskResourcesCount = 4,
-  }) => {
-    if (!taskId || !resourceId) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/student/resource-progress`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          taskId,
-          resourceId,
-          resourceType,
-          watchedSeconds,
-          durationSeconds,
-          totalTaskResourcesCount,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success && data.progress) {
-          const key = `${taskId}_${resourceId}`;
-          setResourceProgressMap((prev) => ({
-            ...prev,
-            [key]: data.progress,
-          }));
-
-          // If task status was automatically updated, update local tasks state
-          if (data.taskStatus) {
-            setTasks((prev) =>
-              prev.map((t) =>
-                t && (t._id === taskId || String(t._id) === String(taskId))
-                  ? {
-                      ...t,
-                      status: data.taskStatus,
-                      completedAt: data.isTaskCompleted ? new Date().toISOString() : t.completedAt,
-                    }
-                  : t
-              )
-            );
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Resource progress error:', err);
-    }
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
-  // Dynamically load YouTube IFrame API script
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      if (firstScriptTag && firstScriptTag.parentNode) {
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-      } else {
-        document.head.appendChild(tag);
+  // ---------------------------------------------------------------------------
+  // Derived Statistics
+  // ---------------------------------------------------------------------------
+
+  const taskStats = useMemo(() => {
+    const total = tasks.length;
+    const completed = tasks.filter(
+      (t) => t.assignment?.status === 'completed' || t.status === 'completed'
+    ).length;
+    const submitted = tasks.filter(
+      (t) => t.assignment?.status === 'submitted' || t.status === 'submitted'
+    ).length;
+    const pending = total - completed - submitted;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, submitted, pending, pct };
+  }, [tasks]);
+
+  const nextPriorityTask = useMemo(() => {
+    return (
+      tasks.find(
+        (t) =>
+          t.assignment?.status !== 'completed' &&
+          t.status !== 'completed' &&
+          t.assignment?.status !== 'submitted'
+      ) ||
+      tasks.find((t) => t.assignment?.status === 'submitted') ||
+      tasks[0] ||
+      null
+    );
+  }, [tasks]);
+
+  const completedResourcesCount = useMemo(() => {
+    return hubResources.filter((r) => r.isCompleted).length;
+  }, [hubResources]);
+
+  // Filtered tasks for "My Tasks"
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      const status = t.assignment?.status || t.status || 'pending';
+      if (taskStatusFilter === 'todo') {
+        if (status === 'completed' || status === 'submitted') return false;
+      } else if (taskStatusFilter === 'submitted') {
+        if (status !== 'submitted') return false;
+      } else if (taskStatusFilter === 'completed') {
+        if (status !== 'completed') return false;
       }
-    }
-  }, []);
 
-  // YouTube IFrame Player Lifecycle Management
-  useEffect(() => {
-    if (!activeMediaResource || activeMediaResource.type !== 'video') return;
-    const resUrl = activeMediaResource.url || activeMediaResource.name || '';
-    const yId = getYouTubeVideoId(resUrl);
-
-    if (!yId) return;
-
-    let player = null;
-    let interval = null;
-    let lastTime = 0;
-
-    const initYTPlayer = () => {
-      const container = document.getElementById('yt-player-iframe');
-      if (!container || !window.YT || !window.YT.Player) return;
-
-      try {
-        player = new window.YT.Player('yt-player-iframe', {
-          videoId: yId,
-          playerVars: {
-            autoplay: 1,
-            controls: 1,
-            rel: 0,
-          },
-          events: {
-            onReady: (event) => {
-              const dur = Math.floor(event.target.getDuration() || 0);
-              if (dur > 0) setVideoDurSecs(dur);
-            },
-            onStateChange: (event) => {
-              // YT.PlayerState.PLAYING === 1
-              if (event.data === 1) {
-                lastTime = player.getCurrentTime ? player.getCurrentTime() : 0;
-                if (interval) clearInterval(interval);
-                interval = setInterval(() => {
-                  if (!player || typeof player.getCurrentTime !== 'function') return;
-                  const curr = player.getCurrentTime();
-                  const delta = curr - lastTime;
-                  // Count ONLY actual linear playback time (delta between 0 and 2.5s)
-                  if (delta > 0 && delta <= 2.5) {
-                    setVideoWatchedSecs((prev) => {
-                      const next = prev + delta;
-                      const dur = Math.floor(player.getDuration ? player.getDuration() : videoDurSecs || 180);
-                      if (Math.floor(next) % 5 === 0 || next >= 0.5 * dur) {
-                        recordResourceProgress({
-                          taskId: activeMediaResource.task._id,
-                          resourceId: activeMediaResource.resourceId,
-                          resourceType: 'video',
-                          watchedSeconds: Math.floor(next),
-                          durationSeconds: dur,
-                          totalTaskResourcesCount: activeMediaResource.totalTaskResourcesCount,
-                        });
-                      }
-                      return next;
-                    });
-                  }
-                  lastTime = curr;
-                }, 1000);
-              } else {
-                // Paused, Ended, Buffering
-                if (interval) clearInterval(interval);
-              }
-            },
-          },
-        });
-        ytPlayerRef.current = player;
-      } catch (err) {
-        console.error('Failed to initialize YT Player:', err);
+      if (taskSearchQuery.trim()) {
+        const q = taskSearchQuery.toLowerCase();
+        const matchTitle = t.title?.toLowerCase().includes(q);
+        const matchDesc = t.description?.toLowerCase().includes(q);
+        const matchTopic = t.topic?.toLowerCase().includes(q);
+        if (!matchTitle && !matchDesc && !matchTopic) return false;
       }
-    };
-
-    const timerId = setTimeout(initYTPlayer, 150);
-
-    return () => {
-      clearTimeout(timerId);
-      if (interval) clearInterval(interval);
-      if (player && typeof player.destroy === 'function') {
-        player.destroy();
-      }
-    };
-  }, [activeMediaResource]);
-
-  // Open Media Resource Viewer Modal
-  const openMediaResource = (task, resourceItem, index) => {
-    if (!task || !resourceItem) return;
-    let nameStr = typeof resourceItem === 'string' ? resourceItem : resourceItem.name || resourceItem.title || 'Deliverable Spec';
-    let resUrl = typeof resourceItem === 'object' && resourceItem.url ? resourceItem.url : '';
-    let lower = (nameStr + ' ' + resUrl).toLowerCase();
-    let type = lower.includes('demo') || lower.includes('video') || lower.includes('youtube') || lower.includes('youtu.be') ? 'video' : lower.includes('pdf') ? 'pdf' : lower.includes('code') || lower.includes('repo') ? 'link' : 'note';
-
-    const rId = `res-${index}`;
-    const key = `${task._id}_${rId}`;
-    const existing = resourceProgressMap[key];
-
-    setActiveMediaResource({
-      task,
-      resourceId: rId,
-      name: nameStr,
-      url: resUrl,
-      type,
-      totalTaskResourcesCount: Array.isArray(task.deliverables) && task.deliverables.length > 0 ? task.deliverables.length : 4,
+      return true;
     });
+  }, [tasks, taskStatusFilter, taskSearchQuery]);
 
-    if (type === 'video') {
-      const initWatched = existing ? existing.watchedSeconds || 0 : 0;
-      const initDur = existing ? existing.durationSeconds || 180 : 180;
-      setVideoWatchedSecs(initWatched);
-      setVideoDurSecs(initDur);
-      lastHtml5TimeRef.current = 0;
-    } else {
-      // Document/Link: auto mark as viewed/completed immediately upon opening
-      recordResourceProgress({
-        taskId: task._id,
-        resourceId: rId,
-        resourceType: type,
-        watchedSeconds: 0,
-        durationSeconds: 0,
-        totalTaskResourcesCount: Array.isArray(task.deliverables) && task.deliverables.length > 0 ? task.deliverables.length : 4,
-      });
-    }
-  };
-
-  // Close Media Resource Viewer Modal & Save Final Progress
-  const closeMediaResource = () => {
-    if (activeMediaResource && activeMediaResource.type === 'video') {
-      recordResourceProgress({
-        taskId: activeMediaResource.task._id,
-        resourceId: activeMediaResource.resourceId,
-        resourceType: 'video',
-        watchedSeconds: Math.floor(videoWatchedSecs),
-        durationSeconds: Math.floor(videoDurSecs),
-        totalTaskResourcesCount: activeMediaResource.totalTaskResourcesCount,
-      });
-    }
-    setActiveMediaResource(null);
-  };
-
-  // Handle HTML5 Video playback progress tracking (Actual linear time only, no seeking forward)
-  const handleHtml5TimeUpdate = (e) => {
-    if (!activeMediaResource || activeMediaResource.type !== 'video') return;
-    const vid = e.target;
-    if (!vid) return;
-
-    const current = vid.currentTime;
-    const duration = Math.floor(vid.duration || videoDurSecs);
-    const delta = current - lastHtml5TimeRef.current;
-
-    // Count ONLY actual playback time: not paused, not seeking, delta between 0 and 2.5s
-    if (!vid.paused && !vid.seeking && delta > 0 && delta <= 2.5) {
-      setVideoWatchedSecs((prev) => {
-        const next = prev + delta;
-        if (duration > 0) setVideoDurSecs(duration);
-        if (Math.floor(next) % 5 === 0 || next >= 0.5 * duration) {
-          recordResourceProgress({
-            taskId: activeMediaResource.task._id,
-            resourceId: activeMediaResource.resourceId,
-            resourceType: 'video',
-            watchedSeconds: Math.floor(next),
-            durationSeconds: duration,
-            totalTaskResourcesCount: activeMediaResource.totalTaskResourcesCount,
-          });
-        }
-        return next;
-      });
-    }
-    lastHtml5TimeRef.current = current;
-  };
-
-  // Toggle expanded resources for a task
-  const toggleTaskResources = (taskId) => {
-    if (!taskId) return;
-    setExpandedResources((prev) => ({
-      ...prev,
-      [taskId]: !prev[taskId],
-    }));
-  };
-
-  const safeTasks = Array.isArray(tasks) ? tasks.filter(Boolean) : [];
-
-  // Categorize tasks into Admin Tasks and Team Lead Tasks
-  const isTeamLeadTask = (t) => {
-    const role = t?.createdBy?.role;
-    return role === 'teamlead' || role === 'team_lead';
-  };
-
-  const adminTasks = safeTasks.filter((t) => !isTeamLeadTask(t));
-  const teamLeadTasks = safeTasks.filter((t) => isTeamLeadTask(t));
-
-  // Task & Statistics Calculations (Real Data)
-  const totalTasks = safeTasks.length;
-  const completedTasksCount = safeTasks.filter((t) => t.status === 'completed').length;
-  const inProgressTasksCount = safeTasks.filter(
-    (t) => t.status === 'in_progress' || (t.status !== 'completed' && t.status !== 'not_completed')
-  ).length;
-
-  // Due Soon: Pending tasks with deadline within the next 5 days
-  const dueSoonTasksCount = safeTasks.filter((t) => {
-    if (t.status === 'completed' || !t.deadline) return false;
-    try {
-      const diffMs = new Date(t.deadline).getTime() - new Date().getTime();
-      const diffDays = diffMs / (1000 * 60 * 60 * 24);
-      return diffDays >= -1 && diffDays <= 5;
-    } catch {
-      return false;
-    }
-  }).length;
-
-  // Overall Completion Percentage
-  const overallProgressPercentage = totalTasks > 0
-    ? Math.round((completedTasksCount / totalTasks) * 100)
-    : 0;
-
-  // Pending / Incomplete Tasks sorted by deadline
-  const incompleteTasks = safeTasks
-    .filter((t) => t.status !== 'completed')
-    .sort((a, b) => {
-      const dateA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-      const dateB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-      return (isNaN(dateA) ? Infinity : dateA) - (isNaN(dateB) ? Infinity : dateB);
-    });
-
-  // Prominent Priority / Continue Task (Nearest incomplete task or first task)
-  const priorityTask = incompleteTasks.length > 0 ? incompleteTasks[0] : (safeTasks[0] || null);
-
-  // Recent Tasks preview list (up to 4 tasks)
-  const myTasksPreviewList = safeTasks.slice(0, 4);
-
-  // Extract all deliverables across assigned tasks for Recent Resources Preview
-  const allResources = [];
-  safeTasks.forEach((task) => {
-    const list = Array.isArray(task.deliverables) && task.deliverables.length > 0
-      ? task.deliverables
-      : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'];
-
-    list.forEach((item, idx) => {
-      let itemName = 'Deliverable Spec';
-      if (typeof item === 'string') {
-        itemName = item;
-      } else if (item && typeof item === 'object') {
-        itemName = item.name || item.title || item.label || 'Deliverable Spec';
+  // Filtered resources for "Resources"
+  const filteredResources = useMemo(() => {
+    return hubResources.filter((r) => {
+      if (resourceCategory === 'docs') {
+        if (!['doc', 'pdf', 'excel'].includes(r.type)) return false;
+      } else if (resourceCategory === 'code') {
+        if (!['git_repo', 'link'].includes(r.type)) return false;
+      } else if (resourceCategory === 'dsa') {
+        if (r.type !== 'dsa_problem') return false;
       }
-      allResources.push({
-        name: String(itemName),
-        taskTitle: typeof task.title === 'string' ? task.title : 'Engineering Task',
-        taskId: task._id ? String(task._id) : 'task',
-        taskObj: task,
-        resourceIndex: idx,
-      });
+
+      if (resourceSearch.trim()) {
+        const q = resourceSearch.toLowerCase();
+        const matchTitle = r.title?.toLowerCase().includes(q);
+        const matchDesc = r.description?.toLowerCase().includes(q);
+        const matchTopic = r.topic?.toLowerCase().includes(q);
+        if (!matchTitle && !matchDesc && !matchTopic) return false;
+      }
+      return true;
     });
-  });
-  const recentResourcesPreview = allResources.slice(0, 4);
+  }, [hubResources, resourceCategory, resourceSearch]);
 
-  // Dynamic Subject/Domain Task Progress Breakdown (Requirement 2)
-  const subjectMap = {};
-  safeTasks.forEach((t) => {
-    const domain = t.topic && typeof t.topic === 'string' && t.topic.trim() ? t.topic.trim() : 'Engineering Track';
-    if (!subjectMap[domain]) {
-      subjectMap[domain] = { total: 0, completed: 0, inProgress: 0, pending: 0 };
-    }
-    subjectMap[domain].total += 1;
-    if (t.status === 'completed') {
-      subjectMap[domain].completed += 1;
-    } else if (t.status === 'in_progress') {
-      subjectMap[domain].inProgress += 1;
-    } else {
-      subjectMap[domain].pending += 1;
-    }
-  });
-
-  const subjectList = Object.keys(subjectMap).map((subject) => {
-    const { total, completed, inProgress, pending } = subjectMap[subject];
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { subject, total, completed, inProgress, pending, percentage };
-  });
-
-  // Derived Recent Activity Log from real student data
-  const recentActivityLog = [];
-  safeTasks.forEach((t, idx) => {
-    const tId = t._id ? String(t._id) : `t-${idx}`;
-    const titleStr = typeof t.title === 'string' ? t.title : 'Task';
-    if (t.status === 'completed' && t.completedAt) {
-      recentActivityLog.push({
-        id: `act-${tId}`,
-        title: `Completed task: ${titleStr}`,
-        time: formatDate(t.completedAt),
-        type: 'completed',
-      });
-    } else {
-      recentActivityLog.push({
-        id: `act-assign-${tId}`,
-        title: `Assigned task: ${titleStr}`,
-        time: formatDate(t.createdAt || t.deadline),
-        type: 'assigned',
-      });
-    }
-  });
-  if (streakData && streakData.currentStreak > 0) {
-    recentActivityLog.unshift({
-      id: 'act-streak',
-      title: `Achieved ${streakData.currentStreak}-day activity streak milestone 🔥`,
-      time: 'Today',
-      type: 'streak',
-    });
-  }
-  const activityLogPreview = recentActivityLog.slice(0, 4);
-
-  function formatDate(dateStr) {
-    if (!dateStr) return 'N/A';
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return String(dateStr);
-      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    } catch {
-      return String(dateStr);
-    }
-  }
-
-  function getInitials(name) {
-    if (!name || typeof name !== 'string') return 'ST';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
-  }
-
-  // 4 Student Sidebar Items (Overview, My Tasks, Progress, Resources)
-  const sidebarNavItems = [
-    {
-      id: 'dashboard',
-      path: '/student/overview',
-      name: 'Overview',
-      description: 'Overview & learning workspace',
-      icon: <LayoutDashboard className="w-4.5 h-4.5" />,
-    },
-    {
-      id: 'my-tasks',
-      path: '/student/my-tasks',
-      name: 'My Tasks',
-      description: 'All assigned tasks & specs',
-      icon: <CheckSquare className="w-4.5 h-4.5" />,
-    },
-    {
-      id: 'progress',
-      path: '/student/progress',
-      name: 'Progress',
-      description: 'Status & completion tracking',
-      icon: <TrendingUp className="w-4.5 h-4.5" />,
-    },
-    {
-      id: 'resources',
-      path: '/student/resources',
-      name: 'Resources',
-      description: 'Cloudinary files, DSA & Git repos',
-      icon: <FolderKanban className="w-4.5 h-4.5" />,
-    },
-  ];
-
-  const getPageInfo = () => {
-    switch (activeNav) {
-      case 'my-tasks':
-        return { breadcrumb: 'My Tasks', title: 'My Tasks' };
-      case 'progress':
-        return { breadcrumb: 'Progress', title: 'Progress' };
-      case 'resources':
-        return { breadcrumb: 'Resources', title: 'Learning Resources' };
-      case 'dashboard':
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'completed':
+        return <Badge variant="success">✓ Completed</Badge>;
+      case 'submitted':
+        return <Badge variant="warning">⏳ Awaiting Review</Badge>;
+      case 'revision_requested':
+        return <Badge variant="destructive">⚠️ Revision Needed</Badge>;
       default:
-        return { breadcrumb: 'Overview', title: 'Overview' };
+        return <Badge variant="secondary">To Do</Badge>;
     }
   };
 
-  const pageInfo = getPageInfo();
-
-  const getTaskResourceIcon = (type) => {
+  const getResourceIcon = (type) => {
     switch (type) {
       case 'doc':
-        return <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
-      case 'excel':
-        return <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
       case 'pdf':
-        return <FileText className="w-3.5 h-3.5 text-rose-600 shrink-0" />;
-      case 'image':
-        return <UploadCloud className="w-3.5 h-3.5 text-purple-600 shrink-0" />;
+        return <FileText className="w-5 h-5 text-blue-600" />;
+      case 'excel':
+        return <FileSpreadsheet className="w-5 h-5 text-emerald-600" />;
       case 'dsa_problem':
-        return <Code2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+        return <Code2 className="w-5 h-5 text-amber-600" />;
       case 'git_repo':
-        return <GitBranch className="w-3.5 h-3.5 text-slate-800 shrink-0" />;
+        return <GitBranch className="w-5 h-5 text-slate-800" />;
       default:
-        return <ExternalLink className="w-3.5 h-3.5 text-indigo-600 shrink-0" />;
+        return <BookOpen className="w-5 h-5 text-indigo-600" />;
     }
   };
 
-  // Helper renderer for consistent, interactive task cards — clean simple design
-  const renderTaskCard = (task, idx, type) => {
-    if (!task) return null;
-    const isCompleted = task.status === 'completed';
-    const isSubmitted = task.status === 'submitted';
-    const isRevision = task.status === 'revision_requested';
-    const isLeadTask = type === 'teamlead' || isTeamLeadTask(task);
-    const accentColor = isLeadTask ? '#10b981' : '#7c3aed';
-
-    return (
-      <div
-        key={task._id || idx}
-        onClick={() => setSelectedOverviewTask(task)}
-        className="bg-white border border-slate-200 rounded-xl hover:border-slate-300 hover:shadow-md transition-all cursor-pointer group overflow-hidden"
-        style={{ borderLeft: `4px solid ${accentColor}` }}
-      >
-        <div className="p-5">
-          {/* Title + Status row */}
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <h4 className="text-[15px] font-semibold text-gray-900 leading-snug flex-1">
-              {task.title}
-            </h4>
-            <span
-              className={`shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-full border ${
-                isCompleted
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : isSubmitted
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : isRevision
-                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : 'bg-amber-50 text-amber-700 border-amber-200'
-              }`}
-            >
-              {isCompleted ? '✓ Completed' : isSubmitted ? '⏳ Awaiting Review' : isRevision ? '⚠️ Revision Needed' : 'In Progress'}
-            </span>
-          </div>
-
-          {/* Description */}
-          {task.description && (
-            <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-3">
-              {task.description}
-            </p>
-          )}
-
-          {/* Connected Resources Direct Links */}
-          {Array.isArray(task.relatedResources) && task.relatedResources.length > 0 && (
-            <div className="mb-3 pt-2.5 border-t border-slate-100 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-              <div className="text-[11px] font-mono uppercase text-slate-500 font-semibold flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <UploadCloud className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Attached Study Resources ({task.relatedResources.length}):</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">Click to see / download</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {task.relatedResources.map((resItem) => {
-                  if (!resItem || !resItem._id) return null;
-                  const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
-                  return (
-                    <a
-                      key={resItem._id}
-                      href={resItem.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download={isFile}
-                      onClick={() => handleDownloadOrOpenResource(resItem)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-50 border border-slate-200 hover:bg-white hover:border-slate-400 text-slate-800 transition shadow-2xs group cursor-pointer"
-                      title={resItem.title}
-                    >
-                      {getTaskResourceIcon(resItem.type)}
-                      <span className="truncate max-w-[150px] font-semibold">{resItem.title}</span>
-                      {isFile ? (
-                        <Download className="w-3 h-3 text-slate-400 group-hover:text-black" />
-                      ) : (
-                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-black" />
-                      )}
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
-            <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-              {task.topic && (
-                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">
-                  {task.topic}
-                </span>
-              )}
-              <span>
-                By <strong className="text-gray-700">{task.createdBy?.name || (isLeadTask ? 'Team Lead' : 'Admin')}</strong>
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-gray-400 font-mono">
-                Due {formatDate(task.deadline)}
-              </span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setSelectedOverviewTask(task); }}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-black transition-colors cursor-pointer"
-              >
-                View
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-
   return (
-    <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-[#F7F5EE] font-sans antialiased text-[#1C1B1A] select-none overflow-hidden">
-      {/* Profile Details Modal */}
-      <ProfileDetailsModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-      />
-
-      {/* ==================== TASK OVERVIEW MODAL (Requirement 1) ==================== */}
-      {selectedOverviewTask && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-[700px] w-full p-6 sm:p-8 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#E0DDD0] pb-4">
-              <div className="flex items-center gap-2.5">
-                <span className={`w-3 h-3 rounded-full ${selectedOverviewTask.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#66645E]">
-                  Task Overview Specs
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedOverviewTask(null)}
-                className="p-1 rounded-lg text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
-                  {selectedOverviewTask.topic || 'Engineering Track'}
-                </span>
-                <span
-                  className={`px-2.5 py-0.5 text-[10px] font-mono font-bold rounded-full border ${
-                    isTeamLeadTask(selectedOverviewTask)
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : 'bg-purple-50 text-purple-800 border-purple-200'
-                  }`}
-                >
-                  {isTeamLeadTask(selectedOverviewTask) ? 'Team Lead Task' : 'Admin Task'}
-                </span>
-                {selectedOverviewTask.priority && (
-                  <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-amber-50 text-amber-900 rounded-full border border-amber-200">
-                    {selectedOverviewTask.priority} Priority
-                  </span>
-                )}
-                <span className={`px-2.5 py-0.5 text-[10px] font-mono font-bold rounded-full border ${selectedOverviewTask.status === 'completed' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
-                  {selectedOverviewTask.status === 'completed' ? '✓ Completed' : 'Pending / In Progress'}
-                </span>
-              </div>
-              <h2 className="text- font-bold text-[#1C1B1A]">
-                {selectedOverviewTask.title}
-              </h2>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs font-mono font-bold uppercase text-[#66645E]">Task Description:</div>
-              <p className="text-sm text-[#66645E] leading-relaxed bg-[#F4F1E8]/60 p-4 rounded-xl border border-[#E0DDD0] whitespace-pre-wrap">
-                {selectedOverviewTask.description || 'No additional specification details provided.'}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-              <div className="p-3 bg-white rounded-xl border border-[#E0DDD0] space-y-1">
-                <div className="text-[#66645E]">Deadline Date:</div>
-                <div className="font-bold text-[#1C1B1A] flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-[#1C1B1A]" />
-                  {formatDate(selectedOverviewTask.deadline)}
-                </div>
-              </div>
-              <div className="p-3 bg-white rounded-xl border border-[#E0DDD0] space-y-1">
-                <div className="text-[#66645E]">Assigned By:</div>
-                <div className="font-bold text-[#1C1B1A] flex items-center gap-1.5">
-                  <span>{selectedOverviewTask.createdBy?.name || (isTeamLeadTask(selectedOverviewTask) ? 'Team Lead' : 'Platform Admin')}</span>
-                  <span
-                    className={`px-1.5 py-0.2 text-[9px] font-mono font-bold rounded ${
-                      isTeamLeadTask(selectedOverviewTask)
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-purple-100 text-purple-800'
-                    }`}
-                  >
-                    {isTeamLeadTask(selectedOverviewTask) ? 'TEAM LEAD' : 'ADMIN'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs font-mono font-bold uppercase text-[#66645E]">Assigned Deliverables / Requirements:</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {(Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
-                  ? selectedOverviewTask.deliverables
-                  : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation']
-                ).map((deliv, dIdx) => (
-                  <div key={dIdx} className="p-3 bg-white border border-[#E0DDD0] rounded-xl flex items-center gap-2 text-xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="font-medium text-[#1C1B1A]">{typeof deliv === 'string' ? deliv : deliv.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ================= SUBMIT DELIVERABLES SECTION (Requirement: Doc & Presentation Google Drive Links) ================= */}
-            <div className="space-y-3 p-5 bg-gradient-to-br from-emerald-50/70 via-[#FDFCF9] to-blue-50/60 rounded-2xl border-2 border-emerald-200/80 shadow-xs">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="text-xs font-mono font-bold uppercase text-[#1C1B1A] flex items-center gap-2">
-                  <UploadCloud className="w-4 h-4 text-emerald-600" />
-                  <span>Submit Required Deliverables (Google Drive &amp; Project Links):</span>
-                </div>
-                <span className="text-[10px] font-mono text-emerald-800 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold">
-                  Google Drive / Docs / Slides
-                </span>
-              </div>
-
-              <p className="text-xs text-[#66645E] leading-relaxed">
-                Please upload your documentation, presentations, or demo videos to Google Drive, ensure link sharing is set to <strong className="text-[#1C1B1A]">"Anyone with the link can view"</strong>, and paste the URLs below. Your Team Lead will review and mark your milestone completed.
-              </p>
-
-              {/* Status Alert Banner */}
-              {selectedOverviewTask.status === 'completed' ? (
-                <div className="p-3 bg-emerald-100/80 rounded-xl border border-emerald-300 text-xs text-emerald-900 flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold">✓ Task Approved &amp; Marked Completed!</div>
-                    <div className="text-[11px] text-emerald-800 mt-0.5">
-                      {selectedOverviewTask.assignment?.reviewedBy?.name
-                        ? `Reviewed and accepted by ${selectedOverviewTask.assignment.reviewedBy.name}`
-                        : 'Reviewed and accepted by your Team Lead'}
-                      {selectedOverviewTask.assignment?.reviewNotes && ` — "${selectedOverviewTask.assignment.reviewNotes}"`}
-                    </div>
-                  </div>
-                </div>
-              ) : selectedOverviewTask.status === 'submitted' ? (
-                <div className="p-3 bg-blue-100/80 rounded-xl border border-blue-300 text-xs text-blue-900 flex items-start gap-2.5">
-                  <Clock className="w-4 h-4 text-blue-700 shrink-0 mt-0.5 animate-pulse" />
-                  <div>
-                    <div className="font-bold">Deliverables Submitted — Awaiting Team Lead Review</div>
-                    <div className="text-[11px] text-blue-800 mt-0.5">
-                      Your Google Drive links are submitted. Once your Team Lead inspects and accepts them, your progress will update automatically. You can update your links below anytime.
-                    </div>
-                  </div>
-                </div>
-              ) : selectedOverviewTask.status === 'revision_requested' ? (
-                <div className="p-3 bg-amber-100/80 rounded-xl border border-amber-300 text-xs text-amber-900 flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold">Team Lead Requested Updates / Revision:</div>
-                    <div className="text-[11px] text-amber-800 mt-0.5">
-                      {selectedOverviewTask.assignment?.reviewNotes || 'Please check your submitted links and update your deliverables below.'}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Submission Inputs for each deliverable */}
-              <form onSubmit={handleSubmitDeliverables} className="space-y-3 pt-1">
-                <div className="space-y-2.5">
-                  {(Array.isArray(selectedOverviewTask.deliverables) && selectedOverviewTask.deliverables.length > 0
-                    ? selectedOverviewTask.deliverables
-                    : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation']
-                  ).map((delivItem, dIdx) => {
-                    const dName = typeof delivItem === 'string' ? delivItem : delivItem.name || 'Deliverable';
-                    const isDoc = dName.toLowerCase().includes('doc') || dName.toLowerCase().includes('spec');
-                    const isPres = dName.toLowerCase().includes('demo') || dName.toLowerCase().includes('presentation');
-                    const isGit = dName.toLowerCase().includes('repo') || dName.toLowerCase().includes('pull') || dName.toLowerCase().includes('github');
-                    const currentVal = submissionDeliverables[dName] || '';
-
-                    return (
-                      <div key={dIdx} className="p-3 bg-white border border-[#E0DDD0] rounded-xl space-y-1.5 shadow-2xs">
-                        <div className="flex items-center justify-between text-xs">
-                          <label className="font-bold text-[#1C1B1A] flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full ${isPres ? 'bg-amber-500' : isDoc ? 'bg-blue-500' : 'bg-emerald-500'}`} />
-                            <span>{dName}</span>
-                            {isDoc && (
-                              <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
-                                Google Drive Doc
-                              </span>
-                            )}
-                            {isPres && (
-                              <span className="text-[10px] font-mono text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                                Google Drive Presentation
-                              </span>
-                            )}
-                          </label>
-                          {currentVal && (
-                            <a
-                              href={currentVal}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] text-emerald-700 hover:underline inline-flex items-center gap-1 font-mono font-medium"
-                            >
-                              <span>Preview Link</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
-
-                        <div className="relative">
-                          <input
-                            type="url"
-                            value={currentVal}
-                            onChange={(e) =>
-                              setSubmissionDeliverables((prev) => ({
-                                ...prev,
-                                [dName]: e.target.value,
-                              }))
-                            }
-                            placeholder={
-                              isDoc
-                                ? 'https://docs.google.com/document/d/... (Google Drive Doc shareable link)'
-                                : isPres
-                                ? 'https://docs.google.com/presentation/d/... (Google Drive Slides shareable link)'
-                                : isGit
-                                ? 'https://github.com/... (GitHub repository or PR link)'
-                                : 'https://... (Google Drive or project web URL)'
-                            }
-                            className="w-full text-xs px-3 py-2 rounded-lg border border-[#E0DDD0] bg-[#FDFCF9] text-[#1C1B1A] font-mono focus:outline-none focus:border-emerald-600 transition"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Optional Notes */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-mono font-bold text-[#66645E] uppercase block">
-                    Submission Remarks / Notes for Team Lead (Optional):
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={submissionNotes}
-                    onChange={(e) => setSubmissionNotes(e.target.value)}
-                    placeholder="e.g. Completed documentation draft on Google Docs and demo presentation deck for sprint review..."
-                    className="w-full text-xs p-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:outline-none focus:border-emerald-600 transition"
-                  />
-                </div>
-
-                {/* Submit button */}
-                <div className="flex items-center justify-between pt-1">
-                  {submissionSuccessMessage && (
-                    <span className="text-xs font-mono font-semibold text-emerald-700 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{submissionSuccessMessage}</span>
-                    </span>
-                  )}
-                  <div className="ml-auto">
-                    <button
-                      type="submit"
-                      disabled={submittingDeliverables}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {submittingDeliverables ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-                      <span>
-                        {selectedOverviewTask.status === 'completed'
-                          ? 'Update Deliverables Links'
-                          : selectedOverviewTask.status === 'submitted'
-                          ? 'Update Submitted Links'
-                          : selectedOverviewTask.status === 'revision_requested'
-                          ? 'Resubmit Updated Work'
-                          : 'Submit Deliverables for Team Lead Review'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            {/* Connected Study Resources & Materials (Direct connect with uploaded resources so students can click, see, and download) */}
-            {Array.isArray(selectedOverviewTask.relatedResources) && selectedOverviewTask.relatedResources.length > 0 && (
-              <div className="space-y-2.5 p-4 bg-gradient-to-r from-sky-50 via-[#FDFCF9] to-indigo-50/40 rounded-2xl border border-sky-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-mono font-bold uppercase text-sky-950 flex items-center gap-1.5">
-                    <UploadCloud className="w-4 h-4 text-sky-600" />
-                    <span>Connected Learning Resources ({selectedOverviewTask.relatedResources.length}):</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-sky-700 bg-white px-2 py-0.5 rounded-full border border-sky-200">
-                    Direct Access & Download
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {selectedOverviewTask.relatedResources.map((resItem) => {
-                    if (!resItem || !resItem._id) return null;
-                    const isFile = ['pdf', 'doc', 'excel', 'image'].includes(resItem.type);
-                    return (
-                      <div
-                        key={resItem._id}
-                        className="p-3 bg-white border border-sky-200 rounded-xl flex items-center justify-between gap-3 shadow-xs hover:border-sky-400 transition group"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
-                            {getTaskResourceIcon(resItem.type)}
-                          </div>
-                          <div className="truncate">
-                            <div className="text-xs font-bold text-[#1C1B1A] truncate">{resItem.title}</div>
-                            <div className="text-[10px] text-[#66645E] font-mono truncate">
-                              {resItem.topic || 'Resource'} {resItem.fileFormat ? `• ${resItem.fileFormat.toUpperCase()}` : ''}
-                            </div>
-                          </div>
-                        </div>
-
-                        <a
-                          href={resItem.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={isFile}
-                          onClick={() => handleDownloadOrOpenResource(resItem)}
-                          className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
-                        >
-                          {isFile ? (
-                            <>
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Download</span>
-                            </>
-                          ) : (
-                            <>
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              <span>Open</span>
-                            </>
-                          )}
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-3 border-t border-[#E0DDD0]">
-              <button
-                type="button"
-                onClick={() => setSelectedOverviewTask(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-[#E0DDD0] text-[#1C1B1A] hover:bg-[#F8F6F0] cursor-pointer"
-              >
-                Close Overview
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedResourceTaskId(selectedOverviewTask._id);
-                  setSelectedOverviewTask(null);
-                  navigate('/student/resources');
-                }}
-                className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-[#1C1B1A] text-white hover:bg-black transition-colors shadow-2xs flex items-center gap-2 cursor-pointer"
-              >
-                <FolderKanban className="w-4 h-4" />
-                <span>View Task Resources ({Array.isArray(selectedOverviewTask.deliverables) ? selectedOverviewTask.deliverables.length : 4})</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== ACTIVE MEDIA RESOURCE VIEWER MODAL (Requirement 3) ==================== */}
-      {activeMediaResource && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-[760px] w-full p-6 sm:p-8 space-y-5 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-[#E0DDD0] pb-4">
-              <div className="flex items-center gap-2.5">
-                {activeMediaResource.type === 'video' ? (
-                  <Video className="w-5 h-5 text-indigo-600" />
-                ) : (
-                  <FileText className="w-5 h-5 text-emerald-600" />
-                )}
-                <div>
-                  <h3 className="font-bold text-sm text-[#1C1B1A]">{activeMediaResource.name}</h3>
-                  <p className="text-[11px] text-[#66645E]">Task: {activeMediaResource.task.title}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveMediaResource(null)}
-                className="p-1 rounded-lg text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {activeMediaResource.type === 'video' ? (
-              <div className="space-y-4">
-                <div className="relative aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center border border-[#E0DDD0]">
-                  <video
-                    ref={videoRef}
-                    controls
-                    onTimeUpdate={handleVideoTimeUpdate}
-                    className="w-full h-full object-contain"
-                    src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-                  >
-                    Your browser does not support HTML5 video playback.
-                  </video>
-                </div>
-
-                <div className="bg-[#EEECDF]/80 border border-[#E0DDD0] p-4 rounded-xl space-y-2 text-xs">
-                  <div className="flex items-center justify-between font-mono">
-                    <span className="font-bold text-[#1C1B1A]">Automatic Video Completion Requirement:</span>
-                    <span className="font-bold text-[#1C1B1A]">
-                      Watched: {Math.floor(videoWatchedSecs / 60)}m {videoWatchedSecs % 60}s / {Math.floor(videoDurSecs / 60)}m {videoDurSecs % 60}s
-                    </span>
-                  </div>
-
-                  <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-300 ${videoWatchedSecs >= 0.5 * videoDurSecs ? 'bg-emerald-600' : 'bg-amber-500'}`}
-                      style={{ width: `${Math.min(100, Math.round((videoWatchedSecs / (videoDurSecs || 1)) * 100))}%` }}
-                    />
-                  </div>
-
-                  <p className="text-[11px] text-[#66645E]">
-                    {videoWatchedSecs >= 0.5 * videoDurSecs
-                      ? '✓ 50%+ Watch Goal Reached! This video resource is marked completed.'
-                      : `Must watch at least 50% (${Math.ceil(0.5 * videoDurSecs)} seconds) of the total video duration to automatically mark as completed.`}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 p-6 bg-[#F4F1E8]/60 border border-[#E0DDD0] rounded-xl text-center space-y-3">
-                <FileCode className="w-10 h-10 text-[#1C1B1A] mx-auto" />
-                <h4 className="font-sans text-xl font-bold text-[#1C1B1A]">{activeMediaResource.name}</h4>
-                <p className="text-xs text-[#66645E] max-w-md mx-auto leading-relaxed">
-                  Resource spec opened and verified. Viewing this document has automatically recorded your completion progress in MongoDB Atlas.
-                </p>
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Resource Verified &amp; Completed
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2 border-t border-[#E0DDD0]">
-              <button
-                type="button"
-                onClick={() => setActiveMediaResource(null)}
-                className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black cursor-pointer shadow-2xs"
-              >
-                Done Viewing
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== ACETERNITY COLLAPSIBLE SIDEBAR ==================== */}
+    <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-slate-50/60 font-sans text-slate-900 overflow-hidden">
+      {/* Sidebar Navigation */}
       <Sidebar open={mobileSidebarOpen} setOpen={setMobileSidebarOpen} animate={true}>
         <SidebarBody className="bg-neutral-900 border-r border-neutral-800 h-full flex flex-col justify-between">
-          {/* Top: logo + nav */}
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
-            {/* Logo */}
             <SidebarLogo
               logo={{
-                href: '/student/overview',
+                href: '/student',
                 icon: (
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 border border-white/10 shadow-xs">
                     <C4GTLogo showText={false} imgClassName="h-7" />
@@ -1702,160 +489,155 @@ export default function StudentDashboard() {
                 ),
                 label: 'C4GT KIET HUB',
                 badge: 'STUDENT',
-                sublabel: 'Workspace',
+                sublabel: studentTeam?.name || 'Workspace',
               }}
               className="mb-4"
             />
 
-            {/* Section label */}
             <SidebarSectionLabel label="Student Workspace" />
 
-            {/* Nav links */}
             <nav className="mt-2 space-y-1">
-              {sidebarNavItems.map((item) => {
-                const isActive = activeNav === item.id;
-                return (
-                  <SidebarLink
-                    key={item.id}
-                    link={{
-                      href: item.path,
-                      label: item.name,
-                      icon: (
-                        <span className={`w-5 h-5 flex items-center justify-center ${isActive ? 'text-white' : 'text-neutral-400'}`}>
-                          {item.icon}
-                        </span>
-                      ),
-                      badge: item.id === 'my-tasks' ? totalTasks : undefined,
-                    }}
-                    isActive={isActive}
-                    onClick={() => setMobileSidebarOpen(false)}
-                  />
-                );
-              })}
+              <SidebarLink
+                link={{
+                  href: '/student/overview',
+                  label: 'Overview',
+                  icon: <LayoutDashboard className="w-4 h-4" />,
+                }}
+                isActive={activeNav === 'overview'}
+                onClick={() => {
+                  navigate('/student/overview');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/student/my-tasks',
+                  label: 'My Tasks',
+                  icon: <CheckSquare className="w-4 h-4" />,
+                  badge: taskStats.pending > 0 ? taskStats.pending : undefined,
+                }}
+                isActive={activeNav === 'my-tasks'}
+                onClick={() => {
+                  navigate('/student/my-tasks');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/student/resources',
+                  label: 'Learning Resources',
+                  icon: <BookOpen className="w-4 h-4" />,
+                  badge: hubResources.length > 0 ? hubResources.length : undefined,
+                }}
+                isActive={activeNav === 'resources'}
+                onClick={() => {
+                  navigate('/student/resources');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/student/progress',
+                  label: 'My Team & Progress',
+                  icon: <Users className="w-4 h-4" />,
+                }}
+                isActive={activeNav === 'progress'}
+                onClick={() => {
+                  navigate('/student/progress');
+                  setMobileSidebarOpen(false);
+                }}
+              />
             </nav>
 
-            {/* Divider */}
-            <div className="mx-2 my-4 border-t border-neutral-800/80" />
-
-            {/* Exit to Main Site */}
-            <SidebarLink
-              link={{
-                href: '/',
-                label: 'Exit to Main Site',
-                icon: <Home className="w-5 h-5 text-neutral-400" />,
-              }}
-              onClick={() => setMobileSidebarOpen(false)}
-            />
+            {isTeamLead && (
+              <>
+                <SidebarSectionLabel label="Lead Role" />
+                <nav className="mt-1 space-y-1">
+                  <SidebarLink
+                    link={{
+                      href: '/teamlead/tasks',
+                      label: 'Team Lead Workspace',
+                      icon: <ShieldCheck className="w-4 h-4 text-amber-600" />,
+                    }}
+                    isActive={false}
+                    onClick={() => setMobileSidebarOpen(false)}
+                  />
+                </nav>
+              </>
+            )}
           </div>
 
-          {/* Bottom: User profile */}
           <SidebarUser
             user={user}
-            getInitials={getInitials}
+            getInitials={(name) => (name ? name.slice(0, 2).toUpperCase() : 'ST')}
             onProfileClick={() => setShowProfileModal(true)}
             onLogout={handleLogout}
           />
         </SidebarBody>
       </Sidebar>
 
-      {/* ==================== MAIN CONTENT AREA ==================== */}
-      <div className="flex-1 h-screen flex flex-col overflow-hidden min-w-0">
-        {/* Sticky Header */}
-        <header className="h-[84px] bg-[#F9F8F3]/95 backdrop-blur-md border-b border-[#E2DDD0] px-6 sm:px-8 flex items-center justify-between flex-shrink-0 shadow-2xs z-20">
-          <div className="flex items-center gap-4">
+      {/* Main Workspace Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* Top Header Bar */}
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 sm:px-8 backdrop-blur-xs">
+          <div className="flex items-center gap-3">
             <button
-              type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl text-[#1C1B1A] hover:bg-black/5 cursor-pointer"
-              aria-label="Open sidebar"
+              className="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100"
             >
-              <Menu className="w-6 h-6" />
+              <LayoutDashboard className="w-5 h-5" />
             </button>
-
             <div>
-              <div className="flex items-center gap-2 text-xs text-[#66645E] font-medium mb-1">
-                <Link to="/student" className="hover:text-[#1C1B1A] transition-colors">
-                  Student Workspace
-                </Link>
-                <span className="text-[#9E9C94]">/</span>
-                <span className="text-[#1C1B1A] font-semibold">{pageInfo.breadcrumb}</span>
-              </div>
-              <h1 className="text-2xl sm:text-[28px] lg:text-[30px] font-bold text-[#1C1B1A] tracking-tight leading-none">
-                {pageInfo.title}
+              <div className="text-xs text-slate-500 font-medium">Cohort 2026 – 2027</div>
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 capitalize">
+                {activeNav === 'overview' && 'Student Overview'}
+                {activeNav === 'my-tasks' && 'My Tasks & Deliverables'}
+                {activeNav === 'resources' && 'Learning Resources Hub'}
+                {activeNav === 'progress' && 'Team Progress & Roster'}
               </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
-            {/* Bell Notification Popover Container */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Daily Streak Badge */}
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold shadow-2xs"
+              title="Daily Active Streak"
+            >
+              <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <span>{streakData.currentStreak} Day Streak</span>
+            </div>
+
+            {/* Notifications Bell */}
             <div className="relative" ref={notificationsRef}>
               <button
-                type="button"
-                onClick={() => setNotificationsPopoverOpen((prev) => !prev)}
-                className="relative p-2 rounded-full text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 transition-colors border border-[#E0DDD0] bg-white shadow-2xs cursor-pointer flex items-center justify-center"
-                title="Notifications & Alerts"
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="relative p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors"
+                aria-label="Notifications"
               >
-                <Bell className="w-4 h-4 text-[#1C1B1A]" />
+                <Bell className="w-4 h-4" />
                 {unreadNotificationsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-mono font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white animate-pulse">
-                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
-                  </span>
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
                 )}
               </button>
 
-              {/* Notification Dropdown Popover */}
-              {notificationsPopoverOpen && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xl z-50 overflow-hidden animate-in fade-in duration-150">
-                  <div className="p-4 border-b border-[#E0DDD0] flex items-center justify-between bg-[#F4F1E8]/70">
-                    <div className="flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-[#1C1B1A]" />
-                      <span className="font-sans text-lg font-bold text-[#1C1B1A]">Notifications</span>
-                      {unreadNotificationsCount > 0 && (
-                        <span className="text-[10px] font-mono font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full border border-rose-200">
-                          {unreadNotificationsCount} Unread
-                        </span>
-                      )}
-                    </div>
-                    {unreadNotificationsCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleMarkAllNotificationsRead}
-                        className="text-[11px] font-mono font-semibold text-[#1C1B1A] hover:underline cursor-pointer"
-                      >
-                        Mark all read
-                      </button>
-                    )}
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg z-50 animate-in fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-xs font-bold text-slate-900">Notifications</span>
+                    <span className="text-[11px] text-slate-500">{unreadNotificationsCount} unread</span>
                   </div>
-
-                  <div className="max-h-80 overflow-y-auto divide-y divide-[#E0DDD0]/60 p-2">
+                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 py-1">
                     {notificationsList.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-[#66645E]">
-                        No notifications available right now.
-                      </div>
+                      <div className="py-4 text-center text-xs text-slate-500">No new notifications</div>
                     ) : (
                       notificationsList.map((n) => (
-                        <div
-                          key={n._id}
-                          onClick={() => handleMarkNotificationRead(n)}
-                          className={`p-3 rounded-xl transition-colors cursor-pointer text-xs space-y-1.5 ${
-                            !n.isRead ? 'bg-[#EEECDF]/80 hover:bg-[#EEECDF]' : 'hover:bg-[#F4F1E8]/60'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${!n.isRead ? 'bg-rose-500' : 'bg-[#E0DDD0]'}`} />
-                              <span className="font-bold text-[#1C1B1A] truncate">{n.title}</span>
-                            </div>
-                            <span className="text-[10px] font-mono text-[#66645E] shrink-0">{formatDate(n.createdAt)}</span>
-                          </div>
-                          <p className="text-[#66645E] text-[11px] leading-relaxed pl-3.5">
-                            {n.message}
-                          </p>
-                          {n.deadline && (
-                            <div className="text-[10px] font-mono text-[#1C1B1A] pl-3.5">
-                              Due: {formatDate(n.deadline)}
-                            </div>
-                          )}
+                        <div key={n._id} className="py-2 text-xs">
+                          <p className="font-semibold text-slate-900">{n.title || 'Update'}</p>
+                          <p className="text-slate-500 text-[11px]">{n.message}</p>
                         </div>
                       ))
                     )}
@@ -1864,1529 +646,819 @@ export default function StudentDashboard() {
               )}
             </div>
 
-            {/* Top Profile Header with Dropdown (Switch to Team Lead & Profile Routes) */}
-            <div className="relative" ref={profileDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setProfileDropdownOpen((prev) => !prev)}
-                className={`flex items-center gap-2.5 p-1.5 pr-3 rounded-full hover:bg-black/5 transition-all cursor-pointer border ${
-                  profileDropdownOpen ? 'border-[#1C1B1A] ring-2 ring-black/5 bg-[#F4F1E8]' : 'border-[#E0DDD0] bg-white'
-                } shadow-2xs`}
-                title="Account & Navigation Menu"
+            {/* Team Lead switch button if applicable */}
+            {isTeamLead && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/teamlead/tasks')}
+                className="hidden sm:inline-flex text-xs font-semibold text-amber-800 border-amber-200 bg-amber-50/50 hover:bg-amber-100/60"
               >
-                {user?.avatar ? (
-                  <img src={user.avatar} alt={user.name || 'User'} className="w-8 h-8 rounded-full object-cover border border-[#E0DDD0]" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-[#1C1B1A] text-white font-bold flex items-center justify-center text-xs shadow-2xs">
-                    {getInitials(user?.name)}
-                  </div>
-                )}
-                <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-[#1C1B1A] leading-tight flex items-center gap-1.5">
-                    <span className="truncate max-w-[110px]">{user?.name || 'Student'}</span>
-                    {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-                      <span className="px-1.5 py-0.2 text-[8px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        LEAD
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-[10px] text-[#66645E] font-medium leading-tight">
-                    {user?.role === 'teamlead' || user?.role === 'team_lead' ? 'Team Lead & Student' : 'Student Account'}
-                  </p>
-                </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-[#66645E] transition-transform duration-200 ${profileDropdownOpen ? 'rotate-180 text-[#1C1B1A]' : ''}`} />
-              </button>
-
-              {/* Profile Dropdown Popover */}
-              {profileDropdownOpen && (
-                <div className="absolute right-0 mt-3 w-72 sm:w-80 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                  {/* User Profile Header Card */}
-                  <div className="p-4 border-b border-[#E0DDD0] bg-[#F4F1E8]/70">
-                    <div className="flex items-center gap-3">
-                      {user?.avatar ? (
-                        <img src={user.avatar} alt={user.name || 'User'} className="w-10 h-10 rounded-full object-cover border border-[#E0DDD0]" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-[#1C1B1A] text-white font-bold flex items-center justify-center text-sm shadow-2xs">
-                          {getInitials(user?.name)}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-sm text-[#1C1B1A] truncate">{user?.name || 'Student Account'}</div>
-                        <div className="text-[11px] text-[#66645E] font-mono truncate">{user?.email || 'student@c4gt.in'}</div>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-                            <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              TEAM LEAD
-                            </span>
-                          )}
-                          <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
-                            STUDENT
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Navigation & Actions */}
-                  <div className="p-2 space-y-1">
-                    {/* Switch to Team Lead Route (for Team Leads) */}
-                    {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-                      <Link
-                        to="/teamlead"
-                        onClick={() => setProfileDropdownOpen(false)}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-emerald-50/80 to-[#F7FDF9] hover:from-emerald-100/90 hover:to-emerald-50 border border-emerald-200/80 text-emerald-950 transition-all group cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform">
-                            <Users className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-emerald-900 leading-tight flex items-center gap-1.5">
-                              Switch to Team Lead
-                              <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-200/80 text-emerald-900">
-                                Portal
-                              </span>
-                            </p>
-                            <p className="text-[10px] text-emerald-700/90">Manage roster, invite members & tasks</p>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-emerald-700 group-hover:translate-x-0.5 transition-transform" />
-                      </Link>
-                    )}
-
-                    {/* Profile Route / Details */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        setShowProfileModal(true);
-                      }}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F2EFE6] text-[#1C1B1A] transition-colors group cursor-pointer text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-[#E0DDD0] text-[#1C1B1A] flex items-center justify-center shadow-2xs group-hover:bg-[#1C1B1A] group-hover:text-white transition-colors">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-[#1C1B1A] leading-tight">My Profile</p>
-                          <p className="text-[10px] text-[#66645E]">View & edit student details and track</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-[#9E9C94] group-hover:text-[#1C1B1A] group-hover:translate-x-0.5 transition-all" />
-                    </button>
-
-                    {/* Exit to Main Site */}
-                    <Link
-                      to="/"
-                      onClick={() => setProfileDropdownOpen(false)}
-                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F2EFE6] text-[#1C1B1A] transition-colors group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-[#E0DDD0] text-[#66645E] flex items-center justify-center shadow-2xs group-hover:text-[#1C1B1A]">
-                          <Home className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-[#1C1B1A] leading-tight">Exit to Main Site</p>
-                          <p className="text-[10px] text-[#66645E]">Return to public LMS landing page</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-[#9E9C94] group-hover:text-[#1C1B1A] group-hover:translate-x-0.5 transition-all" />
-                    </Link>
-                  </div>
-
-                  {/* Sign Out Action */}
-                  <div className="p-2 border-t border-[#E0DDD0] bg-[#F4F1E8]/30">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        handleLogout();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
-                    >
-                      <LogOut className="w-4 h-4 text-rose-500" />
-                      <span>Sign Out</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600 mr-1.5" />
+                Team Lead Portal
+              </Button>
+            )}
           </div>
         </header>
 
-        {/* Scrollable Main Content */}
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-8">
-          {/* TAB 1: DASHBOARD OVERVIEW */}
-          {activeNav === 'dashboard' && (
-            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
-              
-              {/* 1. GREETING HERO BANNER */}
-              <div className="relative rounded-2xl bg-gradient-to-r from-[#EBF3EA]/60 via-[#F8F6F0] to-[#FCEEE9]/50 border border-[#E0DDD0] p-8 text-[#1C1B1A] overflow-hidden shadow-2xs">
-                <div className="relative z-10 max-w-[680px] space-y-3">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-black/10 text-[11px] font-mono font-semibold tracking-wider uppercase shadow-2xs text-[#1C1B1A]">
-                    <Sparkles className="w-3.5 h-3.5 text-[#1C1B1A]" />
-                    Learning Platform Workspace
+        {/* Workspace Body */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8">
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* ============================================================= */}
+            {/* VIEW 1: OVERVIEW */}
+            {/* ============================================================= */}
+            {activeNav === 'overview' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {/* Welcome Card */}
+                <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+                      Welcome back, {user?.name || 'Developer'}! 👋
+                    </h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {studentTeam
+                        ? `${studentTeam.name} • ${studentTeam.track || 'Engineering Track'}`
+                        : 'Cohort 2026 – 2027 • Track your progress and submit deliverables.'}
+                    </p>
                   </div>
-                  <h2 className="font-bold tracking-tight text-3xl sm:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
-                    Welcome back, {user?.name || 'Student'}!
-                  </h2>
-                  <p className="text-[#66645E] text-sm leading-relaxed">
-                    Here is your task-focused learning overview. Track admin-assigned tasks, upcoming deadlines, sprint deliverables, and your activity progress.
-                  </p>
+                  <Button
+                    onClick={() => navigate('/student/my-tasks')}
+                    className="self-start sm:self-auto gap-2"
+                  >
+                    <span>View All Tasks</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
                 </div>
-              </div>
 
-              {/* TEAM INVITATIONS BANNER (When student has pending invites) */}
-              {teamInvitations && teamInvitations.length > 0 && (
-                <div className="space-y-4">
-                  {teamInvitations.map((inv) => (
-                    <div
-                      key={inv._id}
-                      className="rounded-2xl bg-gradient-to-r from-amber-50 via-[#FFFDF5] to-orange-50 border-2 border-amber-300 p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-5 animate-in slide-in-from-top-3 duration-300"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-[#1C1B1A] text-white flex items-center justify-center flex-shrink-0 font-bold font-mono text-sm shadow-xs">
-                          {inv.teamId?.teamNumber || 'T'}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-mono font-bold uppercase tracking-wider">
-                              Team Invitation
-                            </span>
-                            <span className="text-xs text-[#66645E]">
-                              Capacity: {(inv.teamId?.members?.length || 0) + (inv.teamId?.teamLeadId ? 1 : 0)} / {inv.teamId?.maxMembers || 9}
-                            </span>
-                          </div>
-                          <h3 className="text- font-bold text-[#1C1B1A]">
-                            You have been invited to join {inv.teamId?.name || 'a Team'}!
-                          </h3>
-                          <p className="text-xs text-[#66645E]">
-                            <strong>{inv.teamLeadId?.name || 'Team Lead'}</strong> ({inv.teamLeadId?.email}) invited you to join their team for <strong>{inv.teamId?.track || 'Track'}</strong>.
-                          </p>
-                          {inv.message && (
-                            <div className="text-xs italic text-[#4A4843] bg-white/80 p-2.5 rounded-xl border border-amber-200/80 mt-1">
-                              "{inv.message}"
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                {/* 3 Core Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Tasks Completed
+                      </CardDescription>
+                      <CardTitle className="text-2xl font-bold text-slate-900">
+                        {taskStats.completed} / {taskStats.total}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Progress value={taskStats.pct} className="h-1.5" />
+                      <p className="text-xs text-slate-500 mt-2 font-medium">
+                        {taskStats.pct}% of assigned deliverables submitted & verified
+                      </p>
+                    </CardContent>
+                  </Card>
 
-                      <div className="flex items-center gap-3 self-end md:self-center flex-shrink-0">
-                        <button
-                          onClick={() => handleRespondInvitation(inv._id, 'reject')}
-                          disabled={respondingInviteId === inv._id}
-                          className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] text-xs font-semibold text-[#66645E] hover:text-rose-600 transition-colors cursor-pointer"
-                        >
-                          Decline
-                        </button>
-                        <button
-                          onClick={() => handleRespondInvitation(inv._id, 'accept')}
-                          disabled={respondingInviteId === inv._id}
-                          className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
-                        >
-                          {respondingInviteId === inv._id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          )}
-                          <span>Accept & Join Team</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Active Daily Streak
+                      </CardDescription>
+                      <CardTitle className="text-2xl font-bold text-amber-600 flex items-center gap-2">
+                        <Flame className="w-6 h-6 fill-amber-500 text-amber-500" />
+                        <span>{streakData.currentStreak} Days</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Keep active daily on learning materials to maintain momentum!
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Resources Completed
+                      </CardDescription>
+                      <CardTitle className="text-2xl font-bold text-slate-900">
+                        {completedResourcesCount} / {hubResources.length}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Progress
+                        value={
+                          hubResources.length > 0
+                            ? Math.round((completedResourcesCount / hubResources.length) * 100)
+                            : 0
+                        }
+                        className="h-1.5"
+                      />
+                      <p className="text-xs text-slate-500 mt-2 font-medium">
+                        Study guides, DSA problems, and documentation explored
+                      </p>
+                    </CardContent>
+                  </Card>
                 </div>
-              )}
 
-              {/* MY COHORT TEAM WIDGET (When user belongs to a team) */}
-              {studentTeam && (
-                <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E0DDD0]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[#1C1B1A] text-white flex items-center justify-center font-bold font-mono text-sm">
-                        {studentTeam.teamNumber}
+                {/* Next Action Priority Card */}
+                {nextPriorityTask ? (
+                  <Card className="border-slate-300 shadow-xs">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="default">Priority Action Item</Badge>
+                        <span className="text-xs font-mono font-medium text-slate-500 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          Due: {new Date(nextPriorityTask.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                        </span>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">
-                            MY COHORT TEAM
-                          </span>
-                          <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.2 rounded-full font-semibold">
-                            ACTIVE MEMBER
-                          </span>
-                        </div>
-                        <h3 className="text- font-bold text-[#1C1B1A]">
-                          {studentTeam.name} • {studentTeam.track || 'Engineering Track'}
-                        </h3>
-                      </div>
-                    </div>
+                      <CardTitle className="text-lg font-bold text-slate-900 mt-2">
+                        {nextPriorityTask.title}
+                      </CardTitle>
+                      <CardDescription className="text-sm text-slate-600 line-clamp-2">
+                        {nextPriorityTask.description}
+                      </CardDescription>
+                    </CardHeader>
 
-                    <div className="text-xs font-mono text-[#66645E] bg-[#F2EFE6] px-3 py-1 rounded-xl border border-[#E0DDD0]">
-                      Roster: {(studentTeam.members?.length || 0) + (studentTeam.teamLeadId ? 1 : 0)} / {studentTeam.maxMembers || 9} Members
-                    </div>
-                  </div>
-
-                  {/* Team Lead & Teammates List */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Team Lead */}
-                    <div className="p-3.5 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] text-xs space-y-1">
-                      <span className="text-[10px] font-mono uppercase text-[#66645E]">Team Lead</span>
-                      <p className="font-bold text-[#1C1B1A]">{studentTeam.teamLeadId?.name || 'Assigned Lead'}</p>
-                      {studentTeam.teamLeadId?.email && (
-                        <p className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1">
-                          <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
-                          <a href={`mailto:${studentTeam.teamLeadId.email}`} className="hover:underline">
-                            {studentTeam.teamLeadId.email}
-                          </a>
-                        </p>
-                      )}
-                      {(studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber) && (
-                        <p className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1 font-medium">
-                          <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
-                          <a
-                            href={`tel:${studentTeam.teamLeadId.phone || studentTeam.teamLeadId.phoneNumber}`}
-                            className="hover:underline font-semibold"
-                          >
-                            {studentTeam.teamLeadId.phone || studentTeam.teamLeadId.phoneNumber}
-                          </a>
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Fellow Members Preview */}
-                    <div className="md:col-span-2 p-3.5 bg-white rounded-xl border border-[#E0DDD0] text-xs">
-                      <span className="text-[10px] font-mono uppercase text-[#66645E]">
-                        Team Members ({(studentTeam.members?.length || 0)} Joined)
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                        {studentTeam.members && studentTeam.members.length > 0 ? (
-                          studentTeam.members.map((m, idx) => (
-                            <div
-                              key={m._id || idx}
-                              className={`p-2.5 rounded-xl text-xs border flex flex-col justify-between ${
-                                m._id === user?._id || m.email === user?.email
-                                  ? 'bg-[#1C1B1A] text-white border-black shadow-xs'
-                                  : 'bg-[#FDFCF9] text-[#1C1B1A] border-[#E0DDD0]'
-                              }`}
+                    <CardContent className="space-y-3 pb-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-slate-500">Required Deliverables:</span>
+                        {Array.isArray(nextPriorityTask.deliverables) && nextPriorityTask.deliverables.length > 0 ? (
+                          nextPriorityTask.deliverables.map((d, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium"
                             >
-                              <div className="flex items-center justify-between gap-1">
-                                <span className="font-bold truncate">
-                                  {m.name || 'Student'} {m._id === user?._id ? '(You)' : ''}
-                                </span>
-                                <span className={`text-[10px] font-mono ${m._id === user?._id ? 'text-amber-300 font-semibold' : 'text-[#88867E]'}`}>
-                                  {m.rollNumber || ''}
-                                </span>
-                              </div>
-                              <div className="mt-1 space-y-0.5">
-                                <div className={`text-[10px] font-mono truncate flex items-center gap-1 ${m._id === user?._id ? 'text-gray-300' : 'text-[#66645E]'}`}>
-                                  <Mail className="w-2.5 h-2.5 shrink-0 opacity-70" />
-                                  <span className="truncate">{m.email}</span>
-                                </div>
-                                {(m.phone || m.phoneNumber) && (
-                                  <div className={`text-[10px] font-mono truncate flex items-center gap-1 ${m._id === user?._id ? 'text-emerald-300' : 'text-emerald-700 font-medium'}`}>
-                                    <Phone className="w-2.5 h-2.5 shrink-0" />
-                                    <span>{m.phone || m.phoneNumber}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                              {typeof d === 'string' ? d : d.name}
+                            </span>
                           ))
                         ) : (
-                          <span className="text-[11px] text-[#88867E] italic">You are the first member to join!</span>
+                          <>
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
+                              Documentation (Google Doc)
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
+                              Presentation (Google Slides)
+                            </span>
+                          </>
                         )}
                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+                    </CardContent>
 
-              {/* 2. STATS CARDS GRID */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-                {/* Total Tasks */}
-                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Total Tasks</span>
-                    <div className="w-8 h-8 rounded-xl bg-[#1C1B1A] text-white flex items-center justify-center shadow-2xs">
-                      <ListTodo className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{totalTasks}</div>
-                    <span className="text-[11px] font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
-                      Assigned
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#66645E] mt-1 font-mono">
-                    {adminTasks.length} Admin • {teamLeadTasks.length} Team Lead
-                  </p>
-                </div>
-
-                {/* Completed */}
-                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Completed</span>
-                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center border border-emerald-200">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{completedTasksCount}</div>
-                    <span className="text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                      Finished
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#66645E] mt-1">Successfully completed</p>
-                </div>
-
-                {/* In Progress */}
-                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">In Progress</span>
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center border border-amber-200">
-                      <Clock className="w-4 h-4 text-amber-700" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{inProgressTasksCount}</div>
-                    <span className="text-[11px] font-mono font-medium text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                      Active
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#66645E] mt-1">Tasks underway</p>
-                </div>
-
-                {/* Due Soon */}
-                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Due Soon</span>
-                    <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-800 flex items-center justify-center border border-rose-200">
-                      <Calendar className="w-4 h-4 text-rose-700" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{dueSoonTasksCount}</div>
-                    <span className="text-[11px] font-mono font-medium text-rose-800 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
-                      Urgent
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#66645E] mt-1">Next 5 days deadline</p>
-                </div>
-
-                {/* COMPACT ACTIVITY STREAK CARD */}
-                <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Activity Streak</span>
-                    <div className="w-8 h-8 rounded-xl bg-[#1C1B1A] text-amber-400 flex items-center justify-center shadow-2xs">
-                      <Flame className="w-4 h-4 fill-amber-400" />
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">{streakData?.currentStreak || 0}</div>
-                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
-                      <Flame className="w-3 h-3 fill-amber-500 text-amber-500" /> Days
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-[#E0DDD0]">
-                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, idx) => {
-                      const dayObj = streakData?.weeklyActivity && streakData.weeklyActivity[idx];
-                      const isDone = dayObj && dayObj.isStreakCompleted;
-                      const isToday = dayObj && dayObj.isToday;
-                      return (
-                        <div key={idx} className="flex flex-col items-center gap-0.5" title={d}>
-                          <span className="text-[9px] font-mono text-[#66645E]">{d}</span>
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              isDone
-                                ? 'bg-emerald-600'
-                                : isToday
-                                ? 'bg-amber-500 animate-pulse'
-                                : 'bg-[#E0DDD0]'
-                            }`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. PROMINENT CONTINUE / PRIORITY TASK CARD */}
-              {priorityTask && (
-                <div className="bg-[#FDFCF9] rounded-2xl border-2 border-[#1C1B1A]/20 p-6 sm:p-8 shadow-2xs space-y-5 relative overflow-hidden">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E0DDD0] pb-4">
-                    <div className="flex items-center gap-3">
-                      <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-[#1C1B1A] text-white">
-                            Priority Action Item
-                          </span>
-                          {priorityTask.priority && typeof priorityTask.priority === 'string' && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0]">
-                              {priorityTask.priority} Priority
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="font-bold tracking-tight text-2xl sm:text-3xl font-semibold text-[#1C1B1A] mt-1">
-                          {typeof priorityTask.title === 'string' ? priorityTask.title : 'Engineering Sprint Task'}
-                        </h3>
+                    <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Status:</span>
+                        {getStatusBadge(nextPriorityTask.assignment?.status || nextPriorityTask.status)}
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 self-start sm:self-auto font-mono text-xs text-[#66645E] bg-[#EEECDF]/80 px-3 py-1.5 rounded-xl border border-[#E0DDD0]">
-                      <Calendar className="w-4 h-4 text-[#1C1B1A]" />
-                      <span>Due: {formatDate(priorityTask.deadline)}</span>
-                    </div>
-                  </div>
-
-                  {priorityTask.description && (
-                    <p className="text-sm text-[#66645E] leading-relaxed max-w-[850px] line-clamp-3">
-                      {typeof priorityTask.description === 'string' ? priorityTask.description : String(priorityTask.description)}
+                      <Button onClick={() => setSelectedTask(nextPriorityTask)} size="sm">
+                        {nextPriorityTask.assignment?.status === 'submitted'
+                          ? 'View Submitted Links'
+                          : 'Submit Deliverables (Google Drive)'}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ) : (
+                  <Card className="p-8 text-center bg-white border-dashed">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
+                    <h3 className="text-base font-bold text-slate-900">All Tasks Completed!</h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      You are completely caught up with your team's deliverables.
                     </p>
-                  )}
+                  </Card>
+                )}
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-mono font-semibold text-[#1C1B1A]">Task Milestone Progress</span>
-                      <span className="font-mono font-bold text-[#1C1B1A]">
-                        {priorityTask.status === 'completed' ? '100%' : priorityTask.status === 'in_progress' ? '50%' : '0%'}
-                      </span>
-                    </div>
-                    <div className="w-full bg-[#E0DDD0] h-2.5 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-500 ${
-                          priorityTask.status === 'completed' ? 'bg-emerald-600 w-full' : priorityTask.status === 'in_progress' ? 'bg-amber-500 w-1/2' : 'bg-[#1C1B1A] w-1/12'
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-                    <div className="flex items-center gap-3 text-xs text-[#66645E] flex-wrap">
-                      <span className="bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-1 rounded-md text-[11px] font-mono font-medium border border-[#E0DDD0]">
-                        Track: {priorityTask.topic || 'Engineering Track'}
-                      </span>
-                      <span>Assigned by: <strong className="text-[#1C1B1A]">{priorityTask.createdBy?.name || 'Admin'}</strong></span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {priorityTask.status === 'completed' ? (
-                        <span className="px-4 py-2 rounded-xl text-xs font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Task Finished
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedOverviewTask(priorityTask)}
-                          className="bg-[#1C1B1A] hover:bg-black text-white font-semibold text-xs rounded-xl px-5 py-2.5 flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
-                        >
-                          <BookOpen className="w-4 h-4" />
-                          Open Task Specs
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 4. MY TASKS PREVIEW SECTION */}
-              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
-                      <BookOpen className="w-5 h-5 text-[#1C1B1A]" />
-                      My Tasks Overview
+                {/* Quick Resources Strip */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      Recommended Learning Resources
                     </h3>
-                    <p className="text-xs text-[#66645E] mt-0.5">
-                      Assigned sprint deliverables divided into Admin and Team Lead sections.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center bg-[#F2EFE6] p-1 rounded-xl border border-[#E0DDD0] text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setOverviewTaskFilter('all')}
-                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                          overviewTaskFilter === 'all' ? 'bg-[#1C1B1A] text-white shadow-2xs' : 'text-[#66645E]'
-                        }`}
-                      >
-                        All ({totalTasks})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setOverviewTaskFilter('admin')}
-                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                          overviewTaskFilter === 'admin' ? 'bg-purple-700 text-white shadow-2xs' : 'text-[#66645E]'
-                        }`}
-                      >
-                        Admin ({adminTasks.length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setOverviewTaskFilter('teamlead')}
-                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
-                          overviewTaskFilter === 'teamlead' ? 'bg-emerald-700 text-white shadow-2xs' : 'text-[#66645E]'
-                        }`}
-                      >
-                        Team Lead ({teamLeadTasks.length})
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate('/student/my-tasks')}
-                      className="text-xs font-semibold text-[#1C1B1A] hover:underline flex items-center gap-1 cursor-pointer pl-1"
+                    <Button
+                      variant="link"
+                      onClick={() => navigate('/student/resources')}
+                      className="text-xs text-slate-600 hover:text-slate-900"
                     >
-                      View All <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
+                      Browse All ({hubResources.length}) →
+                    </Button>
                   </div>
-                </div>
 
-                <div className="p-6 space-y-6">
-                  {loadingTasks ? (
-                    <div className="p-6 text-center text-xs text-[#66645E] flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-[#1C1B1A]" />
-                      <span>Loading assigned tasks...</span>
-                    </div>
-                  ) : safeTasks.length === 0 ? (
-                    <div className="p-5 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
-                      No tasks assigned currently.
-                    </div>
-                  ) : (
-                    <>
-                      {/* SECTION 1: ADMIN TASKS PREVIEW */}
-                      {(overviewTaskFilter === 'all' || overviewTaskFilter === 'admin') && (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-                              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-purple-950">
-                                Admin Curriculum Tasks ({adminTasks.length})
-                              </h4>
-                            </div>
-                            <span className="text-[11px] font-mono text-[#66645E]">
-                              {adminTasks.filter((t) => t.status === 'completed').length} completed
-                            </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {hubResources.slice(0, 3).map((r) => (
+                      <Card key={r._id} className="p-4 hover:border-slate-300 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 rounded-lg bg-slate-50 shrink-0">
+                            {getResourceIcon(r.type)}
                           </div>
-
-                          {adminTasks.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/40 rounded-xl border border-[#E0DDD0]">
-                              No Admin tasks assigned yet.
-                            </div>
-                          ) : (
-                            <div className="space-y-2.5">
-                              {adminTasks.slice(0, 2).map((t, idx) => (
-                                <div
-                                  key={t._id || idx}
-                                  className="p-4 rounded-xl border border-purple-200/80 bg-white hover:border-purple-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs cursor-pointer"
-                                  onClick={() => setSelectedOverviewTask(t)}
-                                >
-                                  <div className="space-y-1 min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-sans">
-                                        {typeof t.title === 'string' ? t.title : 'Task Item'}
-                                      </h4>
-                                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-purple-100 text-purple-800 border border-purple-200">
-                                        ADMIN
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] text-[#66645E] truncate">{t.topic || 'Engineering Track'}</p>
-                                  </div>
-
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    <span className="text-[11px] font-mono text-[#66645E]">
-                                      Due {formatDate(t.deadline)}
-                                    </span>
-                                    <span
-                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
-                                        t.status === 'completed'
-                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                          : 'bg-[#EEECDF] text-[#1C1B1A] border-[#E0DDD0]'
-                                      }`}
-                                    >
-                                      {t.status === 'completed' ? 'Completed' : 'Pending'}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedOverviewTask(t);
-                                      }}
-                                      className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
-                                    >
-                                      View Overview
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* SECTION 2: TEAM LEAD TASKS PREVIEW */}
-                      {(overviewTaskFilter === 'all' || overviewTaskFilter === 'teamlead') && (
-                        <div className="space-y-3 pt-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-950">
-                                Team Lead Tasks ({teamLeadTasks.length})
-                              </h4>
-                            </div>
-                            <span className="text-[11px] font-mono text-[#66645E]">
-                              {teamLeadTasks.filter((t) => t.status === 'completed').length} completed
-                            </span>
-                          </div>
-
-                          {teamLeadTasks.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/40 rounded-xl border border-[#E0DDD0]">
-                              No tasks assigned by your Team Lead yet.
-                            </div>
-                          ) : (
-                            <div className="space-y-2.5">
-                              {teamLeadTasks.slice(0, 2).map((t, idx) => (
-                                <div
-                                  key={t._id || idx}
-                                  className="p-4 rounded-xl border border-emerald-200/80 bg-white hover:border-emerald-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs cursor-pointer"
-                                  onClick={() => setSelectedOverviewTask(t)}
-                                >
-                                  <div className="space-y-1 min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                      <h4 className="font-bold text-[#1C1B1A] truncate text-sm font-sans">
-                                        {typeof t.title === 'string' ? t.title : 'Task Item'}
-                                      </h4>
-                                      <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                        TEAM LEAD
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] text-[#66645E] truncate">
-                                      Lead: {t.createdBy?.name || 'Team Lead'} • {t.topic || 'Sprint'}
-                                    </p>
-                                  </div>
-
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    <span className="text-[11px] font-mono text-[#66645E]">
-                                      Due {formatDate(t.deadline)}
-                                    </span>
-                                    <span
-                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border ${
-                                        t.status === 'completed'
-                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                          : 'bg-emerald-50/50 text-emerald-900 border-emerald-200'
-                                      }`}
-                                    >
-                                      {t.status === 'completed' ? 'Completed' : 'Pending'}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedOverviewTask(t);
-                                      }}
-                                      className="px-3 py-1.5 rounded-lg bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
-                                    >
-                                      View Overview
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* 5. TWO-COLUMN LOWER DASHBOARD GRID */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* LEFT COLUMN: OVERALL PROGRESS, UPCOMING DEADLINES, RECENT ACTIVITY */}
-                <div className="space-y-6">
-                  
-                  {/* OVERALL PROGRESS CARD */}
-                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
-                          <TrendingUp className="w-5 h-5 text-[#1C1B1A]" />
-                          Overall Progress
-                        </h3>
-                        <p className="text-xs text-[#66645E] mt-0.5">
-                          Cohort milestone completion rate
-                        </p>
-                      </div>
-                      <span className="text-xl font-mono font-bold text-[#1C1B1A]">
-                        {overallProgressPercentage}%
-                      </span>
-                    </div>
-
-                    <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden">
-                      <div
-                        className="bg-emerald-600 h-full transition-all duration-500 rounded-full"
-                        style={{ width: `${overallProgressPercentage}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-[#66645E] font-mono pt-1">
-                      <span>{completedTasksCount} of {totalTasks} Tasks Completed</span>
-                      <span>Target: 100%</span>
-                    </div>
-                  </div>
-
-                  {/* UPCOMING DEADLINES MODULE */}
-                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                    <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
-                      <div>
-                        <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
-                          <Calendar className="w-5 h-5 text-[#1C1B1A]" />
-                          Upcoming Deadlines
-                        </h3>
-                        <p className="text-xs text-[#66645E] mt-0.5">
-                          Incomplete tasks sorted by nearest due date.
-                        </p>
-                      </div>
-                      <span className="text-xs font-mono font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
-                        {incompleteTasks.length} Pending
-                      </span>
-                    </div>
-                    <div className="p-6 space-y-3">
-                      {incompleteTasks.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
-                          No upcoming deadlines! All tasks completed. 🎉
-                        </div>
-                      ) : (
-                        incompleteTasks.slice(0, 4).map((t, idx) => (
-                          <div
-                            key={t._id || idx}
-                            onClick={() => setSelectedOverviewTask(t)}
-                            className="flex items-center justify-between p-3.5 rounded-xl border border-[#E0DDD0] bg-white hover:border-[#1C1B1A]/40 transition-all text-xs cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                              <div className="truncate">
-                                <h4 className="font-bold text-[#1C1B1A] truncate">{t.title}</h4>
-                                <p className="text-[11px] text-[#66645E] truncate">{t.topic || 'Engineering Task'}</p>
-                              </div>
-                            </div>
-                            <span className="px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
-                              Due {formatDate(t.deadline)}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* RECENT ACTIVITY LOG */}
-                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                    <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
-                      <div>
-                        <h3 className="text- font-bold text-[#1C1B1A] flex items-center gap-2">
-                          <Activity className="w-5 h-5 text-[#1C1B1A]" />
-                          Recent Activity Log
-                        </h3>
-                        <p className="text-xs text-[#66645E] mt-0.5">
-                          Latest learning events &amp; status updates.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-6 space-y-3">
-                      {activityLogPreview.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0]">
-                          No activity logged yet.
-                        </div>
-                      ) : (
-                        activityLogPreview.map((act) => (
-                          <div key={act.id} className="flex items-center justify-between p-3 rounded-xl bg-white border border-[#E0DDD0] text-xs">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-6 h-6 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center shrink-0">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                              </div>
-                              <span className="font-medium text-[#1C1B1A] truncate">{act.title}</span>
-                            </div>
-                            <span className="text-[10px] font-mono text-[#66645E] shrink-0 ml-2">{act.time}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 2: MY TASKS (DIVIDED INTO ADMIN TASKS & TEAM LEAD TASKS) */}
-          {activeNav === 'my-tasks' && (
-            <div className="max-w-[1240px] mx-auto space-y-6 animate-in fade-in duration-200">
-              {/* Filter Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">My Tasks</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">All tasks assigned to you by Admin and Team Lead.</p>
-                </div>
-                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
-                  <button type="button" onClick={() => setTaskFilter('all')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                      taskFilter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                    All <span className="ml-1 text-xs text-gray-400">({totalTasks})</span>
-                  </button>
-                  <button type="button" onClick={() => setTaskFilter('admin')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                      taskFilter === 'admin' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                    Admin <span className="ml-1 text-xs text-gray-400">({adminTasks.length})</span>
-                  </button>
-                  <button type="button" onClick={() => setTaskFilter('teamlead')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                      taskFilter === 'teamlead' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}>
-                    Team Lead <span className="ml-1 text-xs text-gray-400">({teamLeadTasks.length})</span>
-                  </button>
-                </div>
-              </div>
-
-              {loadingTasks ? (
-                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-gray-500 flex items-center justify-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Loading tasks...</span>
-                </div>
-              ) : safeTasks.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
-                  <p className="text-base font-semibold text-gray-800">No tasks assigned yet.</p>
-                  <p className="text-sm text-gray-400 mt-1">Tasks from Admin and Team Lead will appear here.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* SECTION 1: ADMIN TASKS */}
-                  {(taskFilter === 'all' || taskFilter === 'admin') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full bg-purple-600 shrink-0" />
-                          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Admin Tasks</h3>
-                          <span className="text-xs text-gray-400">({adminTasks.length})</span>
-                        </div>
-                        <span className="text-xs text-gray-400">
-                          {adminTasks.filter((t) => t.status === 'completed').length} of {adminTasks.length} completed
-                        </span>
-                      </div>
-                      {adminTasks.length === 0 ? (
-                        <div className="p-8 text-center text-sm text-gray-400 bg-gray-50 rounded-xl border border-slate-200">
-                          No Admin tasks assigned yet.
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {adminTasks.map((task, idx) => renderTaskCard(task, idx, 'admin'))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* SECTION 2: TEAM LEAD TASKS */}
-                  {(taskFilter === 'all' || taskFilter === 'teamlead') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0" />
-                          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Team Lead Tasks</h3>
-                          <span className="text-xs text-gray-400">({teamLeadTasks.length})</span>
-                        </div>
-                        <span className="text-xs text-gray-400">
-                          {teamLeadTasks.filter((t) => t.status === 'completed').length} of {teamLeadTasks.length} completed
-                        </span>
-                      </div>
-                      {teamLeadTasks.length === 0 ? (
-                        <div className="p-8 text-center text-sm text-gray-400 bg-gray-50 rounded-xl border border-slate-200">
-                          No Team Lead tasks assigned yet.
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {teamLeadTasks.map((task, idx) => renderTaskCard(task, idx, 'teamlead'))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-
-          {/* TAB 4: PROGRESS (Requirement 2: Subject/Domain Bar Graph & Breakdown) */}
-          {activeNav === 'progress' && (
-            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
-              {/* OVERALL PROGRESS TOP CONTAINER */}
-              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-                <div className="p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <h3 className="text-xl sm:text-2xl font-bold text-[#1C1B1A] tracking-tight flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-[#1C1B1A]" />
-                      Progress &amp; Completion Tracking
-                    </h3>
-                    <p className="text-xs text-[#66645E] mt-0.5">
-                      Real-time subject/domain breakdown and automatic completion tracking.
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold text-[#1C1B1A] bg-[#EEECDF] border border-[#E0DDD0] px-3.5 py-1 rounded-full shadow-2xs">
-                    {completedTasksCount} of {totalTasks} Completed ({overallProgressPercentage}%)
-                  </span>
-                </div>
-
-                {/* REQUIREMENT 2: BAR GRAPH SHOWING TASK PROGRESS BY SUBJECT/DOMAIN */}
-                <div className="p-6 sm:p-8 space-y-6">
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-[#66645E] uppercase tracking-wider">
-                      Subject / Domain Task Progress Bar Graph
-                    </h4>
-                    <p className="text-xs text-[#66645E]">
-                      Dynamic completion breakdown across assigned learning tracks.
-                    </p>
-                  </div>
-
-                  {subjectList.length === 0 ? (
-                    <div className="p-8 text-center text-[#66645E] bg-[#F4F1E8]/50 rounded-xl border border-[#E0DDD0] text-xs">
-                      No subject task data available yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-5 bg-[#F4F1E8]/60 p-6 rounded-2xl border border-[#E0DDD0]">
-                      <div className="space-y-4">
-                        {subjectList.map((item, idx) => (
-                          <div key={idx} className="space-y-2">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-semibold text-sm text-[#1C1B1A]">{item.subject}</span>
-                              <span className="text-[#66645E] font-medium">
-                                <strong className="text-[#1C1B1A] font-bold">{item.completed}</strong> / {item.total} Tasks ({item.percentage}%)
-                              </span>
-                            </div>
-
-                            {/* Stacked Bar Graph Visual */}
-                            <div className="w-full bg-[#E0DDD0] h-3.5 rounded-full overflow-hidden flex shadow-inner">
-                              {item.completed > 0 && (
-                                <div
-                                  className="bg-emerald-600 h-full transition-all duration-500"
-                                  style={{ width: `${(item.completed / item.total) * 100}%` }}
-                                  title={`Completed: ${item.completed}`}
-                                />
-                              )}
-                              {item.inProgress > 0 && (
-                                <div
-                                  className="bg-amber-500 h-full transition-all duration-500"
-                                  style={{ width: `${(item.inProgress / item.total) * 100}%` }}
-                                  title={`In Progress: ${item.inProgress}`}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Legend */}
-                      <div className="flex items-center gap-6 pt-3 border-t border-[#E0DDD0] text-xs font-medium text-[#66645E]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-sm bg-emerald-600 inline-block" />
-                          <span>Completed Tasks</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-sm bg-amber-500 inline-block" />
-                          <span>In Progress / Pending</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* DETAILED SUBJECT CARDS BREAKDOWN */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {subjectList.map((item, idx) => (
-                  <div key={idx} className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs space-y-4 flex flex-col justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
-                          Domain Track
-                        </span>
-                        <span className="text-xs font-bold text-[#1C1B1A]">
-                          {item.percentage}% Done
-                        </span>
-                      </div>
-                      <h4 className="text-lg font-bold text-[#1C1B1A] pt-1 tracking-tight leading-snug">{item.subject}</h4>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs pt-2">
-                      <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200">
-                        <div className="font-bold text-base">{item.completed}</div>
-                        <div className="text-[11px] font-medium">Completed</div>
-                      </div>
-                      <div className="p-2.5 bg-amber-50 text-amber-800 rounded-xl border border-amber-200">
-                        <div className="font-bold text-base">{item.inProgress}</div>
-                        <div className="text-[11px] font-medium">In Progress</div>
-                      </div>
-                      <div className="p-2.5 bg-[#EEECDF] text-[#1C1B1A] rounded-xl border border-[#E0DDD0]">
-                        <div className="font-bold text-base">{item.pending}</div>
-                        <div className="text-[11px] font-medium">Pending</div>
-                      </div>
-                    </div>
-
-                    <div className="w-full bg-[#E0DDD0] h-2 rounded-full overflow-hidden pt-1">
-                      <div className="bg-emerald-600 h-full transition-all duration-300" style={{ width: `${item.percentage}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: LEARNING RESOURCES & CLOUDINARY REPOSITORY */}
-          {activeNav === 'resources' && (
-            <div className="max-w-[1240px] mx-auto space-y-8 animate-in fade-in duration-200">
-              {/* TOP HEADER & METRIC HERO */}
-              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 sm:p-8 shadow-2xs space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EEECDF] text-[#1C1B1A] text-[11px] font-semibold uppercase tracking-wider border border-[#E0DDD0]">
-                      <FolderKanban className="w-3.5 h-3.5" />
-                      <span>Cloudinary Storage &amp; Resource Hub</span>
-                    </div>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-[#1C1B1A] tracking-tight">
-                      Curated Learning Materials &amp; Links
-                    </h2>
-                    <p className="text-xs text-[#66645E] max-w-2xl">
-                      Download official architecture specs, spreadsheets, PDFs, diagrams, and access curated LeetCode DSA questions and GitHub repositories.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {/* If user is teamlead or admin, show upload button */}
-                    {(user?.role === 'admin' || user?.role === 'teamlead' || user?.role === 'team_lead') && (
-                      <button
-                        type="button"
-                        onClick={() => setUploadResourceModalOpen(true)}
-                        className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#1C1B1A] text-white hover:bg-black transition-colors shadow-2xs flex items-center gap-2 cursor-pointer"
-                      >
-                        <UploadCloud className="w-4 h-4" />
-                        <span>Upload Resource</span>
-                      </button>
-                    )}
-
-                    {/* Progress Badge */}
-                    <div className="p-3 bg-[#FAF8F2] border border-[#E0DDD0] rounded-xl text-right shrink-0">
-                      <div className="text-[11px] font-semibold text-[#66645E]">Your Completion</div>
-                      <div className="text-lg font-bold text-[#1C1B1A] leading-tight">
-                        {resourceStats.completed} / {resourceStats.total}{' '}
-                        <span className="text-xs font-medium text-[#66645E]">({resourceStats.percentage}%)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="space-y-1.5 pt-2 border-t border-[#E0DDD0]">
-                  <div className="flex items-center justify-between text-xs text-[#66645E]">
-                    <span className="font-medium">Total Resources Studied &amp; Solved</span>
-                    <span className="font-bold text-[#1C1B1A]">{resourceStats.percentage}% Completed</span>
-                  </div>
-                  <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden flex shadow-inner">
-                    <div
-                      className="bg-emerald-600 h-full transition-all duration-500 rounded-full"
-                      style={{ width: `${resourceStats.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* SEARCH & FILTERS BAR */}
-              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-4 sm:p-5 shadow-2xs space-y-4">
-                {/* Search & Topic Selector */}
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <div className="relative flex-1 w-full">
-                    <Search className="w-4 h-4 text-[#88867E] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={resourceSearchQuery}
-                      onChange={(e) => setResourceSearchQuery(e.target.value)}
-                      placeholder="Search resources by title, topic, or keyword..."
-                      className="w-full pl-10 pr-4 py-2 rounded-xl bg-white border border-[#E0DDD0] text-xs text-[#1C1B1A] placeholder-[#88867E] focus:ring-2 focus:ring-[#1C1B1A] outline-none font-medium"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Filter className="w-4 h-4 text-[#88867E] shrink-0" />
-                    <select
-                      value={resourceTopicFilter}
-                      onChange={(e) => setResourceTopicFilter(e.target.value)}
-                      className="px-3 py-2 rounded-xl bg-white border border-[#E0DDD0] text-xs text-[#1C1B1A] focus:ring-2 focus:ring-[#1C1B1A] outline-none font-semibold w-full sm:w-auto cursor-pointer"
-                    >
-                      <option value="all">All Topics &amp; Domains</option>
-                      {availableResourceTopics.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Category Pills */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none text-xs flex-wrap">
-                  {[
-                    { id: 'all', label: 'All Resources' },
-                    { id: 'dsa_problem', label: '💻 DSA Problems' },
-                    { id: 'git_repo', label: '🐙 Git Repositories' },
-                    { id: 'pdf', label: '📄 PDFs' },
-                    { id: 'excel', label: '📊 Spreadsheets (Excel)' },
-                    { id: 'doc', label: '📝 Word & Docs' },
-                    { id: 'image', label: '🖼️ Photos & Diagrams' },
-                    { id: 'link', label: '🌐 Web Docs & Notes' },
-                  ].map((cat) => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setResourceCategoryFilter(cat.id)}
-                      className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer whitespace-nowrap text-xs ${
-                        resourceCategoryFilter === cat.id
-                          ? 'bg-[#1C1B1A] text-white shadow-xs'
-                          : 'bg-white border border-[#E0DDD0] text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#FAF8F2]'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* RESOURCE CARDS GRID */}
-              {loadingHubResources ? (
-                <div className="p-12 text-center bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] space-y-3">
-                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#1C1B1A]" />
-                  <p className="text-xs text-[#66645E]">Loading learning resources...</p>
-                </div>
-              ) : filteredHubResources.length === 0 ? (
-                <div className="p-12 text-center bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] space-y-2">
-                  <FolderKanban className="w-10 h-10 mx-auto text-[#9E9C94]" />
-                  <h4 className="text-sm font-bold text-[#1C1B1A]">No resources found</h4>
-                  <p className="text-xs text-[#66645E]">
-                    Try adjusting your search query or category filters.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredHubResources.map((resItem) => {
-                    const isFile = ['doc', 'excel', 'pdf', 'image'].includes(resItem.type);
-                    const isDSA = resItem.type === 'dsa_problem';
-                    const isGit = resItem.type === 'git_repo';
-
-                    return (
-                      <div
-                        key={resItem._id}
-                        className={`bg-[#FDFCF9] rounded-2xl p-6 border transition-all duration-200 flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md ${
-                          resItem.isCompleted
-                            ? 'border-emerald-300 ring-1 ring-emerald-200/60'
-                            : 'border-[#E0DDD0]'
-                        }`}
-                      >
-                        <div className="space-y-3">
-                          {/* Top Row: Type Badge & Status */}
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${
-                                isDSA
-                                  ? 'bg-purple-100 text-purple-900 border border-purple-200'
-                                  : isGit
-                                  ? 'bg-neutral-900 text-white'
-                                  : resItem.type === 'pdf'
-                                  ? 'bg-rose-100 text-rose-900 border border-rose-200'
-                                  : resItem.type === 'excel'
-                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                                  : resItem.type === 'image'
-                                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                                  : 'bg-blue-100 text-blue-900 border border-blue-200'
-                              }`}
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-bold text-slate-900 truncate">{r.title}</h4>
+                            <p className="text-[11px] text-slate-500 truncate mt-0.5">{r.topic || 'General'}</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadResource(r)}
+                              className="mt-3 w-full text-xs h-7"
                             >
-                              {isDSA && <Code2 className="w-3.5 h-3.5" />}
-                              {isGit && <GitBranch className="w-3.5 h-3.5" />}
-                              {resItem.type === 'pdf' && <FileText className="w-3.5 h-3.5" />}
-                              {resItem.type === 'excel' && <FileSpreadsheet className="w-3.5 h-3.5" />}
-                              {resItem.type === 'image' && <ImageIcon className="w-3.5 h-3.5" />}
-                              {!isDSA && !isGit && resItem.type !== 'pdf' && resItem.type !== 'excel' && resItem.type !== 'image' && (
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              )}
-                              <span className="uppercase text-[10px] tracking-wider">
-                                {isDSA ? 'DSA Problem' : isGit ? 'Git Repo' : resItem.type}
-                              </span>
-                            </span>
-
-                            {resItem.isCompleted && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>Completed</span>
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Title & Topic */}
-                          <div>
-                            <span className="text-[11px] font-semibold text-[#66645E] uppercase tracking-wider">
-                              {resItem.topic}
-                            </span>
-                            <h4 className="text-base font-bold text-[#1C1B1A] pt-0.5 tracking-tight leading-snug line-clamp-2">
-                              {resItem.title}
-                            </h4>
-                          </div>
-
-                          {/* Description */}
-                          {resItem.description && (
-                            <p className="text-xs text-[#66645E] leading-relaxed line-clamp-3">
-                              {resItem.description}
-                            </p>
-                          )}
-
-                          {/* Metadata pill */}
-                          <div className="flex items-center gap-3 text-[11px] text-[#88867E] pt-1 flex-wrap">
-                            {resItem.fileSize > 0 && (
-                              <span>{(resItem.fileSize / 1024 / 1024).toFixed(1)} MB</span>
-                            )}
-                            {resItem.downloadsCount > 0 && (
-                              <span>{resItem.downloadsCount} views</span>
-                            )}
-                            {resItem.difficulty && resItem.difficulty !== 'General' && (
-                              <span className="font-semibold text-purple-800">
-                                Level: {resItem.difficulty}
-                              </span>
-                            )}
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              Open Resource
+                            </Button>
                           </div>
                         </div>
-
-                        {/* Bottom Actions */}
-                        <div className="pt-4 border-t border-[#E0DDD0] space-y-2">
-                          <div className="flex items-center gap-2">
-                            {/* Download / Open Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadOrOpenResource(resItem)}
-                              className="flex-1 py-2 px-3 rounded-xl text-xs font-semibold bg-[#1C1B1A] text-white hover:bg-black transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                            >
-                              {isFile ? (
-                                <>
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download</span>
-                                </>
-                              ) : isDSA ? (
-                                <>
-                                  <Code2 className="w-3.5 h-3.5" />
-                                  <span>Solve Problem</span>
-                                </>
-                              ) : isGit ? (
-                                <>
-                                  <GitBranch className="w-3.5 h-3.5" />
-                                  <span>View Repo</span>
-                                </>
-                              ) : (
-                                <>
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                  <span>Open Link</span>
-                                </>
-                              )}
-                            </button>
-
-                            {/* Mark as Completed Toggle Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleResourceComplete(resItem)}
-                              disabled={togglingResourceId === resItem._id}
-                              className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                                resItem.isCompleted
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                                  : 'bg-white text-[#1C1B1A] border-[#E0DDD0] hover:bg-[#FAF8F2]'
-                              }`}
-                              title={resItem.isCompleted ? 'Mark as Incomplete' : 'Mark as Completed'}
-                            >
-                              {togglingResourceId === resItem._id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <CheckCircle2
-                                  className={`w-3.5 h-3.5 ${
-                                    resItem.isCompleted ? 'text-emerald-600' : 'text-[#88867E]'
-                                  }`}
-                                />
-                              )}
-                              <span>{resItem.isCompleted ? 'Done' : 'Mark Done'}</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </main>
-      </div>
-
-      {/* ==================== ACTIVE MEDIA / VIDEO VIEWER MODAL ==================== */}
-      {activeMediaResource && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-3xl w-full p-6 space-y-5 shadow-2xl relative overflow-hidden">
-            <button
-              type="button"
-              onClick={closeMediaResource}
-              className="absolute top-5 right-5 p-2 rounded-full hover:bg-black/5 text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="space-y-1 pr-8">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#1C1B1A] text-white px-2.5 py-0.5 rounded-full">
-                  Resource Viewer
-                </span>
-                <span className="text-[10px] font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] px-2.5 py-0.5 rounded-full border border-[#E0DDD0]">
-                  Task: {activeMediaResource.task?.title}
-                </span>
-              </div>
-              <h3 className="text- font-bold text-[#1C1B1A]">
-                {activeMediaResource.name}
-              </h3>
-            </div>
-
-            {/* Video Player or Document Spec Viewer */}
-            {activeMediaResource.type === 'video' ? (
-              <div className="space-y-4">
-                <div className="w-full aspect-video rounded-xl overflow-hidden bg-black shadow-md relative">
-                  {isYouTubeUrl(activeMediaResource.url || activeMediaResource.name) ? (
-                    <div id="yt-player-iframe" className="w-full h-full" />
-                  ) : (
-                    <video
-                      ref={videoRef}
-                      controls
-                      src={activeMediaResource.url || 'https://www.w3schools.com/html/mov_bbb.mp4'}
-                      onTimeUpdate={handleHtml5TimeUpdate}
-                      className="w-full h-full object-contain"
-                    />
-                  )}
-                </div>
-
-                {/* Video Watch Progress Tracker */}
-                <div className="p-4 bg-[#F4F1E8]/70 rounded-xl border border-[#E0DDD0] space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="font-bold text-[#1C1B1A]">
-                      Watch Time Progress: {formatTimeSecs(videoWatchedSecs)} / {formatTimeSecs(videoDurSecs)}
-                    </span>
-                    <span className="font-bold text-[#1C1B1A]">
-                      {videoDurSecs > 0 ? Math.min(100, Math.round((videoWatchedSecs / videoDurSecs) * 100)) : 0}%
-                    </span>
+                      </Card>
+                    ))}
                   </div>
-
-                  <div className="w-full bg-[#E0DDD0] h-3 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        videoWatchedSecs >= 0.5 * videoDurSecs ? 'bg-emerald-600' : 'bg-amber-500'
-                      }`}
-                      style={{
-                        width: `${videoDurSecs > 0 ? Math.min(100, (videoWatchedSecs / videoDurSecs) * 100) : 0}%`,
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] font-mono pt-1">
-                    <span className="text-[#66645E]">
-                      Required: At least 50% watch time ({formatTimeSecs(0.5 * videoDurSecs)})
-                    </span>
-                    {videoWatchedSecs >= 0.5 * videoDurSecs ? (
-                      <span className="text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        ✓ 50%+ Watched - Completed!
-                      </span>
-                    ) : (
-                      <span className="text-amber-800 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        Watching in progress...
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-8 text-center space-y-4 bg-[#F4F1E8]/60 rounded-xl border border-[#E0DDD0]">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto border border-emerald-200">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="font-bold text-[#1C1B1A] text-base">Deliverable Resource Verified</h4>
-                  <p className="text-xs text-[#66645E]">
-                    Opening and viewing this deliverable specification automatically marked it completed in your progress log.
-                  </p>
                 </div>
               </div>
             )}
 
-            <div className="flex items-center justify-end pt-2 border-t border-[#E0DDD0]">
+            {/* ============================================================= */}
+            {/* VIEW 2: MY TASKS (UNIFIED QUEUE) */}
+            {/* ============================================================= */}
+            {activeNav === 'my-tasks' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {/* Header & Controls */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight text-slate-900">
+                      My Assigned Tasks
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Submit Google Drive links (Docs & Slides) for each milestone to complete your sprint.
+                    </p>
+                  </div>
+
+                  {/* Status Filters */}
+                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+                    <button
+                      onClick={() => setTaskStatusFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        taskStatusFilter === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All ({tasks.length})
+                    </button>
+                    <button
+                      onClick={() => setTaskStatusFilter('todo')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        taskStatusFilter === 'todo'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      To Do ({taskStats.pending})
+                    </button>
+                    <button
+                      onClick={() => setTaskStatusFilter('submitted')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        taskStatusFilter === 'submitted'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Under Review ({taskStats.submitted})
+                    </button>
+                    <button
+                      onClick={() => setTaskStatusFilter('completed')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        taskStatusFilter === 'completed'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Completed ({taskStats.completed})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search box */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={taskSearchQuery}
+                    onChange={(e) => setTaskSearchQuery(e.target.value)}
+                    placeholder="Search tasks by title, topic, or keyword..."
+                    className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  />
+                </div>
+
+                {/* Tasks List */}
+                {loadingTasks ? (
+                  <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Loading your tasks...</span>
+                  </div>
+                ) : filteredTasks.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl border border-dashed border-slate-200 bg-white">
+                    <CheckSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <h3 className="text-sm font-semibold text-slate-900">No tasks found</h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {taskSearchQuery ? 'Try clearing your search terms.' : 'No tasks in this category.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredTasks.map((task) => {
+                      const status = task.assignment?.status || task.status || 'pending';
+                      const isCompleted = status === 'completed';
+                      const isSubmitted = status === 'submitted';
+
+                      return (
+                        <Card key={task._id} className="hover:border-slate-300 transition-colors">
+                          <CardHeader className="pb-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-mono font-bold uppercase">
+                                  {task.source === 'admin' ? 'Admin Milestone' : 'Team Lead Sprint'}
+                                </span>
+                                {task.topic && (
+                                  <span className="text-xs text-slate-500 font-medium">
+                                    • {task.topic}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono text-slate-500">
+                                  Due: {new Date(task.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                                {getStatusBadge(status)}
+                              </div>
+                            </div>
+
+                            <CardTitle className="text-base font-bold text-slate-900 mt-1">
+                              {task.title}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-600 leading-relaxed">
+                              {task.description}
+                            </CardDescription>
+                          </CardHeader>
+
+                          <CardContent className="pb-3">
+                            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                              <span className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider">
+                                Required Deliverables:
+                              </span>
+                              <div className="flex flex-wrap gap-2">
+                                {Array.isArray(task.deliverables) && task.deliverables.length > 0 ? (
+                                  task.deliverables.map((d, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs"
+                                    >
+                                      📄 {typeof d === 'string' ? d : d.name}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <>
+                                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs">
+                                      📄 Documentation (Google Doc)
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs">
+                                      📊 Presentation (Google Slides)
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+
+                          <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <span className="text-xs text-slate-500">
+                              {isCompleted
+                                ? '✓ Work reviewed and accepted by Team Lead'
+                                : isSubmitted
+                                ? '⏳ Work submitted — Team Lead review in progress'
+                                : 'Google Drive links required for review'}
+                            </span>
+                            <Button
+                              onClick={() => setSelectedTask(task)}
+                              variant={isCompleted ? 'outline' : 'default'}
+                              size="sm"
+                            >
+                              {isCompleted
+                                ? 'View Details'
+                                : isSubmitted
+                                ? 'Submission Status'
+                                : 'Submit Work'}
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================= */}
+            {/* VIEW 3: LEARNING RESOURCES (STUDY HUB) */}
+            {/* ============================================================= */}
+            {activeNav === 'resources' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight text-slate-900">
+                      Learning Resources & Practice Materials
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Explore curated study materials, problem links, and guides uploaded by mentors and leads.
+                    </p>
+                  </div>
+
+                  {/* Filter tabs */}
+                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+                    <button
+                      onClick={() => setResourceCategory('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        resourceCategory === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All ({hubResources.length})
+                    </button>
+                    <button
+                      onClick={() => setResourceCategory('docs')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        resourceCategory === 'docs'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Docs & PDFs
+                    </button>
+                    <button
+                      onClick={() => setResourceCategory('code')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        resourceCategory === 'code'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Repositories
+                    </button>
+                    <button
+                      onClick={() => setResourceCategory('dsa')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        resourceCategory === 'dsa'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      DSA Problems
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Box */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={resourceSearch}
+                    onChange={(e) => setResourceSearch(e.target.value)}
+                    placeholder="Search resources by title, topic, or description..."
+                    className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  />
+                </div>
+
+                {/* Resources Grid */}
+                {loadingHubResources ? (
+                  <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Loading resources repository...</span>
+                  </div>
+                ) : filteredResources.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl border border-dashed border-slate-200 bg-white">
+                    <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <h3 className="text-sm font-semibold text-slate-900">No resources found</h3>
+                    <p className="text-xs text-slate-500 mt-1">Adjust your search or category filter.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredResources.map((resItem) => (
+                      <Card key={resItem._id} className="flex flex-col justify-between hover:border-slate-300 transition-colors">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <div className="p-2 rounded-lg bg-slate-100 shrink-0">
+                              {getResourceIcon(resItem.type)}
+                            </div>
+                            <button
+                              onClick={() => handleToggleResourceComplete(resItem)}
+                              disabled={togglingResourceId === resItem._id}
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                                resItem.isCompleted
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              }`}
+                              title={resItem.isCompleted ? 'Mark as incomplete' : 'Mark as completed'}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{resItem.isCompleted ? 'Completed ✓' : 'Mark Done'}</span>
+                            </button>
+                          </div>
+
+                          <CardTitle className="text-sm font-bold text-slate-900 mt-2 line-clamp-1">
+                            {resItem.title}
+                          </CardTitle>
+                          <CardDescription className="text-xs text-slate-500 line-clamp-2">
+                            {resItem.description || 'Practice guide & reference material.'}
+                          </CardDescription>
+                        </CardHeader>
+
+                        <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                          <span className="text-[11px] font-mono font-medium text-slate-500">
+                            {resItem.topic || 'General Track'}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadResource(resItem)}
+                            className="text-xs h-8"
+                          >
+                            <Download className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                            <span>Open</span>
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================= */}
+            {/* VIEW 4: MY TEAM & PROGRESS */}
+            {/* ============================================================= */}
+            {activeNav === 'progress' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {studentTeam ? (
+                  <>
+                    {/* Team Summary Hero */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="md:col-span-2">
+                        <CardHeader>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[10px] font-mono font-bold">
+                              TEAM {studentTeam.teamNumber}
+                            </span>
+                            <span className="text-xs text-slate-500 font-medium">Cohort 2026 – 2027</span>
+                          </div>
+                          <CardTitle className="text-xl font-bold text-slate-900 mt-1">
+                            {studentTeam.name}
+                          </CardTitle>
+                          <CardDescription className="text-xs text-slate-500">
+                            {studentTeam.track || 'Engineering Track'} • Total capacity: 9 members
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs font-medium text-slate-600">
+                              <span>Sprint Completion Progress</span>
+                              <span>{taskStats.pct}%</span>
+                            </div>
+                            <Progress value={taskStats.pct} className="h-2" />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Team Lead Card */}
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Assigned Team Lead
+                          </CardDescription>
+                          <CardTitle className="text-base font-bold text-slate-900 mt-1">
+                            {studentTeam.teamLeadId?.name || 'Lead Assigned'}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-xs">
+                          <div className="flex items-center gap-2 text-slate-600 truncate">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <a
+                              href={`mailto:${studentTeam.teamLeadId?.email}`}
+                              className="hover:underline truncate"
+                            >
+                              {studentTeam.teamLeadId?.email || 'N/A'}
+                            </a>
+                          </div>
+                          {(studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber) && (
+                            <div className="flex items-center gap-2 text-slate-600 truncate">
+                              <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <a
+                                href={`tel:${studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber}`}
+                                className="hover:underline"
+                              >
+                                {studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber}
+                              </a>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Team Members Roster */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                        Team Members (
+                        {Array.isArray(studentTeam.members) ? studentTeam.members.length + 1 : 1} / 9)
+                      </h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {Array.isArray(studentTeam.members) &&
+                          studentTeam.members.map((member) => (
+                            <Card key={member._id} className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-xs shrink-0">
+                                  {member.name ? member.name.slice(0, 2).toUpperCase() : 'ST'}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-xs font-bold text-slate-900 truncate">
+                                    {member.name}
+                                  </h4>
+                                  <p className="text-[11px] text-slate-500 font-mono truncate">
+                                    {member.email}
+                                  </p>
+                                  {(member.branch || member.year) && (
+                                    <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                                      {member.branch} {member.year ? `• Year ${member.year}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </Card>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <Card className="p-12 text-center bg-white border-dashed">
+                    <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                    <h3 className="text-sm font-bold text-slate-900">Not Assigned to a Team Yet</h3>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      Your administrator will assign you to one of the 9 cohort teams shortly.
+                    </p>
+                  </Card>
+                )}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* ============================================================= */}
+      {/* DELIVERABLES SUBMISSION MODAL */}
+      {/* ============================================================= */}
+      {selectedTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="default">Task Submission</Badge>
+                  {getStatusBadge(selectedTask.assignment?.status || selectedTask.status)}
+                </div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {selectedTask.title}
+                </h3>
+              </div>
               <button
-                type="button"
-                onClick={closeMediaResource}
-                className="px-5 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                onClick={() => setSelectedTask(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               >
-                Close &amp; Save Progress
+                <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Fresher Guidance Box */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-1">
+              <p className="font-semibold text-slate-900">📋 Submission Instructions for Students:</p>
+              <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-slate-600">
+                <li>Upload your report/document to Google Docs or Google Drive.</li>
+                <li>Upload your presentation slides to Google Slides or Google Drive.</li>
+                <li>
+                  Ensure sharing access is set to <strong className="text-slate-900">"Anyone with the link can view"</strong>.
+                </li>
+              </ul>
+            </div>
+
+            {/* Review Feedback if Revision Requested */}
+            {selectedTask.assignment?.reviewNotes && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+                <p className="font-bold flex items-center gap-1 text-amber-800">
+                  <AlertCircle className="w-3.5 h-3.5" /> Team Lead Feedback:
+                </p>
+                <p className="text-amber-800">{selectedTask.assignment.reviewNotes}</p>
+              </div>
+            )}
+
+            {/* Submission Form */}
+            <form onSubmit={handleSubmitDeliverables} className="space-y-4 pt-1">
+              {(Array.isArray(selectedTask.deliverables) && selectedTask.deliverables.length > 0
+                ? selectedTask.deliverables
+                : ['Documentation / Spec', 'Demo / Presentation']
+              ).map((deliv, idx) => {
+                const name = typeof deliv === 'string' ? deliv : deliv.name || 'Deliverable';
+                const isDoc = name.toLowerCase().includes('doc') || name.toLowerCase().includes('spec');
+                const isSlide = name.toLowerCase().includes('demo') || name.toLowerCase().includes('presentation');
+
+                return (
+                  <div key={idx} className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-800 flex items-center justify-between">
+                      <span>
+                        {isDoc ? '📄 ' : isSlide ? '📊 ' : '🔗 '}
+                        {name} Link
+                      </span>
+                      {submissionDeliverables[name] && (
+                        <a
+                          href={submissionDeliverables[name]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-0.5 font-normal"
+                        >
+                          <span>Preview Drive Link</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={submissionDeliverables[name] || ''}
+                      onChange={(e) =>
+                        setSubmissionDeliverables({
+                          ...submissionDeliverables,
+                          [name]: e.target.value,
+                        })
+                      }
+                      placeholder={
+                        isDoc
+                          ? 'https://docs.google.com/document/d/...'
+                          : isSlide
+                          ? 'https://docs.google.com/presentation/d/...'
+                          : 'https://github.com/... or Google Drive link'
+                      }
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    />
+                  </div>
+                );
+              })}
+
+              {/* Remarks */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-800">
+                  Remarks / Notes for Team Lead (Optional)
+                </label>
+                <textarea
+                  value={submissionNotes}
+                  onChange={(e) => setSubmissionNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Mention what you completed or any questions..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                />
+              </div>
+
+              {submissionSuccessMessage && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{submissionSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedTask(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={submittingDeliverables}
+                  className="gap-1.5"
+                >
+                  {submittingDeliverables ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Submit for Review</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ==================== INTERACTIVE COMPLETION CONFIRMATION PROMPT ==================== */}
-      {completionPromptResource && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] max-w-md w-full p-6 space-y-4 shadow-2xl relative text-center">
-            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-200 shadow-2xs">
-              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-lg font-bold text-[#1C1B1A] tracking-tight">
-                Resource Accessed!
-              </h3>
-              <p className="text-xs text-[#66645E]">
-                You opened <strong className="text-[#1C1B1A]">"{completionPromptResource.title}"</strong>. Have you finished reviewing or solving this resource?
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setCompletionPromptResource(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white border border-[#E0DDD0] text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#FAF8F2] cursor-pointer"
-              >
-                Maybe Later
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleToggleResourceComplete(completionPromptResource);
-                  setCompletionPromptResource(null);
-                }}
-                className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Mark as Completed ✓</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Profile Details Modal */}
+      {showProfileModal && (
+        <ProfileDetailsModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+        />
       )}
-
-      {/* ==================== RESOURCE UPLOAD MODAL ==================== */}
-      <ResourceUploadModal
-        isOpen={uploadResourceModalOpen}
-        onClose={() => setUploadResourceModalOpen(false)}
-        onResourceUploaded={() => fetchHubResources()}
-        apiBaseUrl={API_BASE_URL}
-        token={token}
-      />
     </div>
   );
 }
-

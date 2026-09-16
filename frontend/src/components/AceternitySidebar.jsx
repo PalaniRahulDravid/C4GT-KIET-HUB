@@ -53,7 +53,7 @@ function DesktopSidebar({ children, className = '', style = {} }) {
 
   return (
     <motion.aside
-      className={`hidden lg:flex lg:flex-col flex-shrink-0 h-full overflow-hidden select-none z-30 ${className}`}
+      className={`hidden lg:flex lg:flex-col flex-shrink-0 h-screen sticky top-0 overflow-hidden select-none z-30 ${className}`}
       style={style}
       animate={{
         width: animate ? (open ? '260px' : '68px') : '260px',
@@ -92,7 +92,7 @@ function MobileSidebar({ children, className = '' }) {
           {/* Drawer */}
           <motion.aside
             key="sidebar-drawer"
-            className={`fixed top-0 left-0 z-50 h-full w-72 flex flex-col lg:hidden shadow-2xl ${className}`}
+            className={`fixed top-0 left-0 z-50 h-screen max-h-screen w-72 flex flex-col lg:hidden shadow-2xl ${className}`}
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}

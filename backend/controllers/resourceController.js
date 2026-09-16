@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const { Readable } = require('stream');
+const https = require('https');
+const http = require('http');
 const Resource = require('../models/Resource');
 const StudentResourceProgress = require('../models/StudentResourceProgress');
 const { cloudinary, isCloudinaryConfigured } = require('../config/cloudinary');
@@ -144,13 +146,19 @@ const getResources = async (req, res) => {
       const isCompleted = Boolean(
         userId && r.completedBy && r.completedBy.some((uid) => uid.toString() === userId.toString())
       );
+      // For Cloudinary files, use the authenticated streaming endpoint to avoid Cloudinary's 401 ACL block on PDFs
+      const fileUrl = r.cloudinaryPublicId
+        ? `${req.protocol}://${req.get('host')}/api/resources/${r._id}/file`
+        : r.url;
+
       return {
         _id: r._id,
         id: r._id,
         title: r.title,
         type: r.type,
         description: r.description,
-        url: r.url,
+        url: fileUrl,
+        rawCloudinaryUrl: r.url,
         topic: r.topic,
         difficulty: r.difficulty,
         fileSize: r.fileSize,
@@ -464,6 +472,81 @@ const deleteResource = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Stream or download resource file directly with Cloudinary authentication bypass
+ * @route   GET /api/resources/:id/file
+ * @access  Private / Authenticated
+ */
+const streamResourceFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const resource = await Resource.findById(id);
+
+    if (!resource) {
+      return res.status(404).send('Resource not found');
+    }
+
+    // Increment download count
+    Resource.findByIdAndUpdate(id, { $inc: { downloadsCount: 1 } }).catch(() => {});
+
+    // If it's an external web link (LeetCode, GitHub, etc.), redirect directly
+    if (!resource.cloudinaryPublicId) {
+      if (resource.url && resource.url.startsWith('http')) {
+        return res.redirect(resource.url);
+      }
+      return res.status(404).send('No file content found for this resource');
+    }
+
+    const format = (resource.fileFormat || resource.originalFilename?.split('.').pop() || 'pdf').toLowerCase();
+    const isImageOrPdf = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'].includes(format);
+
+    // Generate signed authenticated download URL from Cloudinary
+    const downloadUrl = cloudinary.utils.private_download_url(resource.cloudinaryPublicId, format, {
+      resource_type: isImageOrPdf ? 'image' : 'raw',
+      type: 'upload',
+    });
+
+    const client = downloadUrl.startsWith('https') ? https : http;
+    client.get(downloadUrl, (cldRes) => {
+      if (cldRes.statusCode >= 400) {
+        console.warn(`Cloudinary private download returned status ${cldRes.statusCode}, redirecting to fallback`);
+        return res.redirect(resource.url);
+      }
+
+      const mimeTypes = {
+        pdf: 'application/pdf',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        csv: 'text/csv',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+      };
+
+      const contentType = mimeTypes[format] || cldRes.headers['content-type'] || 'application/octet-stream';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="${encodeURIComponent(resource.originalFilename || `resource.${format}`)}"`
+      );
+      if (cldRes.headers['content-length']) {
+        res.setHeader('Content-Length', cldRes.headers['content-length']);
+      }
+
+      cldRes.pipe(res);
+    }).on('error', (err) => {
+      console.error('Streaming error from Cloudinary:', err);
+      res.redirect(resource.url);
+    });
+  } catch (error) {
+    console.error('Failed to stream resource file:', error);
+    res.status(500).send('Error retrieving resource file');
+  }
+};
+
 module.exports = {
   getResources,
   uploadResourceFile,
@@ -471,4 +554,5 @@ module.exports = {
   toggleResourceCompletion,
   recordResourceDownload,
   deleteResource,
+  streamResourceFile,
 };
