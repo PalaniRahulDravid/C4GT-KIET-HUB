@@ -422,15 +422,14 @@ const getTeamTasks = async (req, res) => {
       .populate('createdBy', 'name email avatar role')
       .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
 
-    // Fetch members and their individual assignment statuses
+    // Fetch all assignments for these tasks (covers all team members & any assignees)
     const memberIds = [...(team.members || [])];
     const taskIds = tasks.map((t) => t._id);
 
     const assignments = await TaskAssignment.find({
       taskId: { $in: taskIds },
-      studentId: { $in: memberIds },
     })
-      .populate('studentId', 'name rollNumber email memberType avatar')
+      .populate('studentId', 'name rollNumber email memberType avatar teamId')
       .populate('reviewedBy', 'name email avatar role');
 
     const tasksWithMembersProgress = tasks.map((t) => {
@@ -439,7 +438,7 @@ const getTeamTasks = async (req, res) => {
         (a) => a.taskId.toString() === t._id.toString()
       );
       tObj.assignments = taskAssignments;
-      tObj.totalAssigned = memberIds.length;
+      tObj.totalAssigned = Math.max(memberIds.length, taskAssignments.length);
       tObj.completedCount = taskAssignments.filter((a) => a.status === 'completed').length;
       tObj.submittedCount = taskAssignments.filter((a) => a.status === 'submitted').length;
       return tObj;
