@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import ProfileDetailsModal from '../../components/ProfileDetailsModal';
+import {
+  Sidebar,
+  SidebarBody,
+  SidebarLink,
+  SidebarLogo,
+  SidebarSectionLabel,
+  SidebarUser,
+} from '../../components/AceternitySidebar';
 import {
   Users,
   UserPlus,
@@ -31,11 +40,15 @@ import {
   BookOpen,
   ExternalLink,
   ArrowRight,
+  Home,
+  Menu,
+  LogOut,
 } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
 
 export default function TeamLeadDashboard() {
-  const { user, token, apiBaseUrl } = useAuth();
+  const { user, token, apiBaseUrl, logout } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'roster';
 
@@ -43,6 +56,36 @@ export default function TeamLeadDashboard() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab); // 'roster' | 'search' | 'invitations' | 'give-tasks' | 'student-dashboard'
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'TL';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const getPageTitle = () => {
+    switch (activeTab) {
+      case 'search':
+        return 'Search Users & Add to Team';
+      case 'invitations':
+        return 'Pending Invitations';
+      case 'give-tasks':
+        return 'Give Tasks to Students';
+      case 'roster':
+      default:
+        return 'Team Roster';
+    }
+  };
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -447,7 +490,7 @@ export default function TeamLeadDashboard() {
   }
 
   return (
-    <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-[#F7F5EE] font-sans antialiased text-[#1C1B1A] select-none overflow-hidden">
       {/* Toast Alert */}
       {toast && (
         <div
@@ -468,6 +511,181 @@ export default function TeamLeadDashboard() {
           </button>
         </div>
       )}
+
+      {/* Profile Details Modal */}
+      <ProfileDetailsModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+      />
+
+      {/* ==================== ACETERNITY COLLAPSIBLE SIDEBAR ==================== */}
+      <Sidebar open={mobileSidebarOpen} setOpen={setMobileSidebarOpen} animate={true}>
+        <SidebarBody className="bg-neutral-900 border-r border-neutral-800 h-full flex flex-col justify-between">
+          {/* Top: logo + nav */}
+          <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
+            {/* Logo */}
+            <SidebarLogo
+              logo={{
+                href: '/teamlead',
+                icon: (
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 border border-white/10 shadow-xs">
+                    <C4GTLogo showText={false} imgClassName="h-7" />
+                  </div>
+                ),
+                label: 'C4GT KIET HUB',
+                badge: 'TEAM LEAD',
+                sublabel: team?.name || 'Workspace',
+              }}
+              className="mb-4"
+            />
+
+            {/* Section label */}
+            <SidebarSectionLabel label="Team Lead Workspace" />
+
+            {/* Nav links */}
+            <nav className="mt-2 space-y-1">
+              <SidebarLink
+                link={{
+                  href: '/teamlead?tab=roster',
+                  label: 'Team Roster',
+                  icon: <Users className="w-5 h-5" />,
+                  badge: `${totalCount}/${maxMembers}`,
+                }}
+                isActive={activeTab === 'roster'}
+                onClick={() => {
+                  handleTabChange('roster');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/teamlead?tab=search',
+                  label: 'Search & Add Users',
+                  icon: <Search className="w-5 h-5" />,
+                }}
+                isActive={activeTab === 'search'}
+                onClick={() => {
+                  handleTabChange('search');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/teamlead?tab=invitations',
+                  label: 'Pending Invitations',
+                  icon: <Send className="w-5 h-5" />,
+                  badge: pendingInvitations.length > 0 ? pendingInvitations.length : undefined,
+                }}
+                isActive={activeTab === 'invitations'}
+                onClick={() => {
+                  handleTabChange('invitations');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/teamlead?tab=give-tasks',
+                  label: 'Give Tasks to Students',
+                  icon: <CheckSquare className="w-5 h-5" />,
+                  badge: teamTasks.length > 0 ? teamTasks.length : undefined,
+                }}
+                isActive={activeTab === 'give-tasks'}
+                onClick={() => {
+                  handleTabChange('give-tasks');
+                  setMobileSidebarOpen(false);
+                }}
+              />
+
+              <SidebarLink
+                link={{
+                  href: '/student',
+                  label: 'Student Dashboard',
+                  icon: <GraduationCap className="w-5 h-5" />,
+                }}
+                isActive={false}
+                onClick={() => setMobileSidebarOpen(false)}
+              />
+            </nav>
+
+            {/* Divider */}
+            <div className="mx-2 my-4 border-t border-neutral-800/80" />
+
+            {/* Exit to Main Site */}
+            <SidebarLink
+              link={{
+                href: '/',
+                label: 'Exit to Main Site',
+                icon: <Home className="w-5 h-5 text-neutral-400" />,
+              }}
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+          </div>
+
+          {/* Bottom: Team Lead User profile */}
+          <SidebarUser
+            user={user}
+            getInitials={getInitials}
+            onProfileClick={() => setShowProfileModal(true)}
+            onLogout={handleLogout}
+          />
+        </SidebarBody>
+      </Sidebar>
+
+      {/* ==================== MAIN CONTENT AREA ==================== */}
+      <div className="flex-1 h-screen flex flex-col overflow-hidden min-w-0">
+        {/* Top Sticky Header (~84px) */}
+        <header className="h-[84px] bg-[#F9F8F3]/95 backdrop-blur-md border-b border-[#E2DDD0] px-6 sm:px-8 flex items-center justify-between flex-shrink-0 shadow-2xs z-20">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-[#1C1B1A] hover:bg-black/5 cursor-pointer"
+              aria-label="Open sidebar"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
+            <div>
+              <div className="flex items-center gap-2 text-xs text-[#66645E] font-medium mb-1">
+                <Link to="/teamlead" className="hover:text-[#1C1B1A] transition-colors">
+                  Team Lead Portal
+                </Link>
+                <span className="text-[#9E9C94]">/</span>
+                <span className="text-[#1C1B1A] font-semibold">{getPageTitle()}</span>
+              </div>
+              <h1 className="font-['Instrument_Serif',serif] text-2xl sm:text-[28px] lg:text-[30px] font-semibold text-[#1C1B1A] tracking-tight leading-none">
+                {team.name}: {team.track || 'Engineering Track'}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link
+              to="/student"
+              className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-xs font-medium text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 shadow-2xs transition-colors"
+            >
+              <GraduationCap className="w-4 h-4 text-blue-600" />
+              <span className="hidden sm:inline">Student Dashboard</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] text-[#1C1B1A] text-xs font-medium shadow-2xs transition-all cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-[#66645E] ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Scrollable Workspace Body */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scroll bg-[#F7F5EE]">
+          <div className="max-w-[1240px] mx-auto space-y-8">
 
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#E0DDD0]">
@@ -1645,10 +1863,13 @@ export default function TeamLeadDashboard() {
                 )}
                 <span>Send Invitation</span>
               </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

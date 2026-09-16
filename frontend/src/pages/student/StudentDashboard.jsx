@@ -4,6 +4,16 @@ import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
+  Sidebar,
+  SidebarBody,
+  SidebarLink,
+  SidebarLogo,
+  SidebarSectionLabel,
+  SidebarUser,
+  SidebarProvider,
+  useSidebar,
+} from '../../components/AceternitySidebar';
+import {
   Calendar,
   BookOpen,
   CheckCircle2,
@@ -934,14 +944,6 @@ export default function StudentDashboard() {
 
   return (
     <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-[#F7F5EE] font-sans antialiased text-[#1C1B1A] select-none overflow-hidden">
-      {/* Mobile Sidebar Overlay */}
-      {mobileSidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs lg:hidden"
-          onClick={() => setMobileSidebarOpen(false)}
-        />
-      )}
-
       {/* Profile Details Modal */}
       <ProfileDetailsModal
         isOpen={showProfileModal}
@@ -1158,142 +1160,77 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      {/* ==================== LEFT FIXED LIGHT SIDEBAR ==================== */}
-      <aside
-        className={`fixed lg:static top-0 bottom-0 left-0 z-50 w-[290px] h-full flex-shrink-0 bg-[#F2EFE6] text-[#1C1B1A] flex flex-col justify-between border-r border-[#E0DDD0] transition-transform duration-200 ease-in-out ${
-          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
-      >
-        {/* Top Branding & Navigation */}
-        <div className="p-6 overflow-y-auto">
-          {/* C4GT Brand Logo */}
-          <div className="flex items-center justify-between mb-8">
-            <Link to="/" className="flex flex-col gap-1 group">
-              <div className="flex items-center gap-3">
-                <C4GTLogo showText={false} imgClassName="h-11" />
-                <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded-md bg-[#1C1B1A] text-white">
-                  STUDENT
-                </span>
-              </div>
-              <span className="text-base font-bold text-[#1C1B1A] font-serif tracking-tight mt-1.5 group-hover:text-black transition-colors">
-                C4GT KIET HUB
-              </span>
-            </Link>
-
-            <button
-              onClick={() => setMobileSidebarOpen(false)}
-              className="lg:hidden text-[#66645E] hover:text-[#1C1B1A] p-1 rounded-lg cursor-pointer"
-              aria-label="Close sidebar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-
-          {/* Navigation Section Label */}
-          <div className="mb-3 px-2 flex items-center justify-between">
-            <span className="text-[10px] font-mono font-semibold tracking-widest text-[#66645E] uppercase">Student Workspace</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          </div>
-
-          {/* STRICT 4 STUDENT NAVIGATION ITEMS */}
-          <nav className="space-y-1.5">
-            {sidebarNavItems.map((item) => {
-              const isActive = activeNav === item.id;
-              return (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  onClick={() => setMobileSidebarOpen(false)}
-                  className={`relative w-full flex items-start gap-3 p-3 rounded-xl transition-all duration-150 border text-left cursor-pointer ${
-                    isActive
-                      ? 'bg-white text-[#1C1B1A] font-semibold shadow-2xs border-[#E0DDD0]'
-                      : 'hover:bg-black/5 text-[#66645E] hover:text-[#1C1B1A] border-transparent'
-                  }`}
-                >
-                  {isActive && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-[#1C1B1A]" />
-                  )}
-                  <div className={`mt-0.5 flex-shrink-0 transition-colors ${isActive ? 'text-[#1C1B1A]' : 'text-[#66645E]'}`}>
-                    {item.icon}
+      {/* ==================== ACETERNITY COLLAPSIBLE SIDEBAR ==================== */}
+      <Sidebar open={mobileSidebarOpen} setOpen={setMobileSidebarOpen} animate={true}>
+        <SidebarBody className="bg-neutral-900 border-r border-neutral-800 h-full flex flex-col justify-between">
+          {/* Top: logo + nav */}
+          <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
+            {/* Logo */}
+            <SidebarLogo
+              logo={{
+                href: '/student/overview',
+                icon: (
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 border border-white/10 shadow-xs">
+                    <C4GTLogo showText={false} imgClassName="h-7" />
                   </div>
-                  <div className="leading-tight flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <div className={`text-[14px] ${isActive ? 'font-bold text-[#1C1B1A]' : 'font-medium'}`}>
-                        {item.name}
-                      </div>
-                      {item.id === 'my-tasks' && (
-                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold ${
-                          isActive ? 'bg-[#EEECDF] text-[#1C1B1A]' : 'bg-black/5 text-[#66645E]'
-                        }`}>
-                          {totalTasks}
+                ),
+                label: 'C4GT KIET HUB',
+                badge: 'STUDENT',
+                sublabel: 'Workspace',
+              }}
+              className="mb-4"
+            />
+
+            {/* Section label */}
+            <SidebarSectionLabel label="Student Workspace" />
+
+            {/* Nav links */}
+            <nav className="mt-2 space-y-1">
+              {sidebarNavItems.map((item) => {
+                const isActive = activeNav === item.id;
+                return (
+                  <SidebarLink
+                    key={item.id}
+                    link={{
+                      href: item.path,
+                      label: item.name,
+                      icon: (
+                        <span className={`w-5 h-5 flex items-center justify-center ${isActive ? 'text-white' : 'text-neutral-400'}`}>
+                          {item.icon}
                         </span>
-                      )}
-                    </div>
-                    <div className={`text-[11px] font-normal mt-0.5 truncate ${isActive ? 'text-[#4A4843]' : 'text-[#88867E]'}`}>
-                      {item.description}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+                      ),
+                      badge: item.id === 'my-tasks' ? totalTasks : undefined,
+                    }}
+                    isActive={isActive}
+                    onClick={() => setMobileSidebarOpen(false)}
+                  />
+                );
+              })}
+            </nav>
 
-        {/* Bottom Sidebar */}
-        <div className="p-5 border-t border-[#E0DDD0] bg-[#EEECDF]/60 space-y-3 flex-shrink-0">
-          <Link
-            to="/"
-            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white hover:bg-[#F8F6F0] text-[#1C1B1A] text-xs font-medium border border-[#E0DDD0] shadow-2xs transition-colors group cursor-pointer"
-          >
-            <span className="flex items-center gap-2.5">
-              <Home className="w-4 h-4 text-[#66645E]" />
-              Exit to Main Site
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-[#66645E] group-hover:translate-x-0.5 transition-transform" />
-          </Link>
+            {/* Divider */}
+            <div className="mx-2 my-4 border-t border-neutral-800/80" />
 
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-[#E0DDD0] shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-3 overflow-hidden text-left hover:opacity-90 transition-opacity cursor-pointer group flex-1 min-w-0"
-              title="Click to view & edit Profile Details"
-            >
-              <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs shadow-inner flex-shrink-0">
-                {getInitials(user?.name)}
-              </div>
-              <div className="truncate leading-tight min-w-0">
-                <div className="font-semibold text-xs text-[#1C1B1A] truncate group-hover:text-black">
-                  {user?.name || 'Student Account'}
-                </div>
-                <div className="text-[11px] text-[#66645E] font-mono truncate">
-                  {user?.email || 'student@c4gt.in'}
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-                    <span className="inline-block px-1.5 py-0.2 text-[9px] font-mono font-semibold rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      LEAD
-                    </span>
-                  )}
-                  <span className="inline-block px-1.5 py-0.2 text-[9px] font-mono font-semibold rounded bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
-                    STUDENT
-                  </span>
-                  <span className="text-[9px] text-[#1C1B1A] font-semibold underline">Profile Details</span>
-                </div>
-              </div>
-            </button>
-
-            <button
-              onClick={handleLogout}
-              title="Log out"
-              className="w-8 h-8 rounded-lg hover:bg-black/5 text-[#66645E] hover:text-rose-600 flex items-center justify-center transition-colors flex-shrink-0 ml-1 cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            {/* Exit to Main Site */}
+            <SidebarLink
+              link={{
+                href: '/',
+                label: 'Exit to Main Site',
+                icon: <Home className="w-5 h-5 text-neutral-400" />,
+              }}
+              onClick={() => setMobileSidebarOpen(false)}
+            />
           </div>
-        </div>
-      </aside>
+
+          {/* Bottom: User profile */}
+          <SidebarUser
+            user={user}
+            getInitials={getInitials}
+            onProfileClick={() => setShowProfileModal(true)}
+            onLogout={handleLogout}
+          />
+        </SidebarBody>
+      </Sidebar>
 
       {/* ==================== MAIN CONTENT AREA ==================== */}
       <div className="flex-1 h-screen flex flex-col overflow-hidden min-w-0">

@@ -17,7 +17,9 @@ export default function RootLayout() {
     location.pathname === '/' ||
     location.pathname === '/home' ||
     location.pathname === '/login' ||
-    location.pathname.startsWith('/student');
+    location.pathname.startsWith('/student') ||
+    location.pathname.startsWith('/teamlead') ||
+    location.pathname.startsWith('/team-lead');
 
   useEffect(() => {
     const handleClickOutside = (event) => {
