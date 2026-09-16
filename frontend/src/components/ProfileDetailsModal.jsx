@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   User,
   Mail,
+  Phone,
   GraduationCap,
   Building,
   Briefcase,
@@ -35,6 +36,7 @@ export default function ProfileDetailsModal({ isOpen, onClose }) {
   // Form states
   const [name, setName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [phone, setPhone] = useState('');
   const [branch, setBranch] = useState('');
   const [year, setYear] = useState('');
   const [memberType, setMemberType] = useState('');
@@ -45,6 +47,7 @@ export default function ProfileDetailsModal({ isOpen, onClose }) {
     if (user) {
       setName(user.name || '');
       setRollNumber(user.rollNumber || '');
+      setPhone(user.phone || user.phoneNumber || '');
       setBranch(user.branch || '');
       const initialYear = user.year ? String(user.year) : '';
       setYear(initialYear);
@@ -105,6 +108,7 @@ export default function ProfileDetailsModal({ isOpen, onClose }) {
       await updateProfile({
         name: name.trim(),
         rollNumber: rollNumber.trim(),
+        phone: phone.trim(),
         branch,
         year: Number(year),
         memberType,
@@ -222,6 +226,14 @@ export default function ProfileDetailsModal({ isOpen, onClose }) {
                 </div>
 
                 <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Phone Number</span>
+                  <span className="font-bold text-emerald-800 font-mono text-sm flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                    {user.phone || user.phoneNumber || 'Not Set'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Branch / Department</span>
                   <span className="font-bold text-gray-900 text-xs">{user.branch || 'Not Set'}</span>
                 </div>
@@ -231,7 +243,7 @@ export default function ProfileDetailsModal({ isOpen, onClose }) {
                   <span className="font-bold text-gray-900 text-xs">{user.year ? `${user.year}rd/th Year` : 'Not Set'}</span>
                 </div>
 
-                <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
+                <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-1 sm:col-span-2">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">C4GT Track</span>
                   <span className="font-bold text-blue-700 text-xs">{getTrackLabel(user.memberType)}</span>
                 </div>
@@ -258,6 +270,17 @@ export default function ProfileDetailsModal({ isOpen, onClose }) {
                   required
                   value={rollNumber}
                   onChange={(e) => setRollNumber(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold font-mono focus:ring-2 focus:ring-blue-600 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. 9876543210"
                   className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold font-mono focus:ring-2 focus:ring-blue-600 outline-none"
                 />
               </div>

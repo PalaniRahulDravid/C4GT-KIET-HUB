@@ -6,6 +6,9 @@ const {
   getTeamInvitations,
   cancelInvitation,
   removeMember,
+  getTeamTasks,
+  createTeamTask,
+  deleteTeamTask,
 } = require('../controllers/teamLeadController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -21,5 +24,10 @@ router.post('/invite', inviteMember);
 router.get('/invitations', getTeamInvitations);
 router.delete('/invitations/:id', cancelInvitation);
 router.delete('/members/:memberId', removeMember);
+
+// Team Lead Student Task Assignment endpoints
+router.get('/tasks', getTeamTasks);
+router.post('/tasks', createTeamTask);
+router.delete('/tasks/:id', deleteTeamTask);
 
 module.exports = router;

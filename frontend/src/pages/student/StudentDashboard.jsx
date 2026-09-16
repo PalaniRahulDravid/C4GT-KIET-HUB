@@ -35,6 +35,8 @@ import {
   Activity,
   PlayCircle,
   Eye,
+  Mail,
+  Phone,
 } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -1461,10 +1463,28 @@ export default function StudentDashboard() {
                   {/* Team Lead & Teammates List */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Team Lead */}
-                    <div className="p-3.5 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] text-xs">
+                    <div className="p-3.5 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] text-xs space-y-1">
                       <span className="text-[10px] font-mono uppercase text-[#66645E]">Team Lead</span>
-                      <p className="font-bold text-[#1C1B1A] mt-1">{studentTeam.teamLeadId?.name || 'Assigned Lead'}</p>
-                      <p className="text-[11px] text-[#66645E] font-mono">{studentTeam.teamLeadId?.email}</p>
+                      <p className="font-bold text-[#1C1B1A]">{studentTeam.teamLeadId?.name || 'Assigned Lead'}</p>
+                      {studentTeam.teamLeadId?.email && (
+                        <p className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1">
+                          <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
+                          <a href={`mailto:${studentTeam.teamLeadId.email}`} className="hover:underline">
+                            {studentTeam.teamLeadId.email}
+                          </a>
+                        </p>
+                      )}
+                      {(studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber) && (
+                        <p className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1 font-medium">
+                          <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <a
+                            href={`tel:${studentTeam.teamLeadId.phone || studentTeam.teamLeadId.phoneNumber}`}
+                            className="hover:underline font-semibold"
+                          >
+                            {studentTeam.teamLeadId.phone || studentTeam.teamLeadId.phoneNumber}
+                          </a>
+                        </p>
+                      )}
                     </div>
 
                     {/* Fellow Members Preview */}
@@ -1472,20 +1492,38 @@ export default function StudentDashboard() {
                       <span className="text-[10px] font-mono uppercase text-[#66645E]">
                         Team Members ({(studentTeam.members?.length || 0)} Joined)
                       </span>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                         {studentTeam.members && studentTeam.members.length > 0 ? (
                           studentTeam.members.map((m, idx) => (
-                            <span
+                            <div
                               key={m._id || idx}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                              className={`p-2.5 rounded-xl text-xs border flex flex-col justify-between ${
                                 m._id === user?._id || m.email === user?.email
-                                  ? 'bg-[#1C1B1A] text-white border-black'
-                                  : 'bg-[#F8F6F0] text-[#1C1B1A] border-[#E0DDD0]'
+                                  ? 'bg-[#1C1B1A] text-white border-black shadow-xs'
+                                  : 'bg-[#FDFCF9] text-[#1C1B1A] border-[#E0DDD0]'
                               }`}
                             >
-                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                              {m.name || 'Student'} {m._id === user?._id ? '(You)' : ''}
-                            </span>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-bold truncate">
+                                  {m.name || 'Student'} {m._id === user?._id ? '(You)' : ''}
+                                </span>
+                                <span className={`text-[10px] font-mono ${m._id === user?._id ? 'text-amber-300 font-semibold' : 'text-[#88867E]'}`}>
+                                  {m.rollNumber || ''}
+                                </span>
+                              </div>
+                              <div className="mt-1 space-y-0.5">
+                                <div className={`text-[10px] font-mono truncate flex items-center gap-1 ${m._id === user?._id ? 'text-gray-300' : 'text-[#66645E]'}`}>
+                                  <Mail className="w-2.5 h-2.5 shrink-0 opacity-70" />
+                                  <span className="truncate">{m.email}</span>
+                                </div>
+                                {(m.phone || m.phoneNumber) && (
+                                  <div className={`text-[10px] font-mono truncate flex items-center gap-1 ${m._id === user?._id ? 'text-emerald-300' : 'text-emerald-700 font-medium'}`}>
+                                    <Phone className="w-2.5 h-2.5 shrink-0" />
+                                    <span>{m.phone || m.phoneNumber}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           ))
                         ) : (
                           <span className="text-[11px] text-[#88867E] italic">You are the first member to join!</span>

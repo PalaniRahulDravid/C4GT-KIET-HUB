@@ -181,6 +181,11 @@ const formatUserResponse = (user) => {
     avatar: user.avatar,
     status: user.status,
     rollNumber: user.rollNumber || null,
+    phone: user.phone || user.phoneNumber || null,
+    phoneNumber: user.phoneNumber || user.phone || null,
+    college: user.college || 'KIET',
+    dayScholarHostel: user.dayScholarHostel || 'DS',
+    activeBacklogs: user.activeBacklogs || 0,
     branch: user.branch || null,
     year: user.year || null,
     memberType: user.memberType || null,
@@ -272,6 +277,12 @@ const updateProfile = async (req, res) => {
     user.branch = branch.trim();
     user.year = parsedYear;
     user.memberType = memberType;
+
+    if (req.body.phone || req.body.phoneNumber) {
+      const p = String(req.body.phone || req.body.phoneNumber).trim();
+      user.phone = p;
+      user.phoneNumber = p;
+    }
 
     await user.save();
     console.log(`Updated student profile in MongoDB Atlas for: ${user.email} (Roll: ${user.rollNumber})`);

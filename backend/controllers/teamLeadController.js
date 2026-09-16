@@ -3,6 +3,8 @@ const Team = require('../models/Team');
 const User = require('../models/User');
 const TeamRequest = require('../models/TeamRequest');
 const Notification = require('../models/Notification');
+const Task = require('../models/Task');
+const TaskAssignment = require('../models/TaskAssignment');
 
 /**
  * Helper: Find team for current team lead
@@ -40,15 +42,15 @@ const getMyTeam = async (req, res) => {
     }
 
     const populatedTeam = await Team.findById(team._id)
-      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber status')
-      .populate('members', 'name email avatar role memberType branch year rollNumber status createdAt');
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber status')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status createdAt');
 
     const pendingInvitations = await TeamRequest.find({
       teamId: team._id,
       status: 'pending',
     })
       .sort({ createdAt: -1 })
-      .populate('invitedUserId', 'name email avatar role memberType branch year rollNumber');
+      .populate('invitedUserId', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
 
     const maxMembers = populatedTeam.maxMembers || 9;
     const currentMembersCount = populatedTeam.members ? populatedTeam.members.length : 0;
@@ -96,12 +98,12 @@ const searchUsers = async (req, res) => {
 
     if (search.trim()) {
       const reg = new RegExp(search.trim(), 'i');
-      query.$or = [{ name: reg }, { email: reg }, { rollNumber: reg }, { branch: reg }];
+      query.$or = [{ name: reg }, { email: reg }, { rollNumber: reg }, { branch: reg }, { phone: reg }, { phoneNumber: reg }];
     }
 
     const users = await User.find(query)
       .sort({ createdAt: -1 })
-      .select('name email avatar role memberType branch year rollNumber teamId status')
+      .select('name email phone phoneNumber avatar role memberType branch year rollNumber teamId status')
       .lean();
 
     // Fetch all pending requests for caller's team
@@ -248,7 +250,7 @@ const inviteMember = async (req, res) => {
     }
 
     const populatedRequest = await TeamRequest.findById(newRequest._id)
-      .populate('invitedUserId', 'name email avatar role memberType branch year rollNumber')
+      .populate('invitedUserId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
       .populate('teamId', 'name teamNumber track');
 
     res.status(201).json({
@@ -279,7 +281,7 @@ const getTeamInvitations = async (req, res) => {
 
     const invitations = await TeamRequest.find({ teamId: team._id })
       .sort({ createdAt: -1 })
-      .populate('invitedUserId', 'name email avatar role memberType branch year rollNumber status');
+      .populate('invitedUserId', 'name email phone phoneNumber avatar role memberType branch year rollNumber status');
 
     res.status(200).json({
       success: true,
@@ -377,8 +379,8 @@ const removeMember = async (req, res) => {
     }
 
     const updatedTeam = await Team.findById(team._id)
-      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber')
-      .populate('members', 'name email avatar role memberType branch year rollNumber status');
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status');
 
     res.status(200).json({
       success: true,
@@ -394,6 +396,194 @@ const removeMember = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get tasks assigned to this team / created by team lead
+ * @route   GET /api/teamlead/tasks
+ * @access  Private (Team Lead / Admin)
+ */
+const getTeamTasks = async (req, res) => {
+  try {
+    const team = await findLeadTeam(req.user._id);
+    if (!team) {
+      return res.status(200).json({
+        success: true,
+        tasks: [],
+        message: 'No team assigned yet',
+      });
+    }
+
+    const tasks = await Task.find({
+      $or: [
+        { assignedTeams: team.teamNumber },
+        { createdBy: req.user._id },
+      ],
+    })
+      .sort({ deadline: 1 })
+      .populate('createdBy', 'name email avatar role');
+
+    // Fetch members and their individual assignment statuses
+    const memberIds = [...(team.members || [])];
+    const taskIds = tasks.map((t) => t._id);
+
+    const assignments = await TaskAssignment.find({
+      taskId: { $in: taskIds },
+      studentId: { $in: memberIds },
+    }).populate('studentId', 'name rollNumber email memberType');
+
+    const tasksWithMembersProgress = tasks.map((t) => {
+      const tObj = t.toObject();
+      const taskAssignments = assignments.filter(
+        (a) => a.taskId.toString() === t._id.toString()
+      );
+      tObj.assignments = taskAssignments;
+      tObj.totalAssigned = memberIds.length;
+      tObj.completedCount = taskAssignments.filter((a) => a.status === 'completed').length;
+      return tObj;
+    });
+
+    res.status(200).json({
+      success: true,
+      count: tasksWithMembersProgress.length,
+      tasks: tasksWithMembersProgress,
+    });
+  } catch (error) {
+    console.error('Error fetching team tasks:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch team tasks',
+    });
+  }
+};
+
+/**
+ * @desc    Team lead create/assign task to their team students
+ * @route   POST /api/teamlead/tasks
+ * @access  Private (Team Lead / Admin)
+ */
+const createTeamTask = async (req, res) => {
+  try {
+    const team = await findLeadTeam(req.user._id);
+    if (!team) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not assigned as Team Lead of any team',
+      });
+    }
+
+    const {
+      title,
+      description,
+      topic,
+      targetGroup,
+      deadline,
+      priority,
+      deliverables,
+    } = req.body;
+
+    if (!title || !description || !deadline) {
+      return res.status(400).json({
+        success: false,
+        message: 'Title, description, and deadline are required to assign a task',
+      });
+    }
+
+    const task = await Task.create({
+      title: title.trim(),
+      description: description.trim(),
+      topic: topic ? topic.trim() : (team.track || 'Team Sprint'),
+      targetGroup: targetGroup || 'both',
+      deadline: new Date(deadline),
+      priority: priority || 'Normal',
+      assignedTeams: [team.teamNumber],
+      deliverables:
+        Array.isArray(deliverables) && deliverables.length > 0
+          ? deliverables
+          : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+      status: 'Published',
+      createdBy: req.user._id,
+    });
+
+    // Create TaskAssignment and Notification for each team member
+    const memberIds = [...(team.members || [])];
+    for (const mId of memberIds) {
+      try {
+        await TaskAssignment.findOneAndUpdate(
+          { studentId: mId, taskId: task._id },
+          { $setOnInsert: { studentId: mId, taskId: task._id, status: 'pending' } },
+          { upsert: true }
+        );
+
+        await Notification.create({
+          studentId: mId,
+          taskId: task._id,
+          teamId: team._id,
+          title: `New Task: ${task.title}`,
+          message: `${team.name} Lead ${req.user.name} assigned a new task: ${task.title}`,
+          type: 'task_assigned',
+          assignedBy: req.user.name || 'Team Lead',
+          deadline: task.deadline,
+        });
+      } catch (err) {
+        // Continue on individual duplicate notification errors
+      }
+    }
+
+    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar role');
+
+    res.status(201).json({
+      success: true,
+      message: `Task successfully assigned to ${team.name} students`,
+      task: populatedTask,
+    });
+  } catch (error) {
+    console.error('Error creating team task:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create team task',
+    });
+  }
+};
+
+/**
+ * @desc    Delete a task created by this team lead
+ * @route   DELETE /api/teamlead/tasks/:id
+ * @access  Private (Team Lead / Admin)
+ */
+const deleteTeamTask = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await Task.findById(id);
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    if (task.createdBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete tasks created by you',
+      });
+    }
+
+    await Task.findByIdAndDelete(id);
+    await TaskAssignment.deleteMany({ taskId: id });
+
+    res.status(200).json({
+      success: true,
+      message: 'Task deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting team task:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete task',
+    });
+  }
+};
+
 module.exports = {
   getMyTeam,
   searchUsers,
@@ -401,4 +591,7 @@ module.exports = {
   getTeamInvitations,
   cancelInvitation,
   removeMember,
+  getTeamTasks,
+  createTeamTask,
+  deleteTeamTask,
 };

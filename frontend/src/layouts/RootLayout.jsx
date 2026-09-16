@@ -103,18 +103,76 @@ export default function RootLayout() {
             </div>
           ) : (
             <nav className="hidden md:flex items-center space-x-6">
-              {/* Home is the only top-nav link — dashboards are in the profile dropdown only */}
+              {/* Home link */}
               <NavLink
                 to="/"
                 end
                 className={({ isActive }) =>
                   `text-sm font-medium transition-colors hover:text-blue-600 ${
-                    isActive ? 'text-blue-600' : 'text-gray-600'
+                    isActive ? 'text-blue-600 font-semibold' : 'text-gray-600'
                   }`
                 }
               >
                 Home
               </NavLink>
+
+              {/* For Team Leads: Direct Header Links to Roster, Give Tasks to Students, and Student Dashboard */}
+              {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
+                <>
+                  <NavLink
+                    to="/teamlead?tab=roster"
+                    className={() =>
+                      `text-sm font-medium transition-colors hover:text-[#1C1B1A] flex items-center gap-1 ${
+                        location.pathname.startsWith('/teamlead') && (!location.search || location.search.includes('tab=roster') || location.search.includes('tab=search') || location.search.includes('tab=invitations'))
+                          ? 'text-[#1C1B1A] font-bold border-b-2 border-[#1C1B1A] pb-0.5'
+                          : 'text-gray-600'
+                      }`
+                    }
+                  >
+                    <span>Team Roster</span>
+                  </NavLink>
+
+                  <NavLink
+                    to="/teamlead?tab=give-tasks"
+                    className={() =>
+                      `text-sm font-medium transition-colors hover:text-[#1C1B1A] flex items-center gap-1 ${
+                        location.pathname.startsWith('/teamlead') && location.search.includes('tab=give-tasks')
+                          ? 'text-[#1C1B1A] font-bold border-b-2 border-[#1C1B1A] pb-0.5'
+                          : 'text-gray-600'
+                      }`
+                    }
+                  >
+                    <span>Give Tasks to Students</span>
+                  </NavLink>
+
+                  <NavLink
+                    to="/teamlead?tab=student-dashboard"
+                    className={() =>
+                      `text-sm font-medium transition-colors hover:text-blue-600 flex items-center gap-1 ${
+                        location.pathname.startsWith('/student') || (location.pathname.startsWith('/teamlead') && location.search.includes('tab=student-dashboard'))
+                          ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-0.5'
+                          : 'text-gray-600'
+                      }`
+                    }
+                  >
+                    <span>Student Dashboard</span>
+                  </NavLink>
+                </>
+              )}
+
+              {/* For Regular Students: Direct Link to Student Dashboard */}
+              {(user?.role === 'user' || user?.role === 'student') && (
+                <NavLink
+                  to="/student"
+                  className={({ isActive }) =>
+                    `text-sm font-medium transition-colors hover:text-blue-600 ${
+                      isActive ? 'text-blue-600 font-semibold' : 'text-gray-600'
+                    }`
+                  }
+                >
+                  Student Dashboard
+                </NavLink>
+              )}
 
               {/* If NOT Authenticated: Direct Login link without role dropdown */}
               {!isAuthenticated ? (

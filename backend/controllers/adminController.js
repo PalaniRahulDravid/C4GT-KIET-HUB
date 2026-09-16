@@ -161,8 +161,8 @@ const getTeams = async (req, res) => {
 
     const teams = await Team.find()
       .sort({ teamNumber: 1 })
-      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber')
-      .populate('members', 'name email avatar role memberType branch year rollNumber');
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
 
     res.status(200).json({
       success: true,
@@ -256,8 +256,8 @@ const assignTeamLead = async (req, res) => {
     await team.save();
 
     const updatedTeam = await Team.findById(team._id)
-      .populate('teamLeadId', 'name email avatar role')
-      .populate('members', 'name email avatar role');
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
 
     res.status(200).json({
       success: true,
@@ -306,8 +306,8 @@ const removeTeamMember = async (req, res) => {
     }
 
     const updatedTeam = await Team.findById(team._id)
-      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber')
-      .populate('members', 'name email avatar role memberType branch year rollNumber');
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
 
     res.status(200).json({
       success: true,

@@ -15,6 +15,8 @@ import {
   Trash2,
   ChevronRight,
   ShieldAlert,
+  Mail,
+  Phone,
 } from 'lucide-react';
 
 export default function TeamOverview() {
@@ -344,7 +346,18 @@ export default function TeamOverview() {
                     {t.teamLeadId?.name || 'No Lead Assigned Yet'}
                   </p>
                   {t.teamLeadId?.email ? (
-                    <p className="text-[11px] text-[#66645E] font-mono truncate">{t.teamLeadId.email}</p>
+                    <div className="space-y-0.5 mt-1">
+                      <p className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
+                        <span className="truncate">{t.teamLeadId.email}</span>
+                      </p>
+                      {(t.teamLeadId.phone || t.teamLeadId.phoneNumber) && (
+                        <p className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1 font-medium">
+                          <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span>{t.teamLeadId.phone || t.teamLeadId.phoneNumber}</span>
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-[11px] text-amber-700 italic mt-0.5">Select a user below to assign as Lead</p>
                   )}
@@ -425,14 +438,30 @@ export default function TeamOverview() {
                       <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs">
                         {viewingTeam.teamLeadId.name ? viewingTeam.teamLeadId.name.slice(0, 2).toUpperCase() : 'TL'}
                       </div>
-                      <div>
+                      <div className="flex-1 truncate">
                         <div className="text-xs font-bold text-[#1C1B1A] flex items-center gap-2">
                           {viewingTeam.teamLeadId.name}
                           <span className="text-[9px] font-mono bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
                             LEAD
                           </span>
                         </div>
-                        <div className="text-[11px] text-[#66645E] font-mono">{viewingTeam.teamLeadId.email}</div>
+                        <div className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1 mt-0.5">
+                          <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
+                          <a href={`mailto:${viewingTeam.teamLeadId.email}`} className="hover:underline">
+                            {viewingTeam.teamLeadId.email}
+                          </a>
+                        </div>
+                        {(viewingTeam.teamLeadId.phone || viewingTeam.teamLeadId.phoneNumber) && (
+                          <div className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1 mt-0.5">
+                            <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <a
+                              href={`tel:${viewingTeam.teamLeadId.phone || viewingTeam.teamLeadId.phoneNumber}`}
+                              className="hover:underline font-semibold"
+                            >
+                              {viewingTeam.teamLeadId.phone || viewingTeam.teamLeadId.phoneNumber}
+                            </a>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -474,12 +503,28 @@ export default function TeamOverview() {
                           <div className="w-8 h-8 rounded-full bg-[#EFECE3] text-[#1C1B1A] flex items-center justify-center font-bold text-xs font-mono">
                             {idx + 1}
                           </div>
-                          <div>
-                            <div className="text-xs font-bold text-[#1C1B1A]">{m.name || 'Student Member'}</div>
-                            <div className="text-[11px] text-[#66645E] font-mono">{m.email}</div>
-                            {(m.branch || m.year) && (
-                              <div className="text-[10px] text-[#88867E]">
-                                {m.branch} • Year {m.year}
+                          <div className="flex-1 truncate">
+                            <div className="text-xs font-bold text-[#1C1B1A] truncate">{m.name || 'Student Member'}</div>
+                            <div className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1 mt-0.5">
+                              <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
+                              <a href={`mailto:${m.email}`} className="hover:underline truncate">
+                                {m.email}
+                              </a>
+                            </div>
+                            {(m.phone || m.phoneNumber) && (
+                              <div className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1 mt-0.5">
+                                <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <a
+                                  href={`tel:${m.phone || m.phoneNumber}`}
+                                  className="hover:underline font-semibold"
+                                >
+                                  {m.phone || m.phoneNumber}
+                                </a>
+                              </div>
+                            )}
+                            {(m.branch || m.year || m.rollNumber) && (
+                              <div className="text-[10px] text-[#88867E] mt-0.5 font-mono">
+                                {m.branch} • Year {m.year} {m.rollNumber ? `• ${m.rollNumber}` : ''}
                               </div>
                             )}
                           </div>

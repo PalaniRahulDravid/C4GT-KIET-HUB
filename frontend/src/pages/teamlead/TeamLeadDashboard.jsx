@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Users,
@@ -16,20 +16,45 @@ import {
   Award,
   Sparkles,
   ChevronRight,
+  ChevronDown,
   ShieldCheck,
   Mail,
+  Phone,
   GraduationCap,
   X,
   UserCheck,
+  CheckSquare,
+  Plus,
+  Calendar,
+  FileText,
+  Flame,
+  BookOpen,
+  ExternalLink,
+  ArrowRight,
 } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
 
 export default function TeamLeadDashboard() {
   const { user, token, apiBaseUrl } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'roster';
+
   const [teamData, setTeamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('roster'); // 'roster' | 'search' | 'invitations'
+  const [activeTab, setActiveTab] = useState(initialTab); // 'roster' | 'search' | 'invitations' | 'give-tasks' | 'student-dashboard'
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['roster', 'search', 'invitations', 'give-tasks', 'student-dashboard'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab);
+    setSearchParams({ tab: newTab });
+  };
 
   // Search users state
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,6 +66,34 @@ export default function TeamLeadDashboard() {
   const [invitingUserId, setInvitingUserId] = useState(null);
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteModalUser, setInviteModalUser] = useState(null);
+
+  // Give Tasks to Students State
+  const [teamTasks, setTeamTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [submittingTask, setSubmittingTask] = useState(false);
+  const [expandedTaskProgress, setExpandedTaskProgress] = useState({});
+
+  // Task Form State
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskTopic, setTaskTopic] = useState('');
+  const [taskTargetGroup, setTaskTargetGroup] = useState('both');
+  const [taskDeadline, setTaskDeadline] = useState('');
+  const [taskPriority, setTaskPriority] = useState('Normal');
+  const defaultDeliverables = [
+    'Source Code Repo',
+    'GitHub Pull Request',
+    'Documentation / Spec',
+    'Demo / Presentation',
+  ];
+  const [taskDeliverables, setTaskDeliverables] = useState([...defaultDeliverables]);
+  const [customDeliverableInput, setCustomDeliverableInput] = useState('');
+
+  // Student Dashboard Preview State
+  const [studentTasks, setStudentTasks] = useState([]);
+  const [studentStreak, setStudentStreak] = useState(null);
+  const [loadingStudentData, setLoadingStudentData] = useState(false);
 
   // Toast
   const [toast, setToast] = useState(null);
@@ -99,9 +152,69 @@ export default function TeamLeadDashboard() {
     }
   };
 
+  const fetchTeamTasks = async () => {
+    try {
+      setLoadingTasks(true);
+      const res = await fetch(`${API_BASE_URL}/teamlead/tasks`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.tasks)) {
+          setTeamTasks(data.tasks);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch team tasks:', err);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  const fetchStudentPreviewData = async () => {
+    try {
+      setLoadingStudentData(true);
+      const [tasksRes, streakRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/student/tasks`, {
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }),
+        fetch(`${API_BASE_URL}/student/streak`, {
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }),
+      ]);
+      if (tasksRes.ok) {
+        const tData = await tasksRes.json();
+        if (tData.success && Array.isArray(tData.tasks)) {
+          setStudentTasks(tData.tasks);
+        }
+      }
+      if (streakRes.ok) {
+        const sData = await streakRes.json();
+        if (sData.success) {
+          setStudentStreak(sData);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load student preview data:', err);
+    } finally {
+      setLoadingStudentData(false);
+    }
+  };
+
   useEffect(() => {
     fetchMyTeam();
   }, [user]);
+
+  useEffect(() => {
+    if (activeTab === 'give-tasks') {
+      fetchTeamTasks();
+    } else if (activeTab === 'student-dashboard') {
+      fetchStudentPreviewData();
+    }
+  }, [activeTab]);
 
   // Refetch search when tab is search or search query / filter changes
   useEffect(() => {
@@ -117,7 +230,89 @@ export default function TeamLeadDashboard() {
     setIsRefreshing(true);
     fetchMyTeam();
     if (activeTab === 'search') fetchUsers();
-    showToast('Refreshed team data from Atlas.');
+    if (activeTab === 'give-tasks') fetchTeamTasks();
+    if (activeTab === 'student-dashboard') fetchStudentPreviewData();
+    showToast('Refreshed team workspace data.');
+  };
+
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
+    if (!taskTitle.trim() || !taskDescription.trim() || !taskDeadline) {
+      showToast('Please provide Title, Description, and Deadline', 'error');
+      return;
+    }
+    try {
+      setSubmittingTask(true);
+      const res = await fetch(`${API_BASE_URL}/teamlead/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: taskTitle.trim(),
+          description: taskDescription.trim(),
+          topic: taskTopic.trim() || teamData?.team?.track || 'Team Sprint',
+          targetGroup: taskTargetGroup,
+          deadline: taskDeadline,
+          priority: taskPriority,
+          deliverables: taskDeliverables,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || 'Task assigned to team students successfully!', 'success');
+        setTaskTitle('');
+        setTaskDescription('');
+        setTaskDeadline('');
+        setShowTaskForm(false);
+        fetchTeamTasks();
+      } else {
+        showToast(data.message || 'Failed to create task', 'error');
+      }
+    } catch (err) {
+      console.error('Create task error:', err);
+      showToast('Error assigning task to students', 'error');
+    } finally {
+      setSubmittingTask(false);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/teamlead/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Task deleted successfully', 'success');
+        fetchTeamTasks();
+      } else {
+        showToast(data.message || 'Failed to delete task', 'error');
+      }
+    } catch (err) {
+      console.error('Delete task error:', err);
+      showToast('Error deleting task', 'error');
+    }
+  };
+
+  const toggleDeliverable = (item) => {
+    if (taskDeliverables.includes(item)) {
+      setTaskDeliverables((prev) => prev.filter((d) => d !== item));
+    } else {
+      setTaskDeliverables((prev) => [...prev, item]);
+    }
+  };
+
+  const handleAddCustomDeliverable = () => {
+    if (customDeliverableInput.trim() && !taskDeliverables.includes(customDeliverableInput.trim())) {
+      setTaskDeliverables((prev) => [...prev, customDeliverableInput.trim()]);
+      setCustomDeliverableInput('');
+    }
   };
 
   // Send Invitation Handler
@@ -400,9 +595,9 @@ export default function TeamLeadDashboard() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#E0DDD0] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E0DDD0] pb-2">
         <button
-          onClick={() => setActiveTab('roster')}
+          onClick={() => handleTabChange('roster')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
             activeTab === 'roster'
               ? 'bg-[#1C1B1A] text-white shadow-xs'
@@ -414,7 +609,7 @@ export default function TeamLeadDashboard() {
         </button>
 
         <button
-          onClick={() => setActiveTab('search')}
+          onClick={() => handleTabChange('search')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
             activeTab === 'search'
               ? 'bg-[#1C1B1A] text-white shadow-xs'
@@ -426,7 +621,7 @@ export default function TeamLeadDashboard() {
         </button>
 
         <button
-          onClick={() => setActiveTab('invitations')}
+          onClick={() => handleTabChange('invitations')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
             activeTab === 'invitations'
               ? 'bg-[#1C1B1A] text-white shadow-xs'
@@ -438,6 +633,35 @@ export default function TeamLeadDashboard() {
           {pendingInvitations.length > 0 && (
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           )}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('give-tasks')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
+            activeTab === 'give-tasks'
+              ? 'bg-[#1C1B1A] text-white shadow-xs'
+              : 'bg-white hover:bg-[#F2EFE6] text-[#66645E] border border-[#E0DDD0]'
+          }`}
+        >
+          <CheckSquare className="w-3.5 h-3.5" />
+          <span>Give Tasks to Students ({teamTasks.length})</span>
+          {teamTasks.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200">
+              {teamTasks.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('student-dashboard')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer relative ${
+            activeTab === 'student-dashboard'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-blue-50/70 hover:bg-blue-100 text-blue-800 border border-blue-200'
+          }`}
+        >
+          <GraduationCap className="w-3.5 h-3.5 text-current" />
+          <span>Student Dashboard</span>
         </button>
       </div>
 
@@ -478,14 +702,30 @@ export default function TeamLeadDashboard() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs">
+                <div className="w-11 h-11 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs shrink-0">
                   {team.teamLeadId?.name ? team.teamLeadId.name.slice(0, 2).toUpperCase() : 'TL'}
                 </div>
-                <div className="truncate">
+                <div className="truncate flex-1">
                   <div className="font-bold text-sm text-[#1C1B1A] truncate">{team.teamLeadId?.name}</div>
-                  <div className="text-xs text-[#66645E] font-mono truncate">{team.teamLeadId?.email}</div>
-                  <div className="text-[10px] text-[#88867E] mt-0.5">
-                    Lead Mentor / Senior Developer
+                  <div className="text-xs text-[#66645E] font-mono truncate flex items-center gap-1.5 mt-0.5">
+                    <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
+                    <a href={`mailto:${team.teamLeadId?.email}`} className="hover:underline hover:text-[#1C1B1A] truncate">
+                      {team.teamLeadId?.email}
+                    </a>
+                  </div>
+                  {(team.teamLeadId?.phone || team.teamLeadId?.phoneNumber) && (
+                    <div className="text-xs text-emerald-800 font-mono truncate flex items-center gap-1.5 mt-0.5">
+                      <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <a
+                        href={`tel:${team.teamLeadId?.phone || team.teamLeadId?.phoneNumber}`}
+                        className="hover:underline font-semibold"
+                      >
+                        {team.teamLeadId?.phone || team.teamLeadId?.phoneNumber}
+                      </a>
+                    </div>
+                  )}
+                  <div className="text-[10px] text-[#88867E] mt-1 font-mono">
+                    Lead Mentor • {team.teamLeadId?.rollNumber ? `${team.teamLeadId.rollNumber}` : 'Lead'}
                   </div>
                 </div>
               </div>
@@ -509,14 +749,30 @@ export default function TeamLeadDashboard() {
                     </div>
 
                     <div className="flex items-center gap-3 mt-3">
-                      <div className="w-10 h-10 rounded-full bg-[#EFECE3] text-[#1C1B1A] flex items-center justify-center font-bold text-xs font-mono">
+                      <div className="w-10 h-10 rounded-full bg-[#EFECE3] text-[#1C1B1A] flex items-center justify-center font-bold text-xs font-mono shrink-0">
                         {member.name ? member.name.slice(0, 2).toUpperCase() : 'M'}
                       </div>
-                      <div className="truncate">
+                      <div className="truncate flex-1">
                         <div className="font-bold text-xs text-[#1C1B1A] truncate">{member.name}</div>
-                        <div className="text-[11px] text-[#66645E] font-mono truncate">{member.email}</div>
-                        {(member.branch || member.year) && (
-                          <div className="text-[10px] text-[#88867E]">
+                        <div className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1 mt-0.5">
+                          <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
+                          <a href={`mailto:${member.email}`} className="hover:underline hover:text-[#1C1B1A] truncate">
+                            {member.email}
+                          </a>
+                        </div>
+                        {(member.phone || member.phoneNumber) && (
+                          <div className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1 mt-0.5">
+                            <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <a
+                              href={`tel:${member.phone || member.phoneNumber}`}
+                              className="hover:underline font-semibold"
+                            >
+                              {member.phone || member.phoneNumber}
+                            </a>
+                          </div>
+                        )}
+                        {(member.branch || member.year || member.rollNumber) && (
+                          <div className="text-[10px] text-[#88867E] mt-1 font-mono">
                             {member.branch} • Year {member.year} {member.rollNumber ? `• ${member.rollNumber}` : ''}
                           </div>
                         )}
@@ -655,11 +911,22 @@ export default function TeamLeadDashboard() {
                       )}
                     </div>
 
-                    <div className="mt-2.5">
+                    <div className="mt-2.5 space-y-0.5">
                       <div className="text-xs font-bold text-[#1C1B1A] truncate">{u.name}</div>
-                      <div className="text-[11px] text-[#66645E] font-mono truncate">{u.email}</div>
+                      <div className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
+                        <a href={`mailto:${u.email}`} className="hover:underline truncate">{u.email}</a>
+                      </div>
+                      {(u.phone || u.phoneNumber) && (
+                        <div className="text-[11px] text-emerald-800 font-mono truncate flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <a href={`tel:${u.phone || u.phoneNumber}`} className="hover:underline font-medium">
+                            {u.phone || u.phoneNumber}
+                          </a>
+                        </div>
+                      )}
                       {(u.branch || u.year || u.rollNumber) && (
-                        <div className="text-[10px] text-[#88867E] mt-1">
+                        <div className="text-[10px] text-[#88867E] mt-1 font-mono">
                           {u.branch || 'Eng'} {u.year ? `• Year ${u.year}` : ''} {u.rollNumber ? `• ${u.rollNumber}` : ''}
                         </div>
                       )}
@@ -745,6 +1012,12 @@ export default function TeamLeadDashboard() {
                           <td className="py-3.5 px-4">
                             <div className="font-bold text-[#1C1B1A]">{target?.name || 'Student'}</div>
                             <div className="text-[11px] text-[#66645E] font-mono">{target?.email}</div>
+                            {(target?.phone || target?.phoneNumber) && (
+                              <div className="text-[10px] text-emerald-800 font-mono flex items-center gap-1 mt-0.5">
+                                <Phone className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>{target?.phone || target?.phoneNumber}</span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-[11px] text-[#66645E]">
                             {target?.branch || 'N/A'} {target?.year ? `• Year ${target.year}` : ''}
@@ -779,6 +1052,533 @@ export default function TeamLeadDashboard() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ================= TAB 4: GIVE TASKS TO STUDENTS ================= */}
+      {activeTab === 'give-tasks' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-mono font-bold uppercase tracking-wider border border-amber-200">
+                  Lead Task Dispatcher
+                </span>
+                <span className="text-xs text-[#66645E]">Team 6 • {team.track || 'Engineering Track'}</span>
+              </div>
+              <h3 className="font-['Instrument_Serif',serif] text-3xl font-bold text-[#1C1B1A]">
+                Give Tasks to Team Members
+              </h3>
+              <p className="text-xs text-[#66645E] mt-0.5">
+                Assign sprint deliverables, set deadlines, and monitor completion progress across your 8 team developers.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowTaskForm(!showTaskForm)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors shadow-xs cursor-pointer"
+            >
+              {showTaskForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+              <span>{showTaskForm ? 'Close Task Form' : '+ Assign New Task'}</span>
+            </button>
+          </div>
+
+          {/* Task Assignment Form */}
+          {showTaskForm && (
+            <form
+              onSubmit={handleCreateTask}
+              className="p-6 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-sm space-y-5 animate-in slide-in-from-top-3 duration-200"
+            >
+              <div className="flex items-center justify-between border-b border-[#E0DDD0] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs">
+                    TL
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-[#1C1B1A]">New Task Specification</h4>
+                    <p className="text-[11px] text-[#66645E]">This task will be dispatched to all members of {team.name}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTaskForm(false)}
+                  className="text-[#66645E] hover:text-[#1C1B1A] p-1 rounded-md"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Title */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                    Task Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="e.g. Sprint 1: Setup React Component Architecture & API Mocking"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A]"
+                  />
+                </div>
+
+                {/* Topic / Track */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                    Sprint Topic / Track
+                  </label>
+                  <input
+                    type="text"
+                    value={taskTopic}
+                    onChange={(e) => setTaskTopic(e.target.value)}
+                    placeholder={team.track || 'Team Sprint Goal'}
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A]"
+                  />
+                </div>
+
+                {/* Target Group */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                    Assign To
+                  </label>
+                  <select
+                    value={taskTargetGroup}
+                    onChange={(e) => setTaskTargetGroup(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A]"
+                  >
+                    <option value="both">All Team Members (Senior & Junior Developers)</option>
+                    <option value="developer_interns">Senior Developers (SD1 – SD4)</option>
+                    <option value="junior_developers">Junior Developers (JD1 – JD4)</option>
+                  </select>
+                </div>
+
+                {/* Deadline */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                    Submission Deadline *
+                  </label>
+                  <input
+                    type="date"
+                    value={taskDeadline}
+                    onChange={(e) => setTaskDeadline(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A]"
+                  />
+                </div>
+
+                {/* Priority */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                    Priority Level
+                  </label>
+                  <select
+                    value={taskPriority}
+                    onChange={(e) => setTaskPriority(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A]"
+                  >
+                    <option value="Normal">Normal</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High Priority</option>
+                    <option value="Urgent">Urgent / Milestone Blocker</option>
+                  </select>
+                </div>
+
+                {/* Deliverables Checklist */}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                    Required Deliverables
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {defaultDeliverables.map((item) => {
+                      const isSelected = taskDeliverables.includes(item);
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => toggleDeliverable(item)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-[#1C1B1A] text-white border-black'
+                              : 'bg-white text-[#66645E] border-[#E0DDD0] hover:border-black'
+                          }`}
+                        >
+                          <CheckCircle2 className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-400' : 'text-transparent'}`} />
+                          <span>{item}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom Deliverables Add */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={customDeliverableInput}
+                      onChange={(e) => setCustomDeliverableInput(e.target.value)}
+                      placeholder="Add custom deliverable (e.g. Figma Prototype)..."
+                      className="px-3 py-2 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] max-w-sm flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomDeliverable}
+                      className="px-3.5 py-2 rounded-xl bg-[#F2EFE6] hover:bg-[#E5E2D8] text-xs font-semibold text-[#1C1B1A] cursor-pointer"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-mono font-semibold uppercase text-[#1C1B1A] block">
+                    Task Description & Engineering Instructions *
+                  </label>
+                  <textarea
+                    value={taskDescription}
+                    onChange={(e) => setTaskDescription(e.target.value)}
+                    rows={4}
+                    placeholder="Describe the sprint scope, key functions to implement, branch naming convention, and review guidelines..."
+                    required
+                    className="w-full p-4 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-hidden focus:border-[#1C1B1A]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E0DDD0]">
+                <button
+                  type="button"
+                  onClick={() => setShowTaskForm(false)}
+                  className="px-4 py-2 rounded-xl bg-[#F2EFE6] hover:bg-[#E5E2D8] text-xs font-medium text-[#1C1B1A] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingTask}
+                  className="px-6 py-2.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-70"
+                >
+                  {submittingTask ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Dispatching Task...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Assign Task to Students</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Tasks List */}
+          {loadingTasks ? (
+            <div className="py-12 flex flex-col items-center justify-center space-y-3">
+              <RefreshCw className="w-6 h-6 text-[#1C1B1A] animate-spin" />
+              <p className="text-xs font-mono text-[#66645E]">Loading team tasks & member progress...</p>
+            </div>
+          ) : teamTasks.length === 0 ? (
+            <div className="p-12 text-center bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center mx-auto border border-amber-200">
+                <CheckSquare className="w-6 h-6" />
+              </div>
+              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                No Tasks Assigned to Your Team Yet
+              </h4>
+              <p className="text-xs text-[#66645E] max-w-md mx-auto leading-relaxed">
+                As the Team Lead, you can dispatch project milestones and sprint assignments directly to your 8 team members.
+              </p>
+              <button
+                onClick={() => setShowTaskForm(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#1C1B1A] text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Assign Your First Task</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {teamTasks.map((t) => {
+                const isCreatedByLead =
+                  (t.createdBy?._id && String(t.createdBy._id) === String(user?._id)) ||
+                  (t.createdBy && String(t.createdBy) === String(user?._id));
+                const totalAssigned = t.totalAssigned || membersCount;
+                const completedCount = t.completedCount || 0;
+                const pct = totalAssigned > 0 ? Math.round((completedCount / totalAssigned) * 100) : 0;
+                const isExpanded = Boolean(expandedTaskProgress[t._id]);
+
+                return (
+                  <div
+                    key={t._id}
+                    className="p-6 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-xs space-y-4 hover:border-[#1C1B1A]/40 transition-colors"
+                  >
+                    {/* Top Row */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E0DDD0]/60 pb-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-md bg-[#1C1B1A] text-white text-[10px] font-mono font-bold">
+                          {t.topic || team.track || 'Team Sprint'}
+                        </span>
+                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                          t.priority === 'Urgent'
+                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                            : t.priority === 'High'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-blue-50 text-blue-800 border-blue-200'
+                        }`}>
+                          {t.priority || 'Normal'} Priority
+                        </span>
+                        {isCreatedByLead ? (
+                          <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-bold">
+                            Assigned by You (Team Lead)
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 text-[10px] font-mono font-bold">
+                            Admin Milestone
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs text-[#66645E]">
+                        <div className="flex items-center gap-1 font-mono">
+                          <Calendar className="w-3.5 h-3.5 text-[#1C1B1A]" />
+                          <span>Deadline: {t.deadline ? new Date(t.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</span>
+                        </div>
+                        {isCreatedByLead && (
+                          <button
+                            onClick={() => handleDeleteTask(t._id)}
+                            className="p-1 rounded text-[#66645E] hover:text-rose-600 cursor-pointer"
+                            title="Delete this task"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Title & Description */}
+                    <div>
+                      <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                        {t.title}
+                      </h4>
+                      <p className="text-xs text-[#66645E] mt-1 leading-relaxed whitespace-pre-wrap">
+                        {t.description}
+                      </p>
+                    </div>
+
+                    {/* Deliverables */}
+                    {Array.isArray(t.deliverables) && t.deliverables.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] block">
+                          Required Deliverables:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {t.deliverables.map((deliv, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2.5 py-1 rounded-lg bg-[#F4F1E8] border border-[#E0DDD0] text-[11px] font-medium text-[#1C1B1A] flex items-center gap-1"
+                            >
+                              <FileText className="w-3 h-3 text-[#66645E]" />
+                              <span>{typeof deliv === 'string' ? deliv : deliv.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Member Progress Bar & Breakdown */}
+                    <div className="pt-2 border-t border-[#E0DDD0]/60 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-[#66645E]">Team Member Completion:</span>
+                        <span className="font-bold text-[#1C1B1A]">
+                          {completedCount} / {totalAssigned} Members Completed ({pct}%)
+                        </span>
+                      </div>
+
+                      <div className="w-full h-2.5 bg-[#EFECE3] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-emerald-600 transition-all duration-300"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+
+                      {/* Expand Member Roster Status Breakdown */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedTaskProgress((prev) => ({
+                            ...prev,
+                            [t._id]: !prev[t._id],
+                          }))
+                        }
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1C1B1A] hover:underline cursor-pointer pt-1"
+                      >
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        <span>{isExpanded ? 'Hide Member Status Roster' : 'View Each Member’s Progress Status'}</span>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-3 p-4 bg-white rounded-xl border border-[#E0DDD0] space-y-2 animate-in fade-in">
+                          <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] block">
+                            Member Submission Roster:
+                          </span>
+                          <div className="divide-y divide-[#E0DDD0]/60">
+                            {(team.members || []).map((m) => {
+                              const assignment = (t.assignments || []).find(
+                                (a) => String(a.studentId?._id || a.studentId) === String(m._id)
+                              );
+                              const status = assignment ? assignment.status : 'pending';
+                              return (
+                                <div key={m._id} className="py-2 flex items-center justify-between text-xs">
+                                  <div>
+                                    <span className="font-semibold text-[#1C1B1A]">{m.name}</span>
+                                    <span className="text-[11px] text-[#66645E] font-mono ml-2">({m.rollNumber || 'No Roll'})</span>
+                                    <span className="text-[10px] text-[#88867E] ml-2 uppercase">
+                                      {m.memberType ? m.memberType.replace('_', ' ') : 'Developer'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    {status === 'completed' ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Completed
+                                      </span>
+                                    ) : status === 'in_progress' ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200">
+                                        <Clock className="w-3 h-3" />
+                                        In Progress
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-gray-600 bg-gray-100 border border-gray-200">
+                                        Pending
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= TAB 5: STUDENT DASHBOARD (EMBEDDED VIEW) ================= */}
+      {activeTab === 'student-dashboard' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="p-6 bg-gradient-to-r from-blue-50 via-[#FDFCF9] to-indigo-50 rounded-2xl border-2 border-blue-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-mono font-bold uppercase tracking-wider">
+                  Dual Role Active
+                </span>
+                <span className="text-xs text-blue-900 font-medium">Team Lead & Enrolled Student</span>
+              </div>
+              <h3 className="font-['Instrument_Serif',serif] text-3xl font-bold text-[#1C1B1A]">
+                Student Learning Workspace
+              </h3>
+              <p className="text-xs text-[#66645E]">
+                As a Team Lead, you have access to your personal student curriculum, active learning streak, and task deliverables.
+              </p>
+            </div>
+
+            <Link
+              to="/student"
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            >
+              <span>Open Fullscreen Student Dashboard</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-[#66645E]">
+                <span>Active Streak</span>
+                <Flame className="w-4 h-4 text-orange-500" />
+              </div>
+              <div className="text-2xl font-bold text-[#1C1B1A] font-mono">
+                {studentStreak?.currentStreak || 0} Day{studentStreak?.currentStreak === 1 ? '' : 's'}
+              </div>
+              <p className="text-[11px] text-[#88867E]">Minimum 15 mins daily activity</p>
+            </div>
+
+            <div className="p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-[#66645E]">
+                <span>Assigned Learning Tasks</span>
+                <BookOpen className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="text-2xl font-bold text-[#1C1B1A] font-mono">
+                {studentTasks.length}
+              </div>
+              <p className="text-[11px] text-[#88867E]">Sprint curriculum tasks</p>
+            </div>
+
+            <div className="p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-[#66645E]">
+                <span>Completed Tasks</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-2xl font-bold text-[#1C1B1A] font-mono">
+                {studentTasks.filter((t) => t.status === 'completed').length}
+              </div>
+              <p className="text-[11px] text-[#88867E]">Verified deliverables</p>
+            </div>
+          </div>
+
+          {/* Student Tasks Preview */}
+          <div className="p-6 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] space-y-4 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <h4 className="font-['Instrument_Serif',serif] text-2xl font-bold text-[#1C1B1A]">
+                My Assigned Learning Tasks
+              </h4>
+              <Link
+                to="/student"
+                className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
+              >
+                <span>View All & Work on Tasks</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            {loadingStudentData ? (
+              <div className="py-8 flex justify-center">
+                <RefreshCw className="w-5 h-5 text-[#1C1B1A] animate-spin" />
+              </div>
+            ) : studentTasks.length === 0 ? (
+              <p className="text-xs text-[#66645E] py-4">No tasks currently assigned.</p>
+            ) : (
+              <div className="divide-y divide-[#E0DDD0]/60">
+                {studentTasks.slice(0, 5).map((st) => (
+                  <div key={st._id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-xs text-[#1C1B1A]">{st.title}</div>
+                      <div className="text-[11px] text-[#66645E]">
+                        Topic: {st.topic || 'Engineering Track'} • Deadline: {st.deadline ? new Date(st.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'N/A'}
+                      </div>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                      st.status === 'completed'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                    }`}>
+                      {st.status === 'completed' ? '✓ Completed' : 'In Progress'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -9,103 +9,103 @@ const Notification = require('../models/Notification');
 
 const rawCohortData = [
   // Team 1
-  { teamNum: 1, roleCode: 'LEAD', name: 'Bhavani sankar', roll: '23B21A4268', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CSM' },
-  { teamNum: 1, roleCode: 'SD1', name: 'KOLAMURI BHAVYA SRI', roll: '23JN1A4596', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 1, roleCode: 'SD2', name: 'MAMIDALA GOVIND', roll: '23B21A4541', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 1, roleCode: 'SD3', name: 'BOLISETTI JYOTHI SWARUPA', roll: '23B21A4516', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 1, roleCode: 'SD4', name: 'PANASA.RAJINI', roll: '23JN1A4331', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 1, roleCode: 'JD1', name: 'DASARI NAVEEN KUMAR', roll: '24B21A4419', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSD' },
-  { teamNum: 1, roleCode: 'JD2', name: 'MALLIPUDI SATYA KRUPA', roll: '24B21A4213', college: 'KIET', backlogs: 1, type: 'HS', branch: 'CSM' },
-  { teamNum: 1, roleCode: 'JD3', name: 'S . Siri Bhuvaneswari', roll: '24JN1A4513', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 1, roleCode: 'JD4', name: 'SABBISETTY ANJANA LAKSHMI ASRITHA', roll: '24JN1A4591', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 1, roleCode: 'LEAD', name: 'Bhavani sankar', roll: '23B21A4268', phone: '7995911766', email: 'bhavanisankaradavuluri1094@gmail.com', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CSM' },
+  { teamNum: 1, roleCode: 'SD1', name: 'KOLAMURI BHAVYA SRI', roll: '23JN1A4596', phone: '8500475677', email: 'bhavyasrikolamuri@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 1, roleCode: 'SD2', name: 'MAMIDALA GOVIND', roll: '23B21A4541', phone: '9391118215', email: 'mamidalagovind5599@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 1, roleCode: 'SD3', name: 'BOLISETTI JYOTHI SWARUPA', roll: '23B21A4516', phone: '8019332688', email: 'swaroopa80621@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 1, roleCode: 'SD4', name: 'PANASA.RAJINI', roll: '23JN1A4331', phone: '8184872788', email: 'rajini1788@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 1, roleCode: 'JD1', name: 'DASARI NAVEEN KUMAR', roll: '24B21A4419', phone: '9959305514', email: 'dasarinaveenkumar277@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSD' },
+  { teamNum: 1, roleCode: 'JD2', name: 'MALLIPUDI SATYA KRUPA', roll: '24B21A4213', phone: '9391546652', email: 'satyakrupamallipudi@gmail.com', college: 'KIET', backlogs: 1, type: 'HS', branch: 'CSM' },
+  { teamNum: 1, roleCode: 'JD3', name: 'S . Siri Bhuvaneswari', roll: '24JN1A4513', phone: '6281414574', email: 'somarouthusiri26@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 1, roleCode: 'JD4', name: 'SABBISETTY ANJANA LAKSHMI ASRITHA', roll: '24JN1A4591', phone: '8328107148', email: 'asrithaasabbisetty07@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
 
   // Team 2
-  { teamNum: 2, roleCode: 'LEAD', name: 'Ashwini', roll: '23JN1A4534', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 2, roleCode: 'SD1', name: 'DEVAGUPTAPU VENKATA SURYA SHANMUKHA', roll: '23JN1A4215', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 2, roleCode: 'SD2', name: 'GIRIDHAR SHYAM SAMSANI', roll: '23B21A4269', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 2, roleCode: 'SD3', name: 'Peddapalli Satya venkata Siva Durga Prasad', roll: '23B21A4591', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 2, roleCode: 'SD4', name: 'GANDHAM SRI LAKSHMI', roll: '23JN1A4533', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 2, roleCode: 'JD1', name: 'BALUKULA SAMPATH', roll: '24B21A4345', college: 'KIET', backlogs: 2, type: 'HS', branch: 'CAI' },
-  { teamNum: 2, roleCode: 'JD2', name: 'YUVARAJU BONDADA', roll: '246Q1A4307', college: 'KIET+', backlogs: 0, type: 'HS', branch: 'CAI' },
-  { teamNum: 2, roleCode: 'JD3', name: 'MONIKA KONA', roll: '24JN1A4306', college: 'KIEW', backlogs: 1, type: 'HS', branch: 'CAI' },
-  { teamNum: 2, roleCode: 'JD4', name: 'CHINTADA RAMYA SRI', roll: '24JN1A4502', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 2, roleCode: 'LEAD', name: 'Ashwini', roll: '23JN1A4534', phone: '8019664599', email: 'bashwindurga@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 2, roleCode: 'SD1', name: 'DEVAGUPTAPU VENKATA SURYA SHANMUKHA', roll: '23JN1A4215', phone: '7981535357', email: 'shanmukha2775@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 2, roleCode: 'SD2', name: 'GIRIDHAR SHYAM SAMSANI', roll: '23B21A4269', phone: '9705384535', email: 'giridharshyamsamsani@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 2, roleCode: 'SD3', name: 'Peddapalli Satya venkata Siva Durga Prasad', roll: '23B21A4591', phone: '9030512334', email: 'psivadurgaprasad88@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 2, roleCode: 'SD4', name: 'GANDHAM SRI LAKSHMI', roll: '23JN1A4533', phone: '6304569046', email: 'gandhamsrilakshmi59999@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 2, roleCode: 'JD1', name: 'BALUKULA SAMPATH', roll: '24B21A4345', phone: '9390536794', email: 'sampaths3877@gmail.com', college: 'KIET', backlogs: 2, type: 'HS', branch: 'CAI' },
+  { teamNum: 2, roleCode: 'JD2', name: 'YUVARAJU BONDADA', roll: '246Q1A4307', phone: '7989280510', email: 'yuvarajubondada111@gmail.com', college: 'KIET+', backlogs: 0, type: 'HS', branch: 'CAI' },
+  { teamNum: 2, roleCode: 'JD3', name: 'MONIKA KONA', roll: '24JN1A4306', phone: '8374129365', email: 'k.monikaa10@gmail.com', college: 'KIEW', backlogs: 1, type: 'HS', branch: 'CAI' },
+  { teamNum: 2, roleCode: 'JD4', name: 'CHINTADA RAMYA SRI', roll: '24JN1A4502', phone: '6302404514', email: 'ramyasri15007@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
 
   // Team 3
-  { teamNum: 3, roleCode: 'LEAD', name: 'Karthik', roll: '23B21A4661', college: 'KIET', backlogs: 1, type: 'HS', branch: 'CSC' },
-  { teamNum: 3, roleCode: 'SD1', name: 'Nithin Kumar Mancheela', roll: '23B21A4225', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 3, roleCode: 'SD2', name: 'LAXMI VISALYA SABBISETTI', roll: '23JN1A4543', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 3, roleCode: 'SD3', name: 'MASAA KEERTHI', roll: '23JN1A45A1', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 3, roleCode: 'SD4', name: 'PECHETTI SRI RAMA CHANDRA MURTHI', roll: '23B21A4538', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 3, roleCode: 'JD1', name: 'K HEMA SUPRIYA', roll: '24JN1A4316', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'CAI' },
-  { teamNum: 3, roleCode: 'JD2', name: 'ACHANTA SIVA RAMA KRISHNA', roll: '24B21A4576', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 3, roleCode: 'JD3', name: 'BEELA VIVEK', roll: '24B21A43A1', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CAI' },
-  { teamNum: 3, roleCode: 'JD4', name: 'BEVARA ANJILI RANI', roll: '24B21A4209', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
+  { teamNum: 3, roleCode: 'LEAD', name: 'Karthik', roll: '23B21A4661', phone: '9390756991', email: 'karthik939075@gmail.com', college: 'KIET', backlogs: 1, type: 'HS', branch: 'CSC' },
+  { teamNum: 3, roleCode: 'SD1', name: 'Nithin Kumar Mancheela', roll: '23B21A4225', phone: '7670924723', email: 'nithinmancheela@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 3, roleCode: 'SD2', name: 'LAXMI VISALYA SABBISETTI', roll: '23JN1A4543', phone: '8639478859', email: 'lakshmivisalyasabbisetti@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 3, roleCode: 'SD3', name: 'MASAA KEERTHI', roll: '23JN1A45A1', phone: '7207078483', email: 'keerthimasaa@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 3, roleCode: 'SD4', name: 'PECHETTI SRI RAMA CHANDRA MURTHI', roll: '23B21A4538', phone: '8886262590', email: 'srirampechetti251@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 3, roleCode: 'JD1', name: 'K HEMA SUPRIYA', roll: '24JN1A4316', phone: '9949421999', email: 'hemasupriyakari@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'CAI' },
+  { teamNum: 3, roleCode: 'JD2', name: 'ACHANTA SIVA RAMA KRISHNA', roll: '24B21A4576', phone: '7981239582', email: 'asivaramakrishna018@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 3, roleCode: 'JD3', name: 'BEELA VIVEK', roll: '24B21A43A1', phone: '7207261834', email: 'beelavivek730@gmail.com', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CAI' },
+  { teamNum: 3, roleCode: 'JD4', name: 'BEVARA ANJILI RANI', roll: '24B21A4209', phone: '8688754397', email: 'anjiliranibevara@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
 
   // Team 4
-  { teamNum: 4, roleCode: 'LEAD', name: 'Akhil', roll: '23B21A45B4', college: 'KIET', backlogs: 1, type: 'HS', branch: 'AID' },
-  { teamNum: 4, roleCode: 'SD1', name: 'R.BALA NIKHITHA', roll: '23JN1A4581', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 4, roleCode: 'SD2', name: 'PAIDIKONDALA DEVI', roll: '23B21A4506', college: 'KIET', backlogs: 2, type: 'DS', branch: 'AID' },
-  { teamNum: 4, roleCode: 'SD3', name: 'LITHIKASRAYA C', roll: '23B21A4618', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CSC' },
-  { teamNum: 4, roleCode: 'SD4', name: 'SAI TEJA REVURI', roll: '24B25A4305', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 4, roleCode: 'JD1', name: 'ARIGELA DURGA SAI MANIKANTA', roll: '25B25A4516', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 4, roleCode: 'JD2', name: 'GOLUGURI KEERTHI SRI JYOTHI', roll: '24JN1A4269', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 4, roleCode: 'JD3', name: 'NEELAM MOUNIKA', roll: '24JN1A4526', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 4, roleCode: 'JD4', name: 'MARNI HARISH JAYARAM', roll: '24B21A4281', college: 'KIET', backlogs: 2, type: 'DS', branch: 'CSM' },
+  { teamNum: 4, roleCode: 'LEAD', name: 'Akhil', roll: '23B21A45B4', phone: '9515233587', email: 'akhilvanama19@gmail.com', college: 'KIET', backlogs: 1, type: 'HS', branch: 'AID' },
+  { teamNum: 4, roleCode: 'SD1', name: 'R.BALA NIKHITHA', roll: '23JN1A4581', phone: '9963508675', email: 'nikhithan172@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 4, roleCode: 'SD2', name: 'PAIDIKONDALA DEVI', roll: '23B21A4506', phone: '7569830629', email: 'devipaidikondala3@gmail.com', college: 'KIET', backlogs: 2, type: 'DS', branch: 'AID' },
+  { teamNum: 4, roleCode: 'SD3', name: 'LITHIKASRAYA C', roll: '23B21A4618', phone: '8122600058', email: 'lithikasrayac@gmail.com', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CSC' },
+  { teamNum: 4, roleCode: 'SD4', name: 'SAI TEJA REVURI', roll: '24B25A4305', phone: '9154122026', email: 'steja9759@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 4, roleCode: 'JD1', name: 'ARIGELA DURGA SAI MANIKANTA', roll: '25B25A4516', phone: '9515667677', email: 'arigelamanikanta2005@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 4, roleCode: 'JD2', name: 'GOLUGURI KEERTHI SRI JYOTHI', roll: '24JN1A4269', phone: '7702132788', email: 'ksri01437@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 4, roleCode: 'JD3', name: 'NEELAM MOUNIKA', roll: '24JN1A4526', phone: '8463999085', email: 'mounika.neelam03@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 4, roleCode: 'JD4', name: 'MARNI HARISH JAYARAM', roll: '24B21A4281', phone: '6305233077', email: 'mharishjayaram77@gmail.com', college: 'KIET', backlogs: 2, type: 'DS', branch: 'CSM' },
 
   // Team 5
-  { teamNum: 5, roleCode: 'LEAD', name: 'Meena', roll: '23JN1A45C0', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 5, roleCode: 'SD1', name: 'MANDADI NAGARATNAKAR', roll: '23B21A45A6', college: 'KIET', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 5, roleCode: 'SD2', name: 'CHELLUMAHANTHI KARTHIK', roll: '23B21A4532', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 5, roleCode: 'SD3', name: 'KOLA SRI RAMARAJU', roll: '23B21A4262', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 5, roleCode: 'SD4', name: 'BINDUSRI TALAKONDA', roll: '23JN1A4565', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 5, roleCode: 'JD1', name: 'GUNTAMUKKALA BHARATHI', roll: '25JN5A4204', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 5, roleCode: 'JD2', name: 'SIRIPURAPU DEEKSHITHA', roll: '24B21A4410', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSD' },
-  { teamNum: 5, roleCode: 'JD3', name: 'TADIKALA YASWANTH KUMAR', roll: '24B21A4567', college: 'KIET', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 5, roleCode: 'JD4', name: 'MOTURI TEJA GANESH', roll: '24B21A45C4', college: 'KIET', backlogs: 1, type: 'DS', branch: 'AID' },
+  { teamNum: 5, roleCode: 'LEAD', name: 'Meena', roll: '23JN1A45C0', phone: '8919002723', email: 'meenachittuluri@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 5, roleCode: 'SD1', name: 'MANDADI NAGARATNAKAR', roll: '23B21A45A6', phone: '7981224969', email: 'nagaratnakarmandadi@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 5, roleCode: 'SD2', name: 'CHELLUMAHANTHI KARTHIK', roll: '23B21A4532', phone: '8121407838', email: 'karthikch834@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 5, roleCode: 'SD3', name: 'KOLA SRI RAMARAJU', roll: '23B21A4262', phone: '9666364628', email: 'sriramkola153@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 5, roleCode: 'SD4', name: 'BINDUSRI TALAKONDA', roll: '23JN1A4565', phone: '8019977818', email: 'bindusri2294@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 5, roleCode: 'JD1', name: 'GUNTAMUKKALA BHARATHI', roll: '25JN5A4204', phone: '7981251235', email: 'bharathiguntamukkala123@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 5, roleCode: 'JD2', name: 'SIRIPURAPU DEEKSHITHA', roll: '24B21A4410', phone: '7288820073', email: 'sdeekshitha73@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSD' },
+  { teamNum: 5, roleCode: 'JD3', name: 'TADIKALA YASWANTH KUMAR', roll: '24B21A4567', phone: '9177031935', email: 'tadikalaeswanthkumar@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 5, roleCode: 'JD4', name: 'MOTURI TEJA GANESH', roll: '24B21A45C4', phone: '9032237429', email: 'moturitejaganesh@gmail.com', college: 'KIET', backlogs: 1, type: 'DS', branch: 'AID' },
 
   // Team 6
-  { teamNum: 6, roleCode: 'LEAD', name: 'Rahul', roll: '23B21A4546', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 6, roleCode: 'SD1', name: 'Rayudu Veera Venkata Swamy', roll: '23B21A4595', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 6, roleCode: 'SD2', name: 'CHINTHALAPUDI VENKATA SATYA SAI ABHISHEK', roll: '23B21A4565', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 6, roleCode: 'SD3', name: 'PALIVELA LAKSHMI TARUN', roll: '23B21A4558', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 6, roleCode: 'SD4', name: 'Gattem Aruna', roll: '23JN1A4314', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 6, roleCode: 'JD1', name: 'MALLA HARSHA VARDHAN', roll: '24B21A4260', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 6, roleCode: 'JD2', name: 'CHENNAMALLI SURENDRA', roll: '24B21A43A5', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 6, roleCode: 'JD3', name: 'ROOPA SRI YENUGU', roll: '24B21A4310', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CAI' },
-  { teamNum: 6, roleCode: 'JD4', name: 'Tharun Bole', roll: '25B25A4420', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSD' },
+  { teamNum: 6, roleCode: 'LEAD', name: 'Rahul', roll: '23B21A4546', phone: '9059704389', email: 'rahuldravidpalani2005@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 6, roleCode: 'SD1', name: 'Rayudu Veera Venkata Swamy', roll: '23B21A4595', phone: '7288819391', email: 'swamyrayudu7288@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 6, roleCode: 'SD2', name: 'CHINTHALAPUDI VENKATA SATYA SAI ABHISHEK', roll: '23B21A4565', phone: '6302015687', email: 'abhi31mai@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 6, roleCode: 'SD3', name: 'PALIVELA LAKSHMI TARUN', roll: '23B21A4558', phone: '6303474889', email: 'lakshmitaruntarun@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 6, roleCode: 'SD4', name: 'Gattem Aruna', roll: '23JN1A4314', phone: '8008349924', email: 'gattemaruna68@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 6, roleCode: 'JD1', name: 'MALLA HARSHA VARDHAN', roll: '24B21A4260', phone: '6281511653', email: 'mallaharsahvardhannaidu@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 6, roleCode: 'JD2', name: 'CHENNAMALLI SURENDRA', roll: '24B21A43A5', phone: '9652077964', email: 'surendrachennamalli177@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 6, roleCode: 'JD3', name: 'ROOPA SRI YENUGU', roll: '24B21A4310', phone: '9390093667', email: 'yroopasri6@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CAI' },
+  { teamNum: 6, roleCode: 'JD4', name: 'Tharun Bole', roll: '25B25A4420', phone: '7780388517', email: 'gowdatharthun692@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSD' },
 
   // Team 7
-  { teamNum: 7, roleCode: 'LEAD', name: 'Charan', roll: '23B21A4311', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 7, roleCode: 'SD1', name: 'Thumpala Haribabu', roll: '23B21A4265', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 7, roleCode: 'SD2', name: 'TAMMANA SRI LAKSHMI VASANTHI', roll: '23B21A4202', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 7, roleCode: 'SD3', name: 'GOPISETTI HEMA SAI DEEPTHI', roll: '23JN1A4550', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 7, roleCode: 'SD4', name: 'MOKA DIVYA', roll: '23B21A4301', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 7, roleCode: 'JD1', name: 'BEPALA PURNIMA', roll: '24JN1A4506', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 7, roleCode: 'JD2', name: 'Veeramsetti Y N D Sanjay Bhargav', roll: '24B21A4577', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 7, roleCode: 'JD3', name: 'MOTURI LALITHA SOWJANYA', roll: '25B25A4205', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 7, roleCode: 'JD4', name: 'KADIYALA MANI NAGA VENKATESH', roll: '24B21A4494', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CSD' },
+  { teamNum: 7, roleCode: 'LEAD', name: 'Charan', roll: '23B21A4311', phone: '9182242104', email: 'charannaidukumpatla104@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 7, roleCode: 'SD1', name: 'Thumpala Haribabu', roll: '23B21A4265', phone: '9392393340', email: 'thumpalaharibabu@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 7, roleCode: 'SD2', name: 'TAMMANA SRI LAKSHMI VASANTHI', roll: '23B21A4202', phone: '8374144515', email: 'vasanthitammana56@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 7, roleCode: 'SD3', name: 'GOPISETTI HEMA SAI DEEPTHI', roll: '23JN1A4550', phone: '9618512758', email: 'gopisettideepu@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 7, roleCode: 'SD4', name: 'MOKA DIVYA', roll: '23B21A4301', phone: '8885793625', email: 'divyamoka7511@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 7, roleCode: 'JD1', name: 'BEPALA PURNIMA', roll: '24JN1A4506', phone: '8074376562', email: 'purnimareddy0026@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 7, roleCode: 'JD2', name: 'Veeramsetti Y N D Sanjay Bhargav', roll: '24B21A4577', phone: '6303191968', email: 'sanjaybhargav0005@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 7, roleCode: 'JD3', name: 'MOTURI LALITHA SOWJANYA', roll: '25B25A4205', phone: '9589677166', email: 'moturilalithasowjanya@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 7, roleCode: 'JD4', name: 'KADIYALA MANI NAGA VENKATESH', roll: '24B21A4494', phone: '8106916455', email: 'kadiyalamani5678@gmail.com', college: 'KIET', backlogs: 1, type: 'DS', branch: 'CSD' },
 
   // Team 8
-  { teamNum: 8, roleCode: 'LEAD', name: 'Sanjeetha', roll: '23B21A4304', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 8, roleCode: 'SD1', name: 'KATTEBOINA RAVI TEJA', roll: '23B21A4348', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
-  { teamNum: 8, roleCode: 'SD2', name: 'ACHANTA VEERA KUMARI', roll: '23JN1A4510', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 8, roleCode: 'SD3', name: 'NARUKULA DEVI', roll: '23JN1A45E0', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
-  { teamNum: 8, roleCode: 'SD4', name: 'YANDAPALLI SAI VARSHITHA', roll: '23B21A4205', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 8, roleCode: 'JD1', name: 'AKSHAYA JOGA', roll: '24JN1A4505', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 8, roleCode: 'JD2', name: 'D.GANGA BHAVANI', roll: '25JN5A4202', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 8, roleCode: 'JD3', name: 'HARSHA VARDHAN ARIPAKA', roll: '24B21A4256', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
-  { teamNum: 8, roleCode: 'JD4', name: 'RAPARTHI DURGA VENKATA MANIKANTA', roll: '25B25A4238', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 8, roleCode: 'LEAD', name: 'Sanjeetha', roll: '23B21A4304', phone: '8977621830', email: 'sanjeetha18@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 8, roleCode: 'SD1', name: 'KATTEBOINA RAVI TEJA', roll: '23B21A4348', phone: '6305730848', email: 'katteboinaraviteja21@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CAI' },
+  { teamNum: 8, roleCode: 'SD2', name: 'ACHANTA VEERA KUMARI', roll: '23JN1A4510', phone: '9346136606', email: 'vkachanta9346@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 8, roleCode: 'SD3', name: 'NARUKULA DEVI', roll: '23JN1A45E0', phone: '9849069626', email: 'devivarshinanarukula2005@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'AID' },
+  { teamNum: 8, roleCode: 'SD4', name: 'YANDAPALLI SAI VARSHITHA', roll: '23B21A4205', phone: '9989096389', email: 'saivarshithayandapalli@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 8, roleCode: 'JD1', name: 'AKSHAYA JOGA', roll: '24JN1A4505', phone: '6305643361', email: 'akshayajoga28@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 8, roleCode: 'JD2', name: 'D.GANGA BHAVANI', roll: '25JN5A4202', phone: '9502224398', email: 'dasarigangabhavani81@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 8, roleCode: 'JD3', name: 'HARSHA VARDHAN ARIPAKA', roll: '24B21A4256', phone: '9701368489', email: 'aripakaharshavardhan09@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
+  { teamNum: 8, roleCode: 'JD4', name: 'RAPARTHI DURGA VENKATA MANIKANTA', roll: '25B25A4238', phone: '9866655334', email: 'manikantaraparthi71@gmail.com', college: 'KIET', backlogs: 0, type: 'DS', branch: 'CSM' },
 
   // Team 9
-  { teamNum: 9, roleCode: 'LEAD', name: 'Aditya', roll: '23B21A4368', college: 'KIET', backlogs: 1, type: 'HS', branch: 'CAI' },
-  { teamNum: 9, roleCode: 'SD1', name: 'YELLAPU JAYASREE', roll: '23JN1A4211', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
-  { teamNum: 9, roleCode: 'SD2', name: 'Velaga Sai Chandu', roll: '23B21A4297', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
-  { teamNum: 9, roleCode: 'SD3', name: 'Alapati Avinash', roll: '23B21A4378', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CAI' },
-  { teamNum: 9, roleCode: 'SD4', name: 'Puligedda Naga Sri Verra Varun', roll: '23B21A4323', college: 'KIET', backlogs: 2, type: 'DS', branch: 'CAI' },
-  { teamNum: 9, roleCode: 'JD1', name: 'ANKAMREDDI TEJASRI', roll: '25JN5A4201', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'CSM' },
-  { teamNum: 9, roleCode: 'JD2', name: 'KAMBHAMPATI NAVEEN', roll: '25B25A4512', college: 'KIET', backlogs: 0, type: 'HS', branch: 'AID' },
-  { teamNum: 9, roleCode: 'JD3', name: 'SEELAMREDDI MUGDHA MOHANA SIVA PRIYA', roll: '25B25A4203', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
-  { teamNum: 9, roleCode: 'JD4', name: 'GUMMADIDALA UMA DEVI', roll: '25B25A4202', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
+  { teamNum: 9, roleCode: 'LEAD', name: 'Aditya', roll: '23B21A4368', phone: '8121124042', email: 'nadipilliaditya7@gmail.com', college: 'KIET', backlogs: 1, type: 'HS', branch: 'CAI' },
+  { teamNum: 9, roleCode: 'SD1', name: 'YELLAPU JAYASREE', roll: '23JN1A4211', phone: '7842845423', email: 'jayasreeyellapu6475@gmail.com', college: 'KIEW', backlogs: 0, type: 'DS', branch: 'CSM' },
+  { teamNum: 9, roleCode: 'SD2', name: 'Velaga Sai Chandu', roll: '23B21A4297', phone: '9989408479', email: 'sunnyvelega219@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
+  { teamNum: 9, roleCode: 'SD3', name: 'Alapati Avinash', roll: '23B21A4378', phone: '7780139348', email: 'avinashalapati11@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CAI' },
+  { teamNum: 9, roleCode: 'SD4', name: 'Puligedda Naga Sri Verra Varun', roll: '23B21A4323', phone: '8639797478', email: 'pulligeddanagasriveeravarun@gmail.com', college: 'KIET', backlogs: 2, type: 'DS', branch: 'CAI' },
+  { teamNum: 9, roleCode: 'JD1', name: 'ANKAMREDDI TEJASRI', roll: '25JN5A4201', phone: '7995304085', email: 'ankamredditejasri05@gmail.com', college: 'KIEW', backlogs: 0, type: 'HS', branch: 'CSM' },
+  { teamNum: 9, roleCode: 'JD2', name: 'KAMBHAMPATI NAVEEN', roll: '25B25A4512', phone: '6281841399', email: 'kambhampatinaveen5@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'AID' },
+  { teamNum: 9, roleCode: 'JD3', name: 'SEELAMREDDI MUGDHA MOHANA SIVA PRIYA', roll: '25B25A4203', phone: '9493539295', email: 'sivapriyaseelamreddy@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
+  { teamNum: 9, roleCode: 'JD4', name: 'GUMMADIDALA UMA DEVI', roll: '25B25A4202', phone: '8985913868', email: 'umadevigummadidala@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
 ];
 
 const trackNames = {
@@ -166,7 +166,8 @@ async function seedCohort() {
       const cleanRoll = record.roll.trim().toUpperCase();
       const isLead = record.roleCode === 'LEAD';
       const isSenior = isLead || record.roleCode.startsWith('SD');
-      const cleanEmail = `${cleanRoll.toLowerCase()}@kiet.edu`;
+      const cleanEmail = (record.email || `${cleanRoll.toLowerCase()}@kiet.edu`).trim().toLowerCase();
+      const cleanPhone = (record.phone || '').trim();
       const year = cleanRoll.startsWith('23') ? 3 : cleanRoll.startsWith('24') ? 2 : 2;
 
       // Find or create user
@@ -179,6 +180,8 @@ async function seedCohort() {
           name: record.name.trim(),
           email: cleanEmail,
           rollNumber: cleanRoll,
+          phone: cleanPhone,
+          phoneNumber: cleanPhone,
           password: cleanRoll, // Will be hashed in pre-save
           college: record.college || 'KIET',
           dayScholarHostel: record.type || 'DS',
@@ -194,6 +197,8 @@ async function seedCohort() {
         user.name = record.name.trim();
         user.email = cleanEmail;
         user.rollNumber = cleanRoll;
+        user.phone = cleanPhone;
+        user.phoneNumber = cleanPhone;
         user.password = cleanRoll; // Set password to roll number
         user.college = record.college || 'KIET';
         user.dayScholarHostel = record.type || 'DS';

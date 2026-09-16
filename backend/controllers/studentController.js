@@ -530,8 +530,8 @@ const getStudentTeam = async (req, res) => {
     }
 
     const populatedTeam = await Team.findById(team._id)
-      .populate('teamLeadId', 'name email avatar role memberType branch year rollNumber')
-      .populate('members', 'name email avatar role memberType branch year rollNumber status');
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status');
 
     const maxMembers = populatedTeam.maxMembers || 9;
     const currentMembersCount = (populatedTeam.members ? populatedTeam.members.length : 0) + (populatedTeam.teamLeadId ? 1 : 0);
@@ -565,7 +565,7 @@ const getStudentInvitations = async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .populate('teamId', 'name teamNumber track maxMembers members teamLeadId')
-      .populate('teamLeadId', 'name email avatar role memberType');
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType');
 
     res.status(200).json({
       success: true,
@@ -685,8 +685,8 @@ const respondToTeamInvitation = async (req, res) => {
       } catch (e) {}
 
       const populatedTeam = await Team.findById(team._id)
-        .populate('teamLeadId', 'name email avatar role memberType')
-        .populate('members', 'name email avatar role memberType branch year rollNumber status');
+        .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType')
+        .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status');
 
       return res.status(200).json({
         success: true,
