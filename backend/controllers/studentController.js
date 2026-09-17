@@ -43,7 +43,18 @@ const getStudentTeamNumber = async (user) => {
 const getStudentTasks = async (req, res) => {
   try {
     const studentId = req.user._id;
-    const teamNumber = await getStudentTeamNumber(req.user);
+    let studentTeamDoc = null;
+    if (req.user.teamId) {
+      studentTeamDoc = await Team.findById(req.user.teamId);
+    }
+    if (!studentTeamDoc) {
+      studentTeamDoc = await Team.findOne({
+        $or: [{ members: studentId }, { teamLeadId: studentId }],
+      });
+    }
+
+    const resolvedTeamNumber = studentTeamDoc ? studentTeamDoc.teamNumber : await getStudentTeamNumber(req.user);
+    const leadId = studentTeamDoc ? studentTeamDoc.teamLeadId : null;
 
     // Fetch explicit assignments for student
     const assignments = await TaskAssignment.find({ studentId }).populate('reviewedBy', 'name email avatar role');
@@ -69,27 +80,57 @@ const getStudentTasks = async (req, res) => {
       targetGroups.push('junior_developers', 'developer_interns');
     }
 
-    // Build task query matching team and targetGroup or explicit assignment
-    const query = {
-      $or: [
-        { _id: { $in: explicitTaskIds } },
-        {
-          $and: [
-            teamNumber
-              ? { assignedTeams: teamNumber }
-              : { assignedTeams: { $exists: true } },
-            { targetGroup: { $in: targetGroups } },
-          ],
-        },
-      ],
-    };
+    // Build comprehensive query matching:
+    // 1. Explicit task assignments for this student
+    // 2. Direct assignment in task.assignedTo
+    // 3. Tasks created by their Team Lead
+    // 4. Tasks assigned to their team
+    const queryConditions = [
+      { _id: { $in: explicitTaskIds } },
+      { assignedTo: studentId },
+    ];
+
+    if (leadId) {
+      queryConditions.push({ createdBy: leadId });
+    }
+
+    const teamQueries = [];
+    if (resolvedTeamNumber !== null && resolvedTeamNumber !== undefined) {
+      teamQueries.push(
+        { assignedTeams: resolvedTeamNumber },
+        { assignedTeams: Number(resolvedTeamNumber) },
+        { assignedTeams: String(resolvedTeamNumber) }
+      );
+    }
+
+    if (teamQueries.length > 0) {
+      queryConditions.push({
+        $and: [
+          { $or: teamQueries },
+          {
+            $or: [
+              { targetGroup: { $in: [...targetGroups, 'both', 'individual', 'all'] } },
+              { targetGroup: { $exists: false } },
+              { targetGroup: null },
+            ],
+          },
+        ],
+      });
+    } else {
+      queryConditions.push({
+        assignedTeams: { $exists: true },
+        targetGroup: { $in: [...targetGroups, 'both', 'individual', 'all'] },
+      });
+    }
+
+    const query = { $or: queryConditions };
 
     let tasks = await Task.find(query)
       .sort({ deadline: 1 })
       .populate('createdBy', 'name email avatar role')
       .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
 
-    // Fallback: if database has tasks but query returned none, return published tasks for cohort
+    // Fallback: if query returned none, return published tasks for cohort
     if (tasks.length === 0) {
       tasks = await Task.find()
         .sort({ deadline: 1 })
@@ -105,12 +146,18 @@ const getStudentTasks = async (req, res) => {
       taskObj.assignment = assignment;
 
       const creatorRole = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
-      if (creatorRole === 'admin') {
+      const isLeadCreator = leadId && t.createdBy?._id && t.createdBy._id.toString() === leadId.toString();
+
+      if (creatorRole === 'admin' || (Array.isArray(t.assignedTeams) && t.assignedTeams.length > 1)) {
         taskObj.source = 'admin';
-      } else if (creatorRole === 'teamlead' || creatorRole === 'team_lead') {
+      } else if (
+        creatorRole === 'teamlead' ||
+        creatorRole === 'team_lead' ||
+        isLeadCreator ||
+        t.taskScope === 'students' ||
+        t.taskScope === 'individual'
+      ) {
         taskObj.source = 'teamlead';
-      } else if (Array.isArray(t.assignedTeams) && t.assignedTeams.length > 1) {
-        taskObj.source = 'admin';
       } else {
         taskObj.source = 'teamlead';
       }

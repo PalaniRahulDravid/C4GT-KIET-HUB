@@ -104,7 +104,7 @@ export default function StudentDashboard() {
   // Task filter & search
   const [taskStatusFilter, setTaskStatusFilter] = useState('all'); // all, todo, submitted, completed
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
-  const [taskSourceTab, setTaskSourceTab] = useState('teamlead'); // 'teamlead' or 'admin'
+  const [taskSourceTab, setTaskSourceTab] = useState('all'); // 'all', 'teamlead', 'admin'
 
   // Resources search & category
   const [resourceCategory, setResourceCategory] = useState('all'); // all, docs, code, dsa
@@ -386,6 +386,15 @@ export default function StudentDashboard() {
   }, [tasks]);
 
   const nextPriorityTask = useMemo(() => {
+    // Prioritize pending/in-progress Team Lead tasks first so students see lead tasks right away
+    const pendingTeamLead = teamLeadTasks.find(
+      (t) =>
+        t.assignment?.status !== 'completed' &&
+        t.status !== 'completed' &&
+        t.assignment?.status !== 'submitted'
+    );
+    if (pendingTeamLead) return pendingTeamLead;
+
     return (
       tasks.find(
         (t) =>
@@ -397,7 +406,7 @@ export default function StudentDashboard() {
       tasks[0] ||
       null
     );
-  }, [tasks]);
+  }, [tasks, teamLeadTasks]);
 
   const completedResourcesCount = useMemo(() => {
     return hubResources.filter((r) => r.isCompleted).length;
@@ -408,6 +417,7 @@ export default function StudentDashboard() {
     if (!t) return false;
     if (t.source === 'admin') return true;
     if (t.source === 'teamlead' || t.source === 'team_lead') return false;
+    if (t.taskScope === 'students' || t.taskScope === 'individual') return false;
     const role = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
     if (role === 'admin') return true;
     if (role === 'teamlead' || role === 'team_lead') return false;
@@ -423,8 +433,9 @@ export default function StudentDashboard() {
   }, [tasks]);
 
   const activeSourceTasks = useMemo(() => {
+    if (taskSourceTab === 'all') return tasks;
     return taskSourceTab === 'admin' ? adminTasks : teamLeadTasks;
-  }, [taskSourceTab, adminTasks, teamLeadTasks]);
+  }, [taskSourceTab, tasks, adminTasks, teamLeadTasks]);
 
   // Scoped statistics for the currently selected source tab (Team Lead vs Admin)
   const scopedTaskStats = useMemo(() => {
@@ -796,8 +807,17 @@ export default function StudentDashboard() {
                 {nextPriorityTask ? (
                   <Card className="border-slate-300 shadow-xs">
                     <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="default">Priority Action Item</Badge>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="default">Priority Action Item</Badge>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${
+                            isTaskAdmin(nextPriorityTask)
+                              ? 'bg-slate-100 text-slate-700'
+                              : 'bg-amber-50 text-amber-800 border border-amber-200/80'
+                          }`}>
+                            {isTaskAdmin(nextPriorityTask) ? 'Admin Milestone' : 'Team Lead Sprint'}
+                          </span>
+                        </div>
                         <span className="text-xs font-mono font-medium text-slate-500 flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5" />
                           Due: {new Date(nextPriorityTask.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
@@ -875,6 +895,67 @@ export default function StudentDashboard() {
                       You are completely caught up with your team's deliverables.
                     </p>
                   </Card>
+                )}
+
+                {/* Team Lead Active Sprints & Tasks Section on Overview */}
+                {teamLeadTasks.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-amber-600" />
+                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                          Team Lead Sprints & Tasks ({teamLeadTasks.length})
+                        </h3>
+                      </div>
+                      <Button
+                        variant="link"
+                        onClick={() => {
+                          setTaskSourceTab('teamlead');
+                          navigate('/student/my-tasks');
+                        }}
+                        className="text-xs text-slate-600 hover:text-slate-900"
+                      >
+                        View All in Tasks ({teamLeadTasks.length}) →
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {teamLeadTasks.slice(0, 4).map((t) => {
+                        const status = t.assignment?.status || t.status || 'pending';
+                        const isCompleted = status === 'completed';
+                        const isSubmitted = status === 'submitted';
+                        return (
+                          <Card key={t._id} className="p-4 hover:border-slate-300 transition-colors flex flex-col justify-between">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-semibold border border-amber-200/60 uppercase">
+                                  Team Lead Sprint
+                                </span>
+                                {getStatusBadge(status)}
+                              </div>
+                              <h4 className="text-sm font-bold text-slate-900 line-clamp-1">{t.title}</h4>
+                              <p className="text-xs text-slate-600 line-clamp-2">{t.description}</p>
+                            </div>
+
+                            <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
+                              <span className="text-[11px] font-mono text-slate-500 flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                Due: {new Date(t.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant={isCompleted ? 'outline' : 'default'}
+                                onClick={() => setSelectedTask(t)}
+                                className="h-7 text-xs"
+                              >
+                                {isCompleted ? 'View Work' : isSubmitted ? 'Under Review' : 'Submit Work'}
+                              </Button>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
 
                 {/* Quick Resources Strip */}
@@ -993,8 +1074,33 @@ export default function StudentDashboard() {
                   />
                 </div>
 
-                {/* Assignment Source Tabs (Team Lead vs Admin) */}
+                {/* Assignment Source Tabs (All vs Team Lead vs Admin) */}
                 <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTaskSourceTab('all');
+                      setTaskStatusFilter('all');
+                    }}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      taskSourceTab === 'all'
+                        ? 'bg-[#1C1B1A] text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>All Tasks</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                        taskSourceTab === 'all'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {tasks.length}
+                    </span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1056,14 +1162,20 @@ export default function StudentDashboard() {
                   <div className="p-12 text-center rounded-2xl border border-dashed border-slate-200 bg-white">
                     <CheckSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <h3 className="text-sm font-semibold text-slate-900">
-                      {taskSourceTab === 'teamlead' ? 'No Team Lead tasks found' : 'No Admin tasks found'}
+                      {taskSourceTab === 'teamlead'
+                        ? 'No Team Lead tasks found'
+                        : taskSourceTab === 'admin'
+                        ? 'No Admin tasks found'
+                        : 'No tasks found'}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
                       {taskSearchQuery
                         ? 'Try clearing your search terms.'
                         : taskSourceTab === 'teamlead'
                         ? 'Your Team Lead has not assigned any tasks in this category.'
-                        : 'No admin milestones assigned in this category.'}
+                        : taskSourceTab === 'admin'
+                        ? 'No admin milestones assigned in this category.'
+                        : 'No tasks assigned in this category.'}
                     </p>
                   </div>
                 ) : (
