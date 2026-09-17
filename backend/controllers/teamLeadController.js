@@ -643,9 +643,11 @@ const createTeamTask = async (req, res) => {
     let determinedScope = taskScope || 'students';
 
     if (taskScope === 'team_lead' || assignedTo === 'team_lead') {
-      determinedScope = 'team_lead';
-      targetStudentIds = [req.user._id];
-    } else if (Array.isArray(assignedTo) && assignedTo.length > 0 && !assignedTo.includes('all')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Team Lead self milestone tasks are disabled. Tasks can only be assigned to team members.',
+      });
+    } else if (Array.isArray(assignedTo) && assignedTo.length > 0 && !assignedTo.includes('all') && !assignedTo.includes('all_students')) {
       determinedScope = 'individual';
       targetStudentIds = assignedTo.filter((id) => mongoose.Types.ObjectId.isValid(id));
     } else if (typeof assignedTo === 'string' && mongoose.Types.ObjectId.isValid(assignedTo)) {
@@ -708,12 +710,9 @@ const createTeamTask = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message:
-        determinedScope === 'team_lead'
-          ? 'Team Lead milestone task created successfully'
-          : `Task successfully assigned to ${
-              determinedScope === 'individual' ? `${targetStudentIds.length} student(s)` : `${team.name} students`
-            }!`,
+      message: `Task successfully assigned to ${
+        determinedScope === 'individual' ? `${targetStudentIds.length} student(s)` : `${team.name} students`
+      }!`,
       task: populatedTask,
     });
   } catch (error) {

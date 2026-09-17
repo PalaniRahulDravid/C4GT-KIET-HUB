@@ -109,7 +109,7 @@ export default function TeamLeadDashboard() {
 
   // Task creation state
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [taskAssigneeType, setTaskAssigneeType] = useState('all_students'); // 'all_students', 'specific_students', 'team_lead'
+  const [taskAssigneeType, setTaskAssigneeType] = useState('all_students'); // 'all_students', 'specific_students'
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
@@ -259,17 +259,11 @@ export default function TeamLeadDashboard() {
     const fullDeadline = `${taskDeadlineDate}T${taskDeadlineTime || '23:59'}:00`;
 
     let payloadScope = 'students';
-    let payloadAssignedTo = [];
+    let payloadAssignedTo = 'all_students';
 
-    if (taskAssigneeType === 'team_lead') {
-      payloadScope = 'team_lead';
-      payloadAssignedTo = 'team_lead';
-    } else if (taskAssigneeType === 'specific_students') {
+    if (taskAssigneeType === 'specific_students') {
       payloadScope = 'individual';
       payloadAssignedTo = selectedStudentIds;
-    } else {
-      payloadScope = 'students';
-      payloadAssignedTo = 'all_students';
     }
 
     try {
@@ -860,7 +854,7 @@ export default function TeamLeadDashboard() {
                       Team Lead & Student Tasks Workspace
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Check your own lead milestones, track student assignments, filter by person, and review deliverables.
+                      Track student assignments, filter by person, and review submitted deliverables.
                     </p>
                   </div>
                   <Button
@@ -1160,7 +1154,7 @@ export default function TeamLeadDashboard() {
                           </Badge>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Tasks assigned to you by administrators or self-managed leadership milestones for {team?.name}.
+                          Tasks assigned to you by administrators for {team?.name}.
                         </p>
                       </div>
                     </div>
@@ -1195,7 +1189,7 @@ export default function TeamLeadDashboard() {
                     <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                       {taskSearchQuery || selectedPersonFilter !== 'all' || taskStatusFilter !== 'all'
                         ? 'Try clearing your search or person filters to see other tasks.'
-                        : 'Click "Assign New Task" above to assign sprint milestones to your students or create a lead task.'}
+                        : 'Click "Assign New Task" above to assign sprint milestones to your students.'}
                     </p>
                     {(taskSearchQuery || selectedPersonFilter !== 'all' || taskStatusFilter !== 'all' || taskAudienceFilter !== 'all') && (
                       <Button
@@ -1851,7 +1845,7 @@ export default function TeamLeadDashboard() {
                   Assign Task & Milestone
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Target all students, specific individuals, or create a lead task with a defined deadline.
+                  Target all students or specific individual members with a defined deadline.
                 </p>
               </div>
               <button
@@ -1868,7 +1862,7 @@ export default function TeamLeadDashboard() {
                 <label className="text-xs font-semibold text-slate-800">
                   Assign Task To: *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setTaskAssigneeType('all_students')}
@@ -1902,24 +1896,6 @@ export default function TeamLeadDashboard() {
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       Select individual members
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTaskAssigneeType('team_lead')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      taskAssigneeType === 'team_lead'
-                        ? 'border-purple-600 bg-purple-50/80 text-purple-900'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 font-bold text-xs">
-                      <Crown className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Team Lead (Me)</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      Self milestone task
                     </div>
                   </button>
                 </div>
