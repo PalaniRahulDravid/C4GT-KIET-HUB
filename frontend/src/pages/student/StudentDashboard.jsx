@@ -796,6 +796,25 @@ export default function StudentDashboard() {
                           </>
                         )}
                       </div>
+
+                      {Array.isArray(nextPriorityTask.relatedResources) && nextPriorityTask.relatedResources.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                          <span className="text-xs font-semibold text-slate-500">Resources:</span>
+                          {nextPriorityTask.relatedResources.map((resItem) => (
+                            <a
+                              key={resItem._id || resItem.title}
+                              href={resItem.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium border border-blue-200 transition-colors"
+                            >
+                              <BookOpen className="w-3 h-3 text-blue-600" />
+                              <span className="truncate max-w-[200px]">{resItem.title}</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-blue-400" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
 
                     <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
@@ -1014,6 +1033,32 @@ export default function StudentDashboard() {
                                 )}
                               </div>
                             </div>
+
+                            {Array.isArray(task.relatedResources) && task.relatedResources.length > 0 && (
+                              <div className="p-2.5 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1 mt-2">
+                                <span className="text-[11px] font-semibold text-blue-900 uppercase tracking-wider flex items-center gap-1">
+                                  <BookOpen className="w-3 h-3 text-blue-600" />
+                                  <span>Learning Resources & References:</span>
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {task.relatedResources.map((resItem) => (
+                                    <a
+                                      key={resItem._id || resItem.title}
+                                      href={resItem.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-blue-50 text-blue-800 text-xs font-medium border border-blue-200 transition-colors shadow-2xs"
+                                    >
+                                      <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[10px] font-mono uppercase font-semibold">
+                                        {resItem.type || 'link'}
+                                      </span>
+                                      <span className="truncate max-w-[200px]">{resItem.title}</span>
+                                      <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </CardContent>
 
                           <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
@@ -1337,6 +1382,33 @@ export default function StudentDashboard() {
                 </li>
               </ul>
             </div>
+
+            {/* Attached Reference & Learning Resources for Task */}
+            {Array.isArray(selectedTask.relatedResources) && selectedTask.relatedResources.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs space-y-2">
+                <p className="font-semibold text-blue-900 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Reference & Learning Resources for this Task:</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTask.relatedResources.map((resItem) => (
+                    <a
+                      key={resItem._id || resItem.title}
+                      href={resItem.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-blue-200 text-blue-800 font-medium hover:bg-blue-100/60 transition-colors shadow-2xs"
+                    >
+                      <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[10px] font-mono uppercase font-semibold">
+                        {resItem.type || 'link'}
+                      </span>
+                      <span className="truncate max-w-[220px]">{resItem.title}</span>
+                      <ExternalLink className="w-3 h-3 text-blue-500" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Review Feedback if Revision Requested */}
             {selectedTask.assignment?.reviewNotes && (
