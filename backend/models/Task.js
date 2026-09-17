@@ -58,6 +58,17 @@ const taskSchema = new mongoose.Schema({
     required: [true, 'Creator reference is required'],
     index: true,
   },
+  assignedTo: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+  ],
+  taskScope: {
+    type: String,
+    enum: ['students', 'team_lead', 'individual', 'entire_team'],
+    default: 'students',
+  },
   createdAt: {
     type: Date,
     default: Date.now,

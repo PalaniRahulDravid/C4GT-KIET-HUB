@@ -412,20 +412,24 @@ const getTeamTasks = async (req, res) => {
       });
     }
 
+    const memberIds = [...(team.members || [])];
+    const teamLeadId = team.teamLeadId ? team.teamLeadId.toString() : req.user._id.toString();
+
     const tasks = await Task.find({
       $or: [
         { assignedTeams: team.teamNumber },
         { createdBy: req.user._id },
+        { assignedTo: req.user._id },
+        { assignedTo: { $in: memberIds } },
       ],
     })
       .sort({ deadline: 1 })
       .populate('createdBy', 'name email avatar role')
+      .populate('assignedTo', 'name rollNumber email memberType avatar')
       .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
 
-    // Fetch all assignments for these tasks (covers all team members & any assignees)
-    const memberIds = [...(team.members || [])];
+    // Fetch all assignments for these tasks
     const taskIds = tasks.map((t) => t._id);
-
     const assignments = await TaskAssignment.find({
       taskId: { $in: taskIds },
     })
@@ -438,9 +442,54 @@ const getTeamTasks = async (req, res) => {
         (a) => a.taskId.toString() === t._id.toString()
       );
       tObj.assignments = taskAssignments;
-      tObj.totalAssigned = Math.max(memberIds.length, taskAssignments.length);
-      tObj.completedCount = taskAssignments.filter((a) => a.status === 'completed').length;
-      tObj.submittedCount = taskAssignments.filter((a) => a.status === 'submitted').length;
+
+      const isCreatedByLead = t.createdBy && t.createdBy._id.toString() === req.user._id.toString();
+      const isCreatedByAdmin = t.createdBy && t.createdBy.role === 'admin';
+
+      // Determine task audience / scope
+      let audience = tObj.taskScope || 'students';
+      if (!tObj.taskScope) {
+        if (isCreatedByAdmin) {
+          audience = 'team_lead';
+        } else if (tObj.assignedTo && tObj.assignedTo.length > 0 && tObj.assignedTo.length < memberIds.length) {
+          audience = 'individual';
+        } else {
+          audience = 'students';
+        }
+      }
+
+      tObj.audience = audience;
+      tObj.isCreatedByLead = isCreatedByLead;
+      tObj.isCreatedByAdmin = isCreatedByAdmin;
+
+      // Find team lead's own assignment if this is a lead task
+      const leadAssignment = taskAssignments.find(
+        (a) => a.studentId && (a.studentId._id || a.studentId).toString() === req.user._id.toString()
+      );
+      tObj.leadAssignment = leadAssignment || null;
+
+      // Determine targeted assignees
+      const hasSpecificAssignees = Array.isArray(tObj.assignedTo) && tObj.assignedTo.length > 0;
+      const relevantAssignments = hasSpecificAssignees
+        ? taskAssignments.filter((a) =>
+            tObj.assignedTo.some(
+              (u) => (u._id || u).toString() === (a.studentId?._id || a.studentId).toString()
+            )
+          )
+        : taskAssignments.filter(
+            (a) => (a.studentId?._id || a.studentId).toString() !== teamLeadId || audience === 'team_lead'
+          );
+
+      tObj.totalAssigned = hasSpecificAssignees
+        ? tObj.assignedTo.length
+        : audience === 'team_lead'
+        ? 1
+        : Math.max(memberIds.length, relevantAssignments.length);
+
+      tObj.completedCount = relevantAssignments.filter((a) => a.status === 'completed').length;
+      tObj.submittedCount = relevantAssignments.filter((a) => a.status === 'submitted').length;
+      tObj.pendingCount = Math.max(0, tObj.totalAssigned - tObj.completedCount - tObj.submittedCount);
+
       return tObj;
     });
 
@@ -578,6 +627,8 @@ const createTeamTask = async (req, res) => {
       priority,
       deliverables,
       relatedResources,
+      assignedTo,
+      taskScope,
     } = req.body;
 
     if (!title || !description || !deadline) {
@@ -587,14 +638,34 @@ const createTeamTask = async (req, res) => {
       });
     }
 
+    // Determine assignees and scope
+    let targetStudentIds = [];
+    let determinedScope = taskScope || 'students';
+
+    if (taskScope === 'team_lead' || assignedTo === 'team_lead') {
+      determinedScope = 'team_lead';
+      targetStudentIds = [req.user._id];
+    } else if (Array.isArray(assignedTo) && assignedTo.length > 0 && !assignedTo.includes('all')) {
+      determinedScope = 'individual';
+      targetStudentIds = assignedTo.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    } else if (typeof assignedTo === 'string' && mongoose.Types.ObjectId.isValid(assignedTo)) {
+      determinedScope = 'individual';
+      targetStudentIds = [assignedTo];
+    } else {
+      determinedScope = 'students';
+      targetStudentIds = [...(team.members || [])];
+    }
+
     const task = await Task.create({
       title: title.trim(),
       description: description.trim(),
       topic: topic ? topic.trim() : (team.track || 'Team Sprint'),
-      targetGroup: targetGroup || 'both',
+      targetGroup: targetGroup || (determinedScope === 'individual' ? 'individual' : 'both'),
       deadline: new Date(deadline),
       priority: priority || 'Normal',
       assignedTeams: [team.teamNumber],
+      assignedTo: targetStudentIds,
+      taskScope: determinedScope,
       deliverables:
         Array.isArray(deliverables) && deliverables.length > 0
           ? deliverables
@@ -604,9 +675,8 @@ const createTeamTask = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    // Create TaskAssignment and Notification for each team member
-    const memberIds = [...(team.members || [])];
-    for (const mId of memberIds) {
+    // Create TaskAssignment and Notification for each assigned member
+    for (const mId of targetStudentIds) {
       try {
         await TaskAssignment.findOneAndUpdate(
           { studentId: mId, taskId: task._id },
@@ -614,28 +684,36 @@ const createTeamTask = async (req, res) => {
           { upsert: true }
         );
 
-        await Notification.create({
-          studentId: mId,
-          taskId: task._id,
-          teamId: team._id,
-          title: `New Task: ${task.title}`,
-          message: `${team.name} Lead ${req.user.name} assigned a new task: ${task.title}`,
-          type: 'task_assigned',
-          assignedBy: req.user.name || 'Team Lead',
-          deadline: task.deadline,
-        });
+        if (mId.toString() !== req.user._id.toString()) {
+          await Notification.create({
+            studentId: mId,
+            taskId: task._id,
+            teamId: team._id,
+            title: `New Task: ${task.title}`,
+            message: `${team.name} Lead ${req.user.name} assigned a new task: ${task.title}`,
+            type: 'task_assigned',
+            assignedBy: req.user.name || 'Team Lead',
+            deadline: task.deadline,
+          });
+        }
       } catch (err) {
-        // Continue on individual duplicate notification errors
+        // Continue on individual errors
       }
     }
 
     const populatedTask = await Task.findById(task._id)
       .populate('createdBy', 'name email avatar role')
+      .populate('assignedTo', 'name rollNumber email memberType avatar')
       .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
 
     res.status(201).json({
       success: true,
-      message: `Task successfully assigned to ${team.name} students`,
+      message:
+        determinedScope === 'team_lead'
+          ? 'Team Lead milestone task created successfully'
+          : `Task successfully assigned to ${
+              determinedScope === 'individual' ? `${targetStudentIds.length} student(s)` : `${team.name} students`
+            }!`,
       task: populatedTask,
     });
   } catch (error) {
