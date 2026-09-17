@@ -372,6 +372,26 @@ export default function StudentDashboard() {
   // Derived Statistics
   // ---------------------------------------------------------------------------
 
+  // Helper to determine if a task was assigned by Admin
+  const isTaskAdmin = (t) => {
+    if (!t) return false;
+    if (t.source === 'admin') return true;
+    if (t.source === 'teamlead' || t.source === 'team_lead') return false;
+    if (t.taskScope === 'students' || t.taskScope === 'individual') return false;
+    const role = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
+    if (role === 'admin') return true;
+    if (role === 'teamlead' || role === 'team_lead') return false;
+    return Array.isArray(t.assignedTeams) && t.assignedTeams.length > 1;
+  };
+
+  const teamLeadTasks = useMemo(() => {
+    return tasks.filter((t) => !isTaskAdmin(t));
+  }, [tasks]);
+
+  const adminTasks = useMemo(() => {
+    return tasks.filter((t) => isTaskAdmin(t));
+  }, [tasks]);
+
   const taskStats = useMemo(() => {
     const total = tasks.length;
     const completed = tasks.filter(
@@ -411,26 +431,6 @@ export default function StudentDashboard() {
   const completedResourcesCount = useMemo(() => {
     return hubResources.filter((r) => r.isCompleted).length;
   }, [hubResources]);
-
-  // Helper to determine if a task was assigned by Admin
-  const isTaskAdmin = (t) => {
-    if (!t) return false;
-    if (t.source === 'admin') return true;
-    if (t.source === 'teamlead' || t.source === 'team_lead') return false;
-    if (t.taskScope === 'students' || t.taskScope === 'individual') return false;
-    const role = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
-    if (role === 'admin') return true;
-    if (role === 'teamlead' || role === 'team_lead') return false;
-    return Array.isArray(t.assignedTeams) && t.assignedTeams.length > 1;
-  };
-
-  const teamLeadTasks = useMemo(() => {
-    return tasks.filter((t) => !isTaskAdmin(t));
-  }, [tasks]);
-
-  const adminTasks = useMemo(() => {
-    return tasks.filter((t) => isTaskAdmin(t));
-  }, [tasks]);
 
   const activeSourceTasks = useMemo(() => {
     if (taskSourceTab === 'all') return tasks;
