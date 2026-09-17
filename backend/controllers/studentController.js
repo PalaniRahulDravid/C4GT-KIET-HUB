@@ -103,8 +103,21 @@ const getStudentTasks = async (req, res) => {
       const assignment = fullAssignmentMap[t._id.toString()] || null;
       taskObj.status = assignment ? assignment.status : 'pending';
       taskObj.assignment = assignment;
+
+      const creatorRole = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
+      if (creatorRole === 'admin') {
+        taskObj.source = 'admin';
+      } else if (creatorRole === 'teamlead' || creatorRole === 'team_lead') {
+        taskObj.source = 'teamlead';
+      } else if (Array.isArray(t.assignedTeams) && t.assignedTeams.length > 1) {
+        taskObj.source = 'admin';
+      } else {
+        taskObj.source = 'teamlead';
+      }
+
       return taskObj;
     });
+
 
     res.status(200).json({
       success: true,

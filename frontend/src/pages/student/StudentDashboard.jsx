@@ -104,6 +104,7 @@ export default function StudentDashboard() {
   // Task filter & search
   const [taskStatusFilter, setTaskStatusFilter] = useState('all'); // all, todo, submitted, completed
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
+  const [taskSourceTab, setTaskSourceTab] = useState('teamlead'); // 'teamlead' or 'admin'
 
   // Resources search & category
   const [resourceCategory, setResourceCategory] = useState('all'); // all, docs, code, dsa
@@ -402,9 +403,46 @@ export default function StudentDashboard() {
     return hubResources.filter((r) => r.isCompleted).length;
   }, [hubResources]);
 
+  // Helper to determine if a task was assigned by Admin
+  const isTaskAdmin = (t) => {
+    if (!t) return false;
+    if (t.source === 'admin') return true;
+    if (t.source === 'teamlead' || t.source === 'team_lead') return false;
+    const role = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
+    if (role === 'admin') return true;
+    if (role === 'teamlead' || role === 'team_lead') return false;
+    return Array.isArray(t.assignedTeams) && t.assignedTeams.length > 1;
+  };
+
+  const teamLeadTasks = useMemo(() => {
+    return tasks.filter((t) => !isTaskAdmin(t));
+  }, [tasks]);
+
+  const adminTasks = useMemo(() => {
+    return tasks.filter((t) => isTaskAdmin(t));
+  }, [tasks]);
+
+  const activeSourceTasks = useMemo(() => {
+    return taskSourceTab === 'admin' ? adminTasks : teamLeadTasks;
+  }, [taskSourceTab, adminTasks, teamLeadTasks]);
+
+  // Scoped statistics for the currently selected source tab (Team Lead vs Admin)
+  const scopedTaskStats = useMemo(() => {
+    const total = activeSourceTasks.length;
+    const completed = activeSourceTasks.filter(
+      (t) => t.assignment?.status === 'completed' || t.status === 'completed'
+    ).length;
+    const submitted = activeSourceTasks.filter(
+      (t) => t.assignment?.status === 'submitted' || t.status === 'submitted'
+    ).length;
+    const pending = total - completed - submitted;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, submitted, pending, pct };
+  }, [activeSourceTasks]);
+
   // Filtered tasks for "My Tasks"
   const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
+    return activeSourceTasks.filter((t) => {
       const status = t.assignment?.status || t.status || 'pending';
       if (taskStatusFilter === 'todo') {
         if (status === 'completed' || status === 'submitted') return false;
@@ -423,7 +461,7 @@ export default function StudentDashboard() {
       }
       return true;
     });
-  }, [tasks, taskStatusFilter, taskSearchQuery]);
+  }, [activeSourceTasks, taskStatusFilter, taskSearchQuery]);
 
   // Filtered resources for "Resources"
   const filteredResources = useMemo(() => {
@@ -889,7 +927,7 @@ export default function StudentDashboard() {
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      All ({tasks.length})
+                      All ({scopedTaskStats.total})
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('todo')}
@@ -899,7 +937,7 @@ export default function StudentDashboard() {
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      To Do ({taskStats.pending})
+                      To Do ({scopedTaskStats.pending})
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('submitted')}
@@ -909,7 +947,7 @@ export default function StudentDashboard() {
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      Under Review ({taskStats.submitted})
+                      Under Review ({scopedTaskStats.submitted})
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('completed')}
@@ -919,7 +957,7 @@ export default function StudentDashboard() {
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      Completed ({taskStats.completed})
+                      Completed ({scopedTaskStats.completed})
                     </button>
                   </div>
                 </div>
@@ -936,6 +974,59 @@ export default function StudentDashboard() {
                   />
                 </div>
 
+                {/* Assignment Source Tabs (Team Lead vs Admin) */}
+                <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTaskSourceTab('teamlead');
+                      setTaskStatusFilter('all');
+                    }}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      taskSourceTab === 'teamlead'
+                        ? 'bg-[#1C1B1A] text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Team Lead</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                        taskSourceTab === 'teamlead'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {teamLeadTasks.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTaskSourceTab('admin');
+                      setTaskStatusFilter('all');
+                    }}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      taskSourceTab === 'admin'
+                        ? 'bg-[#1C1B1A] text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Admin</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                        taskSourceTab === 'admin'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {adminTasks.length}
+                    </span>
+                  </button>
+                </div>
+
                 {/* Tasks List */}
                 {loadingTasks ? (
                   <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
@@ -945,9 +1036,15 @@ export default function StudentDashboard() {
                 ) : filteredTasks.length === 0 ? (
                   <div className="p-12 text-center rounded-2xl border border-dashed border-slate-200 bg-white">
                     <CheckSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <h3 className="text-sm font-semibold text-slate-900">No tasks found</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      {taskSourceTab === 'teamlead' ? 'No Team Lead tasks found' : 'No Admin tasks found'}
+                    </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      {taskSearchQuery ? 'Try clearing your search terms.' : 'No tasks in this category.'}
+                      {taskSearchQuery
+                        ? 'Try clearing your search terms.'
+                        : taskSourceTab === 'teamlead'
+                        ? 'Your Team Lead has not assigned any tasks in this category.'
+                        : 'No admin milestones assigned in this category.'}
                     </p>
                   </div>
                 ) : (
@@ -963,7 +1060,7 @@ export default function StudentDashboard() {
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-mono font-bold uppercase">
-                                  {task.source === 'admin' ? 'Admin Milestone' : 'Team Lead Sprint'}
+                                  {isTaskAdmin(task) ? 'Admin Milestone' : 'Team Lead Sprint'}
                                 </span>
                                 {task.topic && (
                                   <span className="text-xs text-slate-500 font-medium">
@@ -1019,9 +1116,13 @@ export default function StudentDashboard() {
                           <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
                             <span className="text-xs text-slate-500">
                               {isCompleted
-                                ? '✓ Work reviewed and accepted by Team Lead'
+                                ? isTaskAdmin(task)
+                                  ? '✓ Work reviewed and accepted by Admin'
+                                  : '✓ Work reviewed and accepted by Team Lead'
                                 : isSubmitted
-                                ? '⏳ Work submitted — Team Lead review in progress'
+                                ? isTaskAdmin(task)
+                                  ? '⏳ Work submitted — Admin review in progress'
+                                  : '⏳ Work submitted — Team Lead review in progress'
                                 : 'Google Drive links required for review'}
                             </span>
                             <Button
