@@ -168,21 +168,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Information Callout */}
-          <div className="p-3.5 rounded-2xl bg-[#F2EFE6] border border-[#E0DDD0] text-[11px] text-[#66645E] space-y-1.5 leading-relaxed">
-            <div className="font-semibold text-[#1C1B1A] flex items-center gap-1.5">
-              <span>Login Help</span>
-            </div>
-            <p>
-              • <strong>Students & Leads:</strong> Use your College Roll Number as both username and initial password (e.g. <code className="font-mono text-[#1C1B1A] bg-white px-1 py-0.5 rounded">23B21A4268</code>).
-            </p>
-            <p>
-              • <strong>Team Leads:</strong> Sign in with your Lead Roll Number to automatically view and manage your team.
-            </p>
-            <p>
-              • <strong>Admin:</strong> Predefined login using Roll Number <code className="font-mono text-[#1C1B1A] bg-white px-1 py-0.5 rounded">admin@</code> and password <code className="font-mono text-[#1C1B1A] bg-white px-1 py-0.5 rounded">admin@</code>.
-            </p>
-          </div>
         </div>
       </div>
     </div>
