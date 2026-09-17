@@ -155,7 +155,9 @@ export default function StudentDashboard() {
         if (data && data.success) {
           setStreakData({
             currentStreak: Number(data.currentStreak) || 0,
-            todayActiveSeconds: Number(data.todayActiveSeconds) || 0,
+            todayStreakCompleted: Boolean(data.todayStreakCompleted),
+            totalTaskSubmissionsToday: Number(data.totalTaskSubmissionsToday) || 0,
+            weeklyActivity: Array.isArray(data.weeklyActivity) ? data.weeklyActivity : [],
           });
         }
       }
@@ -296,6 +298,7 @@ export default function StudentDashboard() {
       if (res.ok && data.success) {
         setSubmissionSuccessMessage('Work submitted successfully! Your Team Lead has been notified.');
         fetchStudentTasks();
+        fetchStudentStreak();
         setSelectedTask((prev) =>
           prev
             ? {
@@ -602,13 +605,13 @@ export default function StudentDashboard() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            {/* Daily Streak Badge */}
+            {/* Daily Submission Streak Badge */}
             <div
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold shadow-2xs"
-              title="Daily Active Streak"
+              title="Daily Task Submission Streak"
             >
               <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
-              <span>{streakData.currentStreak} Day Streak</span>
+              <span>{streakData.currentStreak} {streakData.currentStreak === 1 ? 'Day' : 'Days'} Streak</span>
             </div>
 
             {/* Notifications Bell */}
@@ -712,16 +715,16 @@ export default function StudentDashboard() {
                   <Card>
                     <CardHeader className="pb-2">
                       <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Active Daily Streak
+                        Task Submission Streak
                       </CardDescription>
                       <CardTitle className="text-2xl font-bold text-amber-600 flex items-center gap-2">
                         <Flame className="w-6 h-6 fill-amber-500 text-amber-500" />
-                        <span>{streakData.currentStreak} Days</span>
+                        <span>{streakData.currentStreak} {streakData.currentStreak === 1 ? 'Day' : 'Days'}</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className="text-xs text-slate-500 font-medium">
-                        Keep active daily on learning materials to maintain momentum!
+                        Submit task deliverables daily to maintain your momentum and streak!
                       </p>
                     </CardContent>
                   </Card>

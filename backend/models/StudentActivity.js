@@ -17,13 +17,21 @@ const studentActivitySchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    taskSubmissionsCount: {
+      type: Number,
+      default: 0,
+    },
     isStreakCompleted: {
       type: Boolean,
-      default: false,
+      default: false, // Streak completion is strictly driven by task submissions
     },
     lastHeartbeat: {
       type: Date,
       default: Date.now,
+    },
+    lastSubmissionAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

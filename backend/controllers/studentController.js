@@ -176,6 +176,20 @@ const submitTaskDeliverables = async (req, res) => {
 
     await assignment.save();
 
+    // Record task submission for daily streak tracking
+    const todayDateKey = formatDateKey(new Date());
+    await StudentActivity.findOneAndUpdate(
+      { studentId, date: todayDateKey },
+      {
+        $inc: { taskSubmissionsCount: 1 },
+        $set: {
+          isStreakCompleted: true,
+          lastSubmissionAt: new Date(),
+        },
+      },
+      { upsert: true, new: true }
+    );
+
     // Find student's team and team lead to dispatch notification
     const studentUser = await User.findById(studentId);
     let team = null;
@@ -283,11 +297,34 @@ const updateStudentTaskStatus = async (req, res) => {
 
     if (status === 'completed') {
       assignment.completedAt = new Date();
+      if (!assignment.submittedAt) {
+        assignment.submittedAt = new Date();
+      }
+    } else if (status === 'submitted') {
+      if (!assignment.submittedAt) {
+        assignment.submittedAt = new Date();
+      }
     } else {
       assignment.completedAt = null;
     }
 
     await assignment.save();
+
+    // If task was submitted or marked completed, register task submission for streak
+    if (status === 'submitted' || status === 'completed') {
+      const todayDateKey = formatDateKey(new Date());
+      await StudentActivity.findOneAndUpdate(
+        { studentId, date: todayDateKey },
+        {
+          $inc: { taskSubmissionsCount: 1 },
+          $set: {
+            isStreakCompleted: true,
+            lastSubmissionAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -329,14 +366,12 @@ const recordHeartbeat = async (req, res) => {
         date: dateKey,
         activeSeconds: secondsToAdd,
         lastHeartbeat: now,
-        isStreakCompleted: secondsToAdd >= 900, // 15 minutes = 900 seconds
+        isStreakCompleted: false, // Streak is strictly task submission based
       });
     } else {
       activity.activeSeconds = (activity.activeSeconds || 0) + secondsToAdd;
       activity.lastHeartbeat = now;
-      if (activity.activeSeconds >= 900) {
-        activity.isStreakCompleted = true;
-      }
+      // Streak completion is strictly driven by task submissions, not login/active seconds
     }
 
     await activity.save();
@@ -356,7 +391,7 @@ const recordHeartbeat = async (req, res) => {
 };
 
 /**
- * @desc    Get student streak and weekly activity breakdown (15 min requirement)
+ * @desc    Get student streak and weekly activity breakdown (task submission based)
  * @route   GET /api/student/streak
  * @access  Private (Authenticated User)
  */
@@ -366,35 +401,104 @@ const getStudentStreak = async (req, res) => {
     const now = new Date();
     const todayKey = formatDateKey(now);
 
-    // Fetch student activity records for the last 90 days
-    const activities = await StudentActivity.find({ studentId })
-      .sort({ date: -1 })
-      .limit(90);
+    // Fetch all task assignments with submission timestamps or completed/submitted status
+    const assignments = await TaskAssignment.find({
+      studentId,
+      $or: [
+        { submittedAt: { $ne: null } },
+        { 'submissions.submittedAt': { $exists: true } },
+        { status: { $in: ['submitted', 'completed', 'revision_requested'] } },
+      ],
+    }).select('submittedAt status submissions completedAt createdAt updatedAt');
 
-    const activityMap = {};
-    activities.forEach((act) => {
-      activityMap[act.date] = act;
+    const submissionDateSet = new Set();
+    const dateSubmissionCountMap = {};
+
+    const registerDate = (dateVal) => {
+      if (!dateVal) return;
+      try {
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+          const key = formatDateKey(d);
+          submissionDateSet.add(key);
+          dateSubmissionCountMap[key] = (dateSubmissionCountMap[key] || 0) + 1;
+        }
+      } catch (e) {}
+    };
+
+    assignments.forEach((assignment) => {
+      if (assignment.submittedAt) {
+        registerDate(assignment.submittedAt);
+      } else if (assignment.completedAt) {
+        registerDate(assignment.completedAt);
+      } else if (
+        assignment.status === 'submitted' ||
+        assignment.status === 'completed' ||
+        assignment.status === 'revision_requested'
+      ) {
+        registerDate(assignment.updatedAt || assignment.createdAt);
+      }
+
+      if (Array.isArray(assignment.submissions)) {
+        assignment.submissions.forEach((sub) => {
+          if (sub.submittedAt) {
+            registerDate(sub.submittedAt);
+          }
+        });
+      }
     });
 
-    // Calculate current consecutive streak (15+ min required per day)
+    // Also check StudentActivity records where taskSubmissionsCount > 0
+    const activities = await StudentActivity.find({
+      studentId,
+      taskSubmissionsCount: { $gt: 0 },
+    });
+    activities.forEach((act) => {
+      if (act.date) {
+        submissionDateSet.add(act.date);
+        dateSubmissionCountMap[act.date] = Math.max(
+          dateSubmissionCountMap[act.date] || 0,
+          act.taskSubmissionsCount || 1
+        );
+      }
+    });
+
+    // Calculate current consecutive streak based strictly on TASK SUBMISSION
     let currentStreak = 0;
     let checkDate = new Date(now);
 
-    const todayAct = activityMap[todayKey];
-    const todayCompleted = todayAct && todayAct.isStreakCompleted;
+    const hasSubmittedToday = submissionDateSet.has(todayKey);
 
-    if (!todayCompleted) {
+    if (hasSubmittedToday) {
+      currentStreak = 1;
       checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    while (true) {
-      const key = formatDateKey(checkDate);
-      const act = activityMap[key];
-      if (act && act.isStreakCompleted) {
-        currentStreak += 1;
+      while (true) {
+        const key = formatDateKey(checkDate);
+        if (submissionDateSet.has(key)) {
+          currentStreak += 1;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    } else {
+      // If student hasn't submitted today yet, check yesterday to preserve ongoing streak
+      checkDate.setDate(checkDate.getDate() - 1);
+      const yesterdayKey = formatDateKey(checkDate);
+      if (submissionDateSet.has(yesterdayKey)) {
+        currentStreak = 1;
         checkDate.setDate(checkDate.getDate() - 1);
+        while (true) {
+          const key = formatDateKey(checkDate);
+          if (submissionDateSet.has(key)) {
+            currentStreak += 1;
+            checkDate.setDate(checkDate.getDate() - 1);
+          } else {
+            break;
+          }
+        }
       } else {
-        break;
+        currentStreak = 0;
       }
     }
 
@@ -413,14 +517,14 @@ const getStudentStreak = async (req, res) => {
       dayDate.setDate(monday.getDate() + i);
 
       const dKey = formatDateKey(dayDate);
-      const act = activityMap[dKey];
+      const isCompleted = submissionDateSet.has(dKey);
 
       weeklyActivity.push({
         dateStr: dKey,
         dayName: dayLabels[i],
         dateNum: String(dayDate.getDate()).padStart(2, '0'),
-        isStreakCompleted: Boolean(act && act.isStreakCompleted),
-        activeSeconds: act ? act.activeSeconds : 0,
+        isStreakCompleted: isCompleted,
+        taskSubmissionsCount: dateSubmissionCountMap[dKey] || 0,
         isToday: dKey === todayKey,
       });
     }
@@ -428,8 +532,9 @@ const getStudentStreak = async (req, res) => {
     res.status(200).json({
       success: true,
       currentStreak,
-      todayActiveSeconds: todayAct ? todayAct.activeSeconds : 0,
-      todayStreakCompleted: Boolean(todayAct && todayAct.isStreakCompleted),
+      todayStreakCompleted: hasSubmittedToday,
+      totalTaskSubmissionsToday: dateSubmissionCountMap[todayKey] || 0,
+      totalSubmissionDays: submissionDateSet.size,
       weeklyActivity,
     });
   } catch (error) {
