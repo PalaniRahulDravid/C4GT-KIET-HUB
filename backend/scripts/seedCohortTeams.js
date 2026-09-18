@@ -208,9 +208,11 @@ async function seedCohort() {
         user.memberType = isSenior ? 'senior_developer' : 'junior_developer';
         user.role = isLead ? 'teamlead' : 'user';
         user.status = 'active';
+        user.batch = '2026-2027';
         user.teamId = teamDocMap[record.teamNum]._id;
       }
 
+      user.batch = '2026-2027';
       await user.save();
 
       if (isLead) {

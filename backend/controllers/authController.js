@@ -115,6 +115,7 @@ const googleAuth = async (req, res, next) => {
         avatar: picture || '',
         role: 'user', // Mandatory requirement: EVERY new Google user is role = "user" (Student)
         status: 'active',
+        batch: '2026-2027',
       });
       console.log(`Saved new Google user directly into MongoDB Atlas: ${email} (ID: ${user._id})`);
     } else {
@@ -188,6 +189,7 @@ const formatUserResponse = (user) => {
     activeBacklogs: user.activeBacklogs || 0,
     branch: user.branch || null,
     year: user.year || null,
+    batch: user.batch || '2026-2027',
     memberType: user.memberType || null,
     teamId: user.teamId || null,
     isProfileComplete: user.role === 'admin' ? true : hasStudentDetails,
@@ -277,6 +279,10 @@ const updateProfile = async (req, res) => {
     user.branch = branch.trim();
     user.year = parsedYear;
     user.memberType = memberType;
+
+    if (req.body.batch && typeof req.body.batch === 'string' && req.body.batch.trim()) {
+      user.batch = req.body.batch.trim();
+    }
 
     if (req.body.phone || req.body.phoneNumber) {
       const p = String(req.body.phone || req.body.phoneNumber).trim();

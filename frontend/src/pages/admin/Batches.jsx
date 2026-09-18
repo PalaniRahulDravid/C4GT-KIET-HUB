@@ -122,6 +122,16 @@ export default function Batches() {
         const usersData = await usersRes.json();
         if (usersData.success && Array.isArray(usersData.users)) {
           fetchedUsers = usersData.users;
+          const batchLearnersCount = fetchedUsers.filter(
+            (u) => (u.batch === '2026-2027' || !u.batch) && u.role !== 'admin'
+          ).length;
+          setBatches((prev) =>
+            prev.map((b) =>
+              b.id === '2026-2027'
+                ? { ...b, studentsCount: batchLearnersCount || b.studentsCount }
+                : b
+            )
+          );
         }
       }
       setUsers(fetchedUsers);

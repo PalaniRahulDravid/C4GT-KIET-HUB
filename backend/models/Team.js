@@ -38,6 +38,12 @@ const teamSchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
+  batch: {
+    type: String,
+    trim: true,
+    default: '2026-2027',
+    index: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

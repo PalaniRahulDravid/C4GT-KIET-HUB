@@ -62,6 +62,12 @@ const userSchema = new mongoose.Schema({
     max: [4, 'Year must be at most 4'],
     default: null,
   },
+  batch: {
+    type: String,
+    trim: true,
+    default: '2026-2027',
+    index: true,
+  },
   memberType: {
     type: String,
     enum: {

@@ -11,7 +11,12 @@ const TaskAssignment = require('../models/TaskAssignment');
  */
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find()
+    const filter = {};
+    if (req.query.batch) {
+      filter.batch = req.query.batch;
+    }
+
+    const users = await User.find(filter)
       .sort({ createdAt: -1 })
       .select('-__v');
 
