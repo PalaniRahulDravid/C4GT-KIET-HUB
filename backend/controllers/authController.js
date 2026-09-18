@@ -192,6 +192,9 @@ const formatUserResponse = (user) => {
     batch: user.batch || '2026-2027',
     memberType: user.memberType || null,
     teamId: user.teamId || null,
+    isPasswordChanged: Boolean(user.isPasswordChanged),
+    mustChangePassword:
+      (user.role === 'teamlead' || user.role === 'team_lead') && !user.isPasswordChanged,
     isProfileComplete: user.role === 'admin' ? true : hasStudentDetails,
   };
 };
@@ -353,8 +356,13 @@ const loginWithRollNumber = async (req, res) => {
       isMatch = await user.matchPassword(loginPassword);
     }
 
-    // 2. Direct match fallback: default password is their rollNumber
-    if (!isMatch && user.rollNumber && loginPassword.toUpperCase() === user.rollNumber.toUpperCase()) {
+    // 2. Direct match fallback: default password is their rollNumber ONLY IF password has NOT been changed yet
+    if (
+      !isMatch &&
+      !user.isPasswordChanged &&
+      user.rollNumber &&
+      loginPassword.toUpperCase() === user.rollNumber.toUpperCase()
+    ) {
       isMatch = true;
       user.password = loginPassword;
       await user.save();
@@ -376,7 +384,9 @@ const loginWithRollNumber = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid password. Default password is your Roll Number.',
+        message: user.isPasswordChanged
+          ? 'Invalid password. Please enter your updated password.'
+          : 'Invalid password. Default password is your Roll Number.',
       });
     }
 
@@ -429,12 +439,103 @@ const logout = async (req, res) => {
   });
 };
 
+/**
+ * @desc    Change user password (mandatory for Team Leads on first login)
+ * @route   PUT /api/auth/change-password
+ * @access  Private
+ */
+const changePassword = async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'MongoDB Atlas is currently unavailable. Cannot update password.',
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password is required and must be at least 6 characters long.',
+      });
+    }
+
+    // Retrieve user with password select
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found in database.',
+      });
+    }
+
+    // If user already has a password, verify currentPassword
+    if (user.password) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password is required to verify your identity.',
+        });
+      }
+
+      let isMatch = await user.matchPassword(currentPassword);
+      // Fallback check against roll number default ONLY IF password has NOT been changed yet
+      if (
+        !isMatch &&
+        !user.isPasswordChanged &&
+        user.rollNumber &&
+        currentPassword.trim().toUpperCase() === user.rollNumber.toUpperCase()
+      ) {
+        isMatch = true;
+      }
+
+      if (!isMatch) {
+        return res.status(401).json({
+          success: false,
+          message: user.isPasswordChanged
+            ? 'Incorrect current password. Please enter your updated password.'
+            : 'Incorrect current password. Note: Default initial password is your University Roll Number.',
+        });
+      }
+    }
+
+    // Disallow new password being identical to roll number
+    if (user.rollNumber && newPassword.trim().toUpperCase() === user.rollNumber.toUpperCase()) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password cannot be your Roll Number. Please choose a secure, different password.',
+      });
+    }
+
+    user.password = newPassword.trim();
+    user.isPasswordChanged = true;
+    await user.save();
+
+    console.log(`Password updated for user: ${user.email} (${user.role}). isPasswordChanged set to true.`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password changed successfully.',
+      user: formatUserResponse(user),
+    });
+  } catch (error) {
+    console.error('Password change error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update password.',
+    });
+  }
+};
+
 module.exports = {
   loginWithRollNumber,
   googleAuth,
   getMe,
   updateProfile,
   logout,
+  changePassword,
 };
 
 

@@ -216,6 +216,30 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  // Change password in MongoDB Atlas (Mandatory on first login for Team Leads)
+  const changePassword = async (currentPassword, newPassword) => {
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to update password');
+    }
+
+    if (data.user) {
+      setUser(data.user);
+    }
+    return data.user;
+  };
+
   const isProfileComplete = isStudentProfileComplete(user);
 
   const value = {
@@ -230,6 +254,7 @@ export function AuthProvider({ children }) {
     logout,
     refreshUser,
     updateProfile,
+    changePassword,
     getRoleName,
     getDashboardPath,
     apiBaseUrl: API_BASE_URL,

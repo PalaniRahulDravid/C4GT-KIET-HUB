@@ -59,17 +59,80 @@ import {
   AlertTriangle,
   UserCheck,
   Eye,
+  EyeOff,
   MessageSquare,
   Link2,
+  Lock,
+  KeyRound,
 } from 'lucide-react';
 
 export default function TeamLeadDashboard() {
-  const { user, token, apiBaseUrl, logout } = useAuth();
+  const { user, token, apiBaseUrl, logout, changePassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  // Password change modal states
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passError, setPassError] = useState('');
+  const [passSuccess, setPassSuccess] = useState('');
+  const [isChangingPass, setIsChangingPass] = useState(false);
+
+  // Check if first-time password change is mandatory for this Team Lead
+  const isMandatoryPasswordChange = Boolean(
+    (user?.role === 'teamlead' || user?.role === 'team_lead') &&
+    (user?.mustChangePassword || !user?.isPasswordChanged)
+  );
+
+  const isPasswordModalOpen = isMandatoryPasswordChange || showPasswordChangeModal;
+
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+    setPassError('');
+    setPassSuccess('');
+
+    if (!currentPassword.trim()) {
+      setPassError('Please enter your current password (default is your University Roll Number).');
+      return;
+    }
+    if (newPassword.trim().length < 6) {
+      setPassError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (user?.rollNumber && newPassword.trim().toUpperCase() === user.rollNumber.toUpperCase()) {
+      setPassError('New password cannot be your Roll Number. Please choose a different, secure password.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPassError('New password and confirm password do not match.');
+      return;
+    }
+
+    try {
+      setIsChangingPass(true);
+      await changePassword(currentPassword.trim(), newPassword.trim());
+      setPassSuccess('Password successfully updated! Opening Team Lead Dashboard...');
+      setTimeout(() => {
+        setShowPasswordChangeModal(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setPassSuccess('');
+      }, 1000);
+    } catch (err) {
+      setPassError(err.message || 'Failed to change password. Please check your current password.');
+    } finally {
+      setIsChangingPass(false);
+    }
+  };
 
   // Sub-route derivation
   const activeTab = useMemo(() => {
@@ -874,6 +937,20 @@ export default function TeamLeadDashboard() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPassError('');
+                setPassSuccess('');
+                setShowPasswordChangeModal(true);
+              }}
+              className="gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Change Password</span>
+            </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -2430,6 +2507,226 @@ export default function TeamLeadDashboard() {
           isOpen={showProfileModal}
           onClose={() => setShowProfileModal(false)}
         />
+      )}
+
+      {/* MANDATORY / VOLUNTARY PASSWORD CHANGE MODAL */}
+      {isPasswordModalOpen && (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${
+            isMandatoryPasswordChange
+              ? 'bg-black/85 backdrop-blur-md'
+              : 'bg-black/60 backdrop-blur-xs'
+          }`}
+          onClick={(e) => {
+            // Prevent dismissal if mandatory
+            if (!isMandatoryPasswordChange && e.target === e.currentTarget) {
+              setShowPasswordChangeModal(false);
+              setPassError('');
+              setPassSuccess('');
+            }
+          }}
+        >
+          <div
+            className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-[#E0DDD0]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold tracking-tight text-xl text-[#1C1B1A]">
+                    {isMandatoryPasswordChange ? 'Set Your New Password' : 'Change Account Password'}
+                  </h3>
+                  <p className="text-xs text-[#66645E]">
+                    {isMandatoryPasswordChange
+                      ? 'First-Time Login Security Requirement'
+                      : 'Update Team Lead Login Password'}
+                  </p>
+                </div>
+              </div>
+              {!isMandatoryPasswordChange && (
+                <button
+                  onClick={() => {
+                    setShowPasswordChangeModal(false);
+                    setPassError('');
+                    setPassSuccess('');
+                  }}
+                  className="p-1.5 rounded-full hover:bg-[#EAE7DC] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Mandatory Alert Banner */}
+            {isMandatoryPasswordChange && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 text-xs text-amber-950 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Mandatory Security Requirement</span>
+                </div>
+                <p className="text-[11px] leading-relaxed opacity-90">
+                  Welcome <strong>{user?.name}</strong>! Your account is currently using the initial default password (your Roll Number: <code className="bg-amber-100/80 px-1.5 py-0.5 rounded font-mono font-bold">{user?.rollNumber || 'Roll Number'}</code>). You must set a personal password before opening the Team Lead Dashboard.
+                </p>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handlePasswordChangeSubmit} className="space-y-4 text-xs">
+              {passError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{passError}</span>
+                </div>
+              )}
+
+              {passSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{passSuccess}</span>
+                </div>
+              )}
+
+              {/* Current Password */}
+              <div>
+                <label className="block font-medium text-[#1C1B1A] mb-1">
+                  Current Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPass ? 'text' : 'password'}
+                    required
+                    placeholder={user?.rollNumber ? `Initial: ${user.rollNumber}` : 'Current password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPass(!showCurrentPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A]"
+                  >
+                    {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#66645E] mt-1">Default initial password is your University Roll Number.</p>
+              </div>
+
+              {/* New Password */}
+              <div>
+                <label className="block font-medium text-[#1C1B1A] mb-1">
+                  New Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    required
+                    placeholder="Minimum 6 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPass(!showNewPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A]"
+                  >
+                    {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block font-medium text-[#1C1B1A] mb-1">
+                  Confirm New Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPass ? 'text' : 'password'}
+                    required
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPass(!showConfirmPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A]"
+                  >
+                    {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Checklist */}
+              <div className="bg-white/80 border border-[#E0DDD0] rounded-xl p-3 space-y-1.5 text-[11px] font-mono">
+                <div className={`flex items-center gap-1.5 ${newPassword.length >= 6 ? 'text-emerald-700 font-semibold' : 'text-[#66645E]'}`}>
+                  {newPassword.length >= 6 ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 text-center">•</span>}
+                  <span>At least 6 characters</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${user?.rollNumber && newPassword && newPassword.toUpperCase() !== user.rollNumber.toUpperCase() ? 'text-emerald-700 font-semibold' : 'text-[#66645E]'}`}>
+                  {user?.rollNumber && newPassword && newPassword.toUpperCase() !== user.rollNumber.toUpperCase() ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 text-center">•</span>}
+                  <span>Different from Roll Number</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${newPassword && confirmPassword && newPassword === confirmPassword ? 'text-emerald-700 font-semibold' : 'text-[#66645E]'}`}>
+                  {newPassword && confirmPassword && newPassword === confirmPassword ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 text-center">•</span>}
+                  <span>Passwords match</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-[#E0DDD0] flex items-center justify-between gap-3">
+                {isMandatoryPasswordChange ? (
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="text-xs text-[#66645E] hover:text-rose-600 transition-colors underline cursor-pointer"
+                  >
+                    Sign out instead
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordChangeModal(false);
+                      setPassError('');
+                    }}
+                    className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-[#1C1B1A] font-medium cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isChangingPass || !currentPassword || newPassword.length < 6 || newPassword !== confirmPassword}
+                  className={`px-5 py-2.5 rounded-full font-medium transition-all flex items-center gap-2 ${
+                    !isChangingPass && currentPassword && newPassword.length >= 6 && newPassword === confirmPassword
+                      ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md cursor-pointer'
+                      : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
+                  }`}
+                >
+                  {isChangingPass ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Password...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>{isMandatoryPasswordChange ? 'Update & Enter Dashboard' : 'Save New Password'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
