@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
+const connectDB = require('../config/db');
 
-const getHealth = (req, res) => {
+const getHealth = async (req, res) => {
+  if (mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB();
+    } catch (err) {}
+  }
+
   const dbState = mongoose.connection.readyState;
   const dbStatusMap = {
     0: 'disconnected',
@@ -14,10 +21,8 @@ const getHealth = (req, res) => {
   res.status(isDatabaseConnected ? 200 : 503).json({
     status: isDatabaseConnected ? 'healthy' : 'degraded',
     server: 'running',
-    database: {
-      status: dbStatusMap[dbState] || 'unknown',
-      readyState: dbState,
-    },
+    database: isDatabaseConnected ? 'connected' : (dbStatusMap[dbState] || 'disconnected'),
+    readyState: dbState,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });

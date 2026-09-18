@@ -1,39 +1,74 @@
 const mongoose = require('mongoose');
-const dns = require('dns');
 const config = require('./env');
 
-let isConnecting = false;
-
-// Configure reliable DNS servers (Google & Cloudflare) to prevent querySrv ECONNREFUSED on ISPs/networks that block or fail SRV queries
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4', '1.0.0.1']);
-} catch (err) {
-  console.warn('Failed to set custom DNS servers:', err.message);
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    const dns = require('dns');
+    dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4', '1.0.0.1']);
+  } catch (err) {}
 }
+
+// Serverless connection cache
+let cached = global.mongoose;
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
+// Strip credentials for safe logging
+const sanitizeMongoUri = (uri) => {
+  if (!uri) return 'undefined';
+  try {
+    const withoutAuth = uri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
+    return withoutAuth.split('?')[0];
+  } catch {
+    return '[Protected URI]';
+  }
+};
 
 const connectDB = async () => {
   if (!config.mongoUri) {
-    console.error('Database connection aborted: MONGODB_URI is undefined.');
-    return;
+    console.error(
+      'Database connection aborted: MONGODB_URI (or MONGO_URI / DATABASE_URL) is not defined in environment variables.'
+    );
+    return null;
   }
 
-  if (mongoose.connection.readyState === 1 || isConnecting) {
-    return;
+  if (cached.conn && mongoose.connection.readyState === 1) {
+    return cached.conn;
   }
 
-  isConnecting = true;
-  try {
-    const conn = await mongoose.connect(config.mongoUri, {
+  if (!cached.promise) {
+    const opts = {
       serverSelectionTimeoutMS: 5000,
-    });
-    console.log(`MongoDB Atlas connected successfully: ${conn.connection.host}`);
-    isConnecting = false;
-  } catch (error) {
-    isConnecting = false;
-    console.warn(`MongoDB Atlas connection waiting/retrying: ${error.message}`);
-    // Auto-retry connecting every 5 seconds so when network/IP access is ready, it connects immediately
-    setTimeout(connectDB, 5000);
+    };
+
+    console.log(`Initiating MongoDB Atlas connection to: ${sanitizeMongoUri(config.mongoUri)}`);
+
+    cached.promise = mongoose
+      .connect(config.mongoUri, opts)
+      .then((mongooseInstance) => {
+        console.log(`MongoDB Atlas connected successfully to host: ${mongooseInstance.connection.host}`);
+        return mongooseInstance;
+      })
+      .catch((err) => {
+        cached.promise = null;
+        console.error('MongoDB Atlas connection failed:', {
+          name: err.name,
+          message: err.message,
+          code: err.code,
+        });
+        throw err;
+      });
   }
+
+  try {
+    cached.conn = await cached.promise;
+  } catch (error) {
+    cached.promise = null;
+    throw error;
+  }
+
+  return cached.conn;
 };
 
 module.exports = connectDB;

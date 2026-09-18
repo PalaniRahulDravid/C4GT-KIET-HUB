@@ -11,14 +11,23 @@ require('./config/cloudinary');
 
 const app = express();
 
-connectDB();
+connectDB().catch((err) => {
+  console.warn('Initial DB connection warning:', err.message);
+});
+
+const allowedOrigins = [
+  'https://c4gt-team6.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://localhunt-khubteam2.vercel.app',
+];
+
+if (config.frontendUrl && !allowedOrigins.includes(config.frontendUrl)) {
+  allowedOrigins.push(config.frontendUrl);
+}
 
 const corsOptions = {
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://localhunt-khubteam2.vercel.app',
-  ],
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -28,6 +37,23 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
+// Ensure DB connection before handling requests
+app.use(async (req, res, next) => {
+  if (req.path === '/api/health' || req.path === '/health') {
+    return next();
+  }
+
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error(`Database connection unavailable for ${req.method} ${req.path}:`, err.message);
+    return res.status(503).json({
+      success: false,
+      message: 'Database service is temporarily unavailable. Please check MongoDB Atlas connection.',
+    });
+  }
+});
 
 app.use('/api', routes);
 
