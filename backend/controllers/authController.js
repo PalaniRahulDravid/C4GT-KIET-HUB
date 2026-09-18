@@ -348,24 +348,25 @@ const loginWithRollNumber = async (req, res) => {
       });
     }
 
-    // Verify password
+    // Verify password (Strictly case-sensitive)
     let isMatch = false;
 
-    // 1. Try bcrypt match if user has hashed password
-    if (user.password) {
+    // 1. If user has already changed password, verify with bcrypt (strictly case-sensitive)
+    if (user.password && user.isPasswordChanged) {
       isMatch = await user.matchPassword(loginPassword);
     }
 
-    // 2. Direct match fallback: default password is their rollNumber ONLY IF password has NOT been changed yet
-    if (
-      !isMatch &&
-      !user.isPasswordChanged &&
-      user.rollNumber &&
-      loginPassword.toUpperCase() === user.rollNumber.toUpperCase()
-    ) {
-      isMatch = true;
-      user.password = loginPassword;
-      await user.save();
+    // 2. Default password check (when !user.isPasswordChanged):
+    // Default initial password is strictly the UPPERCASE rollNumber (case-sensitive!)
+    if (!user.isPasswordChanged && user.rollNumber) {
+      if (loginPassword === user.rollNumber) {
+        isMatch = true;
+        // Ensure user's password in DB is hashed from the official uppercase rollNumber
+        if (!user.password || !(await user.matchPassword(user.rollNumber))) {
+          user.password = user.rollNumber;
+          await user.save();
+        }
+      }
     }
 
     // 3. If admin credentials (admin@, ADMIN@, admin123, or admin)
@@ -480,15 +481,12 @@ const changePassword = async (req, res) => {
         });
       }
 
-      let isMatch = await user.matchPassword(currentPassword);
-      // Fallback check against roll number default ONLY IF password has NOT been changed yet
-      if (
-        !isMatch &&
-        !user.isPasswordChanged &&
-        user.rollNumber &&
-        currentPassword.trim().toUpperCase() === user.rollNumber.toUpperCase()
-      ) {
-        isMatch = true;
+      let isMatch = false;
+      if (user.isPasswordChanged) {
+        isMatch = await user.matchPassword(currentPassword);
+      } else if (user.rollNumber) {
+        // Initial default password is strictly case-sensitive uppercase roll number
+        isMatch = currentPassword.trim() === user.rollNumber;
       }
 
       if (!isMatch) {
