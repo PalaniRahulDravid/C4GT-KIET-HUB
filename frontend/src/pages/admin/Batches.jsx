@@ -1,7 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, Layers, Users, GraduationCap, Award, RefreshCw, Plus, CheckCircle2, ArrowRight, X, ChevronRight, FileText, CheckSquare, Clock, AlertCircle } from 'lucide-react';
+import {
+  Sparkles,
+  Layers,
+  Users,
+  GraduationCap,
+  Award,
+  RefreshCw,
+  Plus,
+  CheckCircle2,
+  ArrowRight,
+  X,
+  ChevronRight,
+  FileText,
+  CheckSquare,
+  Clock,
+  AlertCircle,
+  UploadCloud,
+  Download,
+  FileSpreadsheet,
+  AlertTriangle,
+  Check,
+  ShieldAlert,
+  HelpCircle,
+} from 'lucide-react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -38,15 +61,24 @@ export default function Batches() {
   const [taskFilter, setTaskFilter] = useState('all'); // 'all' | 'pending' | 'completed' | 'overdue'
   const [memberRoleFilter, setMemberRoleFilter] = useState('all'); // 'all' | 'junior_developer' | 'senior_developer'
 
-  // Create Batch Modal State
+  // Create Batch Modal State & CSV Cohort Import
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [newBatchName, setNewBatchName] = useState('2028 – 2029');
+  const [newBatchName, setNewBatchName] = useState('2027 – 2028');
   const [newBatchStatus, setNewBatchStatus] = useState('Upcoming');
-  const [newBatchStartDate, setNewBatchStartDate] = useState('2028-08-01');
-  const [newBatchEndDate, setNewBatchEndDate] = useState('2029-05-31');
-  const [newBatchTeamsCount, setNewBatchTeamsCount] = useState(9);
+  const [newBatchStartDate, setNewBatchStartDate] = useState('2027-08-01');
+  const [newBatchEndDate, setNewBatchEndDate] = useState('2028-05-31');
+  const [uploadedCsvText, setUploadedCsvText] = useState('');
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const [validationResult, setValidationResult] = useState({
+    valid: false,
+    errors: [],
+    records: [],
+    stats: null,
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverErrors, setServerErrors] = useState([]);
 
-  // Batches state list - Initially starts with current active batch (2026 – 2027)
+  // Batches state list - loaded from MongoDB Atlas
   const [batches, setBatches] = useState([
     {
       id: '2026-2027',
@@ -54,7 +86,7 @@ export default function Batches() {
       status: 'Active Batch',
       teamsCount: 9,
       activeTeamsCount: 9,
-      studentsCount: 42,
+      studentsCount: 81,
       avgPerformance: '78%',
       upcoming: false,
     },
@@ -81,11 +113,256 @@ export default function Batches() {
     }, 4500);
   };
 
+  // Generate downloadable sample CSV template for 9 teams (1 Lead, 4 SD, 4 JD each = 81 students)
+  const downloadCohortTemplate = () => {
+    const headers = [
+      'teamNumber',
+      'roleCode',
+      'name',
+      'rollNumber',
+      'email',
+      'phone',
+      'college',
+      'branch',
+      'backlogs',
+      'type',
+    ];
+    const sampleRows = [];
+    for (let teamNum = 1; teamNum <= 9; teamNum++) {
+      // Exactly 1 Team Lead
+      sampleRows.push([
+        teamNum,
+        'LEAD',
+        `Lead Student Team ${teamNum}`,
+        `24B21A${4200 + teamNum}`,
+        `lead.team${teamNum}@kiet.edu`,
+        `987654321${teamNum}`,
+        'KIET',
+        'CSE',
+        0,
+        'DS',
+      ]);
+      // Exactly 4 Senior Developers (SD1 - SD4)
+      for (let sd = 1; sd <= 4; sd++) {
+        sampleRows.push([
+          teamNum,
+          `SD${sd}`,
+          `Senior Dev ${sd} Team ${teamNum}`,
+          `24B21A${4500 + teamNum * 10 + sd}`,
+          `sd${sd}.team${teamNum}@kiet.edu`,
+          `98765431${teamNum}${sd}`,
+          'KIET',
+          'AID',
+          0,
+          'DS',
+        ]);
+      }
+      // Exactly 4 Junior Developers (JD1 - JD4)
+      for (let jd = 1; jd <= 4; jd++) {
+        sampleRows.push([
+          teamNum,
+          `JD${jd}`,
+          `Junior Dev ${jd} Team ${teamNum}`,
+          `25B21A${4300 + teamNum * 10 + jd}`,
+          `jd${jd}.team${teamNum}@kiet.edu`,
+          `98765421${teamNum}${jd}`,
+          'KIET',
+          'CSM',
+          0,
+          'HS',
+        ]);
+      }
+    }
+
+    const csvContent = [headers.join(','), ...sampleRows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'c4gt_cohort_batch_template_81_students.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Downloaded sample CSV template (81 student slots across 9 teams).', 'success');
+  };
+
+  // Client-side instant validator for Cohort CSV
+  const parseCohortCsvClient = (text) => {
+    const lines = text.trim().split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length < 2) {
+      return { valid: false, errors: ['CSV file is empty or missing data rows.'], records: [], stats: null };
+    }
+
+    const headerLine = lines[0];
+    const rawHeaders = headerLine.split(',').map((h) => h.trim().replace(/^["']|["']$/g, ''));
+    const headerMap = {};
+    rawHeaders.forEach((h, idx) => {
+      const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (['team', 'teamnum', 'teamnumber', 'teamno'].includes(lower)) headerMap.teamNumber = idx;
+      else if (['role', 'rolecode', 'designation', 'memberrole'].includes(lower)) headerMap.roleCode = idx;
+      else if (['name', 'fullname', 'studentname'].includes(lower)) headerMap.name = idx;
+      else if (['roll', 'rollnumber', 'rollno', 'regno'].includes(lower)) headerMap.rollNumber = idx;
+      else if (['email', 'mail', 'emailaddress'].includes(lower)) headerMap.email = idx;
+      else if (['phone', 'phonenumber', 'mobile', 'contact'].includes(lower)) headerMap.phone = idx;
+      else if (['college', 'institution', 'campus'].includes(lower)) headerMap.college = idx;
+      else if (['branch', 'department', 'dept'].includes(lower)) headerMap.branch = idx;
+      else if (['backlogs', 'activebacklogs', 'backlog'].includes(lower)) headerMap.backlogs = idx;
+      else if (['type', 'dayscholarhostel', 'category', 'residence'].includes(lower)) headerMap.type = idx;
+    });
+
+    const requiredKeys = ['teamNumber', 'roleCode', 'name', 'rollNumber', 'email'];
+    const missingKeys = requiredKeys.filter((k) => headerMap[k] === undefined);
+    if (missingKeys.length > 0) {
+      return {
+        valid: false,
+        errors: [
+          `Missing required CSV headers: ${missingKeys.join(
+            ', '
+          )}. Required: teamNumber,roleCode,name,rollNumber,email,phone,college,branch,backlogs,type`,
+        ],
+        records: [],
+        stats: null,
+      };
+    }
+
+    const rows = [];
+    const errors = [];
+    const emailsSeen = new Set();
+    const rollsSeen = new Set();
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',').map((v) => v.trim());
+      const clean = values.map((v) => v.replace(/^["']|["']$/g, '').trim());
+
+      const teamNum = parseInt(clean[headerMap.teamNumber], 10);
+      const roleCode = clean[headerMap.roleCode] || '';
+      const name = clean[headerMap.name] || '';
+      const rollNumber = clean[headerMap.rollNumber] || '';
+      const email = clean[headerMap.email] || '';
+
+      const code = roleCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      let normalizedRole = '';
+      if (['LEAD', 'TL', 'TEAMLEAD', 'TEAMLEADER', 'LEADER'].includes(code)) normalizedRole = 'LEAD';
+      else if (['SD', 'SD1', 'SD2', 'SD3', 'SD4', 'SENIOR', 'SENIORDEV', 'SENIORDEVELOPER'].includes(code))
+        normalizedRole = 'SD';
+      else if (['JD', 'JD1', 'JD2', 'JD3', 'JD4', 'JUNIOR', 'JUNIORDEV', 'JUNIORDEVELOPER'].includes(code))
+        normalizedRole = 'JD';
+      else {
+        errors.push(`Row ${i + 1}: Unrecognized roleCode '${roleCode}' (must be LEAD, SD, or JD)`);
+      }
+
+      if (isNaN(teamNum) || teamNum < 1 || teamNum > 9) {
+        errors.push(`Row ${i + 1}: Invalid Team '${clean[headerMap.teamNumber]}' (must be 1–9)`);
+      }
+      if (!name) errors.push(`Row ${i + 1}: Missing student name`);
+      if (!rollNumber) errors.push(`Row ${i + 1}: Missing roll number`);
+      else {
+        if (rollsSeen.has(rollNumber.toUpperCase())) errors.push(`Row ${i + 1}: Duplicate roll '${rollNumber}'`);
+        rollsSeen.add(rollNumber.toUpperCase());
+      }
+      if (!email || !/^\S+@\S+\.\S+$/.test(email)) errors.push(`Row ${i + 1}: Invalid email '${email}'`);
+      else {
+        if (emailsSeen.has(email.toLowerCase())) errors.push(`Row ${i + 1}: Duplicate email '${email}'`);
+        emailsSeen.add(email.toLowerCase());
+      }
+
+      rows.push({
+        teamNumber: teamNum,
+        roleCode,
+        normalizedRole,
+        name,
+        rollNumber,
+        email,
+        phone: headerMap.phone !== undefined ? clean[headerMap.phone] || '' : '',
+        college: headerMap.college !== undefined ? clean[headerMap.college] || 'KIET' : 'KIET',
+        branch: headerMap.branch !== undefined ? clean[headerMap.branch] || 'CSE' : 'CSE',
+        backlogs: headerMap.backlogs !== undefined ? parseInt(clean[headerMap.backlogs], 10) || 0 : 0,
+        type: headerMap.type !== undefined ? clean[headerMap.type] || 'DS' : 'DS',
+        rowNumber: i + 1,
+      });
+    }
+
+    let totalLeads = 0;
+    let totalSds = 0;
+    let totalJds = 0;
+
+    for (let t = 1; t <= 9; t++) {
+      const tRows = rows.filter((r) => r.teamNumber === t);
+      const leads = tRows.filter((r) => r.normalizedRole === 'LEAD').length;
+      const sds = tRows.filter((r) => r.normalizedRole === 'SD').length;
+      const jds = tRows.filter((r) => r.normalizedRole === 'JD').length;
+      totalLeads += leads;
+      totalSds += sds;
+      totalJds += jds;
+
+      if (leads !== 1) errors.push(`Team ${t}: has ${leads} Team Lead(s) (expected exactly 1)`);
+      if (sds !== 4) errors.push(`Team ${t}: has ${sds} Senior Dev(s) (expected exactly 4)`);
+      if (jds !== 4) errors.push(`Team ${t}: has ${jds} Junior Dev(s) (expected exactly 4)`);
+    }
+
+    if (rows.length !== 81) {
+      errors.push(`Total cohort members is ${rows.length}/81 (exactly 81 students required)`);
+    }
+
+    const stats = {
+      totalRows: rows.length,
+      totalLeads,
+      totalSds,
+      totalJds,
+      teamsDetected: new Set(rows.map((r) => r.teamNumber).filter((n) => n >= 1 && n <= 9)).size,
+    };
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      records: rows,
+      stats,
+    };
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadedFileName(file.name);
+    setServerErrors([]);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result || '';
+      setUploadedCsvText(text);
+      const res = parseCohortCsvClient(text);
+      setValidationResult(res);
+    };
+    reader.readAsText(file);
+  };
+
+  const resetCohortForm = () => {
+    setUploadedCsvText('');
+    setUploadedFileName('');
+    setValidationResult({ valid: false, errors: [], records: [], stats: null });
+    setServerErrors([]);
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fetch Teams
-      const teamsRes = await fetch(`${API_BASE_URL}/admin/teams`, {
+
+      // 1. Fetch Batches from Atlas
+      const batchesRes = await fetch(`${API_BASE_URL}/admin/batches`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (batchesRes.ok) {
+        const batchesData = await batchesRes.json();
+        if (batchesData.success && Array.isArray(batchesData.batches)) {
+          setBatches(batchesData.batches);
+        }
+      }
+
+      // 2. Fetch Teams for selected or active batch
+      const currentBatchId = batchId || '2026-2027';
+      const teamsRes = await fetch(`${API_BASE_URL}/admin/teams?batch=${currentBatchId}`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -112,8 +389,8 @@ export default function Batches() {
       }
       setTeams(fetchedTeams);
 
-      // Fetch Users
-      const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
+      // 3. Fetch Users
+      const usersRes = await fetch(`${API_BASE_URL}/admin/users?batch=${currentBatchId}`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -122,16 +399,6 @@ export default function Batches() {
         const usersData = await usersRes.json();
         if (usersData.success && Array.isArray(usersData.users)) {
           fetchedUsers = usersData.users;
-          const batchLearnersCount = fetchedUsers.filter(
-            (u) => (u.batch === '2026-2027' || !u.batch) && u.role !== 'admin'
-          ).length;
-          setBatches((prev) =>
-            prev.map((b) =>
-              b.id === '2026-2027'
-                ? { ...b, studentsCount: batchLearnersCount || b.studentsCount }
-                : b
-            )
-          );
         }
       }
       setUsers(fetchedUsers);
@@ -153,23 +420,57 @@ export default function Batches() {
     showToast('Refreshed latest batches & team allocations from Atlas.');
   };
 
-  const handleCreateBatchSubmit = (e) => {
+  const handleCreateBatchSubmit = async (e) => {
     e.preventDefault();
-    const formattedId = newBatchName.replace(/\s+/g, '').replace(/–/g, '-');
-    const newBatch = {
-      id: formattedId,
-      year: newBatchName,
-      status: newBatchStatus,
-      teamsCount: parseInt(newBatchTeamsCount, 10) || 9,
-      activeTeamsCount: parseInt(newBatchTeamsCount, 10) || 9,
-      studentsCount: (parseInt(newBatchTeamsCount, 10) || 9) * 9,
-      avgPerformance: '0%',
-      upcoming: newBatchStatus.toLowerCase().includes('upcoming'),
-    };
-    setBatches((prev) => [...prev, newBatch]);
-    setCreateModalOpen(false);
-    showToast(`New Batch ${newBatchName} successfully initialized.`);
-    navigate(`/admin/batches/${formattedId}`);
+    if (!validationResult.valid) {
+      showToast(
+        'Cannot create batch: Please upload a valid CSV with 81 students (9 Teams, 1 Lead, 4 SD, 4 JD each).',
+        'error'
+      );
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setServerErrors([]);
+
+      const res = await fetch(`${API_BASE_URL}/admin/batches`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          year: newBatchName,
+          status: newBatchStatus,
+          startDate: newBatchStartDate,
+          endDate: newBatchEndDate,
+          csvText: uploadedCsvText,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Failed to create batch', 'error');
+        if (data.errors && Array.isArray(data.errors)) {
+          setServerErrors(data.errors);
+        }
+        return;
+      }
+
+      showToast(`Batch ${newBatchName} successfully initialized with 81 students across 9 teams!`, 'success');
+      setCreateModalOpen(false);
+      resetCohortForm();
+      fetchData();
+      const formattedId = newBatchName.replace(/\s+/g, '').replace(/–/g, '-');
+      navigate(`/admin/batches/${formattedId}`);
+    } catch (err) {
+      console.error('Error creating batch:', err);
+      showToast('Network error while initializing batch.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Resolve selected Batch based on URL params
@@ -757,54 +1058,353 @@ export default function Batches() {
         )}
       </div>
 
-      {/* CREATE BATCH MODAL */}
+      {/* CREATE BATCH MODAL WITH STRICT COHORT CSV IMPORT */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E0DDD0]">
-              <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">Initialize New Batch</h3>
-              <button onClick={() => setCreateModalOpen(false)} className="text-[#66645E] hover:text-[#1C1B1A] cursor-pointer">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-[#E0DDD0]">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#66645E] font-semibold">
+                    Admin Cohort Onboarding
+                  </span>
+                </div>
+                <h3 className="font-bold tracking-tight text-2xl sm:text-3xl text-[#1C1B1A] mt-1">
+                  Create Academic Batch
+                </h3>
+                <p className="text-xs text-[#66645E] mt-1">
+                  Strict Cohort Requirement: Exactly 9 teams, each with 1 Team Lead, 4 Senior Developers, and 4 Junior Developers (81 students total).
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setCreateModalOpen(false);
+                  resetCohortForm();
+                }}
+                className="p-1.5 rounded-full hover:bg-[#EAE7DC] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateBatchSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-medium text-[#1C1B1A] mb-1">Batch Year / Name</label>
-                <input
-                  type="text"
-                  required
-                  value={newBatchName}
-                  onChange={(e) => setNewBatchName(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none"
-                />
+            <form onSubmit={handleCreateBatchSubmit} className="space-y-6 text-xs">
+              {/* 1. Batch Metadata Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-medium text-[#1C1B1A] mb-1.5">
+                    Batch Year / Identifier <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 2027 – 2028"
+                    value={newBatchName}
+                    onChange={(e) => setNewBatchName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-[#66645E] mt-1">Formatted ID: {newBatchName.replace(/\s+/g, '').replace(/–/g, '-')}</p>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-[#1C1B1A] mb-1.5">Batch Status</label>
+                  <select
+                    value={newBatchStatus}
+                    onChange={(e) => setNewBatchStatus(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors cursor-pointer"
+                  >
+                    <option value="Upcoming">Upcoming</option>
+                    <option value="Active Batch">Active Batch</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-[#1C1B1A] mb-1.5">Start Date</label>
+                  <input
+                    type="date"
+                    value={newBatchStartDate}
+                    onChange={(e) => setNewBatchStartDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-[#1C1B1A] mb-1.5">End Date</label>
+                  <input
+                    type="date"
+                    value={newBatchEndDate}
+                    onChange={(e) => setNewBatchEndDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-medium text-[#1C1B1A] mb-1">Teams Count</label>
-                <input
-                  type="number"
-                  required
-                  value={newBatchTeamsCount}
-                  onChange={(e) => setNewBatchTeamsCount(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none"
-                />
+              {/* 2. CSV Cohort Header Specification Box */}
+              <div className="bg-[#F2EFE6] border border-[#E0DDD0] rounded-2xl p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[#1C1B1A] font-semibold text-sm">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                    <span>Required CSV Header & Quota Specification</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={downloadCohortTemplate}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-[#FAF9F5] border border-[#E0DDD0] text-[#1C1B1A] text-xs font-semibold shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Download CSV Template</span>
+                  </button>
+                </div>
+
+                <p className="text-xs text-[#66645E]">
+                  Every new batch requires an exact cohort dataset of <strong>81 members</strong> organized into <strong>Teams 1 through 9</strong>. Each team must have exactly <strong>1 Team Lead (`LEAD`)</strong>, <strong>4 Senior Developers (`SD`)</strong>, and <strong>4 Junior Developers (`JD`)</strong>.
+                </p>
+
+                {/* CSV Headers Codebox */}
+                <div className="bg-[#1C1B1A] text-amber-200 rounded-xl p-3 font-mono text-[11px] overflow-x-auto select-all">
+                  teamNumber,roleCode,name,rollNumber,email,phone,college,branch,backlogs,type
+                </div>
+
+                {/* Field description tags */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-[#66645E]">
+                  <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
+                    <span className="font-mono font-bold text-[#1C1B1A]">teamNumber</span>: 1 to 9
+                  </div>
+                  <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
+                    <span className="font-mono font-bold text-[#1C1B1A]">roleCode</span>: LEAD, SD, JD
+                  </div>
+                  <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
+                    <span className="font-mono font-bold text-[#1C1B1A]">rollNumber</span>: Initial Password
+                  </div>
+                  <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
+                    <span className="font-mono font-bold text-[#1C1B1A]">email</span>: Student Email
+                  </div>
+                  <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
+                    <span className="font-mono font-bold text-[#1C1B1A]">phone</span>: Mobile Number
+                  </div>
+                  <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
+                    <span className="font-mono font-bold text-[#1C1B1A]">type</span>: DS (Day) / HS (Hostel)
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-[#E0DDD0] flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-[#1C1B1A] font-medium cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-full bg-[#1C1B1A] hover:bg-black text-white font-medium cursor-pointer"
-                >
-                  Create Batch
-                </button>
+              {/* 3. File Upload Area */}
+              <div className="space-y-2">
+                <label className="block font-medium text-[#1C1B1A]">
+                  Upload Cohort CSV File <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative border-2 border-dashed border-[#D2CEBE] hover:border-[#1C1B1A] rounded-2xl p-6 text-center bg-white transition-all">
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleFileChange}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2 pointer-events-none">
+                    <div className="w-12 h-12 rounded-full bg-[#F2EFE6] flex items-center justify-center text-[#1C1B1A]">
+                      <UploadCloud className="w-6 h-6" />
+                    </div>
+                    {uploadedFileName ? (
+                      <div>
+                        <p className="font-semibold text-sm text-[#1C1B1A]">{uploadedFileName}</p>
+                        <p className="text-xs text-[#66645E]">Click or drag another CSV to replace</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="font-semibold text-sm text-[#1C1B1A]">
+                          Click to browse or drag & drop cohort CSV
+                        </p>
+                        <p className="text-xs text-[#66645E]">Must adhere to the 81-student format</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Live Validation Feedback */}
+              {uploadedCsvText && (
+                <div className="space-y-3">
+                  {/* Status Banner */}
+                  <div
+                    className={`rounded-2xl p-4 border flex items-start gap-3 ${
+                      validationResult.valid
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                        : 'bg-amber-50/80 border-amber-300 text-amber-950'
+                    }`}
+                  >
+                    {validationResult.valid ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    )}
+                    <div className="space-y-1 w-full">
+                      <p className="font-semibold text-sm">
+                        {validationResult.valid
+                          ? 'Cohort CSV Fully Validated & Ready'
+                          : 'Cohort Dataset Validation Issues'}
+                      </p>
+                      <p className="text-xs opacity-90">
+                        {validationResult.valid
+                          ? 'All 9 teams strictly have 1 Lead, 4 SDs, and 4 JDs (81 students total). You can now create the batch.'
+                          : 'The uploaded file does not satisfy the cohort quota requirements. See breakdown below.'}
+                      </p>
+
+                      {/* Quota Checklist Pills */}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2">
+                        <div
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
+                            validationResult.stats?.teamsDetected === 9
+                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                          }`}
+                        >
+                          <div>Teams</div>
+                          <div className="text-sm font-bold mt-0.5">
+                            {validationResult.stats?.teamsDetected || 0}/9
+                          </div>
+                        </div>
+
+                        <div
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
+                            validationResult.stats?.totalLeads === 9
+                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                          }`}
+                        >
+                          <div>Team Leads</div>
+                          <div className="text-sm font-bold mt-0.5">
+                            {validationResult.stats?.totalLeads || 0}/9
+                          </div>
+                        </div>
+
+                        <div
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
+                            validationResult.stats?.totalSds === 36
+                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                          }`}
+                        >
+                          <div>Senior Devs</div>
+                          <div className="text-sm font-bold mt-0.5">
+                            {validationResult.stats?.totalSds || 0}/36
+                          </div>
+                        </div>
+
+                        <div
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
+                            validationResult.stats?.totalJds === 36
+                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                          }`}
+                        >
+                          <div>Junior Devs</div>
+                          <div className="text-sm font-bold mt-0.5">
+                            {validationResult.stats?.totalJds || 0}/36
+                          </div>
+                        </div>
+
+                        <div
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
+                            validationResult.stats?.totalRows === 81
+                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                          }`}
+                        >
+                          <div>Total Students</div>
+                          <div className="text-sm font-bold mt-0.5">
+                            {validationResult.stats?.totalRows || 0}/81
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Errors List */}
+                  {!validationResult.valid && validationResult.errors.length > 0 && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 space-y-2">
+                      <div className="flex items-center gap-1.5 text-rose-800 font-semibold text-xs">
+                        <ShieldAlert className="w-4 h-4" />
+                        <span>Action Required ({validationResult.errors.length} Issues):</span>
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-1 text-[11px] text-rose-700 divide-y divide-rose-100 font-mono">
+                        {validationResult.errors.map((err, idx) => (
+                          <p key={idx} className="pt-1">
+                            • {err}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Server Errors List */}
+                  {serverErrors.length > 0 && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 space-y-2">
+                      <div className="flex items-center gap-1.5 text-rose-800 font-semibold text-xs">
+                        <ShieldAlert className="w-4 h-4" />
+                        <span>Server Validation Errors:</span>
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-1 text-[11px] text-rose-700 divide-y divide-rose-100 font-mono">
+                        {serverErrors.map((err, idx) => (
+                          <p key={idx} className="pt-1">
+                            • {err}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Footer / Submit */}
+              <div className="pt-4 border-t border-[#E0DDD0] flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-xs text-[#66645E]">
+                  {!uploadedCsvText ? (
+                    <span>Upload an 81-student cohort CSV to enable creation.</span>
+                  ) : !validationResult.valid ? (
+                    <span className="text-rose-600 font-medium">Fix CSV validation errors to proceed.</span>
+                  ) : (
+                    <span className="text-emerald-700 font-medium flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Ready to initialize 9 teams and 81 students.
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateModalOpen(false);
+                      resetCohortForm();
+                    }}
+                    className="px-4 py-2.5 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-[#1C1B1A] font-medium transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={!validationResult.valid || isSubmitting}
+                    className={`px-6 py-2.5 rounded-full font-medium transition-all cursor-pointer flex items-center gap-2 ${
+                      validationResult.valid && !isSubmitting
+                        ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md'
+                        : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Seeding Batch Cohort...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        <span>Create Batch & Import Data</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
