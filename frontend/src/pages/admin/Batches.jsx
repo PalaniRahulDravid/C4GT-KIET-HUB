@@ -1159,7 +1159,7 @@ export default function Batches() {
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
                 }`}
               >
-                Assigned Tasks ({team1Tasks.length})
+                Assigned Tasks ({filteredTeamTasks.length})
               </button>
             </div>
 
