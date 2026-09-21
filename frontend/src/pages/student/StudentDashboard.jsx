@@ -102,13 +102,9 @@ export default function StudentDashboard() {
   const [passSuccess, setPassSuccess] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
 
-  // Check if first-time password change is mandatory for this Student
-  const isMandatoryPasswordChange = Boolean(
-    (user?.role === 'user' || user?.role === 'student' || user?.role === 'teamlead' || user?.role === 'team_lead') &&
-    (user?.mustChangePassword || (!user?.isPasswordChanged && user?.rollNumber))
-  );
-
-  const isPasswordModalOpen = isMandatoryPasswordChange || showPasswordChangeModal;
+  // Password change is optional on demand for students (not mandatory on first login)
+  const isMandatoryPasswordChange = false;
+  const isPasswordModalOpen = showPasswordChangeModal;
 
   const handlePasswordChangeSubmit = async (e) => {
     e.preventDefault();
@@ -135,7 +131,7 @@ export default function StudentDashboard() {
     try {
       setIsChangingPass(true);
       await changePassword(currentPassword.trim(), newPassword.trim());
-      setPassSuccess('Password successfully updated! Opening Student Dashboard...');
+      setPassSuccess('Password successfully updated!');
       setTimeout(() => {
         setShowPasswordChangeModal(false);
         setCurrentPassword('');
@@ -923,8 +919,8 @@ export default function StudentDashboard() {
                         <div className="flex items-center gap-2">
                           <Badge variant="default">Priority Action Item</Badge>
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${isTaskAdmin(nextPriorityTask)
-                              ? 'bg-slate-100 text-slate-700'
-                              : 'bg-amber-50 text-amber-800 border border-amber-200/80'
+                            ? 'bg-slate-100 text-slate-700'
+                            : 'bg-amber-50 text-amber-800 border border-amber-200/80'
                             }`}>
                             {isTaskAdmin(nextPriorityTask) ? 'Admin Milestone' : 'Team Lead Sprint'}
                           </span>
@@ -1133,8 +1129,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setTaskStatusFilter('all')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'all'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       All ({scopedTaskStats.total})
@@ -1142,8 +1138,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setTaskStatusFilter('todo')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'todo'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       To Do ({scopedTaskStats.pending})
@@ -1151,8 +1147,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setTaskStatusFilter('submitted')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'submitted'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       Under Review ({scopedTaskStats.submitted})
@@ -1160,8 +1156,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setTaskStatusFilter('completed')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'completed'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       Completed ({scopedTaskStats.completed})
@@ -1190,16 +1186,16 @@ export default function StudentDashboard() {
                       setTaskStatusFilter('all');
                     }}
                     className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${taskSourceTab === 'all'
-                        ? 'bg-[#1C1B1A] text-white shadow-xs'
-                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
+                      ? 'bg-[#1C1B1A] text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
                       }`}
                   >
                     <Layers className="w-3.5 h-3.5" />
                     <span>All Tasks</span>
                     <span
                       className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${taskSourceTab === 'all'
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 text-slate-700'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-700'
                         }`}
                     >
                       {tasks.length}
@@ -1213,16 +1209,16 @@ export default function StudentDashboard() {
                       setTaskStatusFilter('all');
                     }}
                     className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${taskSourceTab === 'teamlead'
-                        ? 'bg-[#1C1B1A] text-white shadow-xs'
-                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
+                      ? 'bg-[#1C1B1A] text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
                       }`}
                   >
                     <Users className="w-3.5 h-3.5" />
                     <span>Team Lead</span>
                     <span
                       className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${taskSourceTab === 'teamlead'
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 text-slate-700'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-700'
                         }`}
                     >
                       {teamLeadTasks.length}
@@ -1236,16 +1232,16 @@ export default function StudentDashboard() {
                       setTaskStatusFilter('all');
                     }}
                     className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${taskSourceTab === 'admin'
-                        ? 'bg-[#1C1B1A] text-white shadow-xs'
-                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
+                      ? 'bg-[#1C1B1A] text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
                       }`}
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Admin</span>
                     <span
                       className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${taskSourceTab === 'admin'
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 text-slate-700'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-700'
                         }`}
                     >
                       {adminTasks.length}
@@ -1424,8 +1420,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setResourceCategory('all')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'all'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       All ({hubResources.length})
@@ -1433,8 +1429,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setResourceCategory('docs')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'docs'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       Docs & PDFs
@@ -1442,8 +1438,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setResourceCategory('code')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'code'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       Repositories
@@ -1451,8 +1447,8 @@ export default function StudentDashboard() {
                     <button
                       onClick={() => setResourceCategory('dsa')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'dsa'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       DSA Problems
@@ -1497,8 +1493,8 @@ export default function StudentDashboard() {
                               onClick={() => handleToggleResourceComplete(resItem)}
                               disabled={togglingResourceId === resItem._id}
                               className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${resItem.isCompleted
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                 }`}
                               title={resItem.isCompleted ? 'Mark as incomplete' : 'Mark as completed'}
                             >
@@ -1853,8 +1849,8 @@ export default function StudentDashboard() {
       {isPasswordModalOpen && (
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${isMandatoryPasswordChange
-              ? 'bg-black/85 backdrop-blur-md'
-              : 'bg-black/60 backdrop-blur-xs'
+            ? 'bg-black/85 backdrop-blur-md'
+            : 'bg-black/60 backdrop-blur-xs'
             }`}
           onClick={(e) => {
             // Prevent dismissal if mandatory
@@ -2045,8 +2041,8 @@ export default function StudentDashboard() {
                   type="submit"
                   disabled={isChangingPass || !currentPassword || newPassword.length < 6 || newPassword !== confirmPassword}
                   className={`px-5 py-2.5 rounded-full font-medium transition-all flex items-center gap-2 ${!isChangingPass && currentPassword && newPassword.length >= 6 && newPassword === confirmPassword
-                      ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md cursor-pointer'
-                      : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
+                    ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md cursor-pointer'
+                    : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
                     }`}
                 >
                   {isChangingPass ? (
