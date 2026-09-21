@@ -4,6 +4,7 @@ const Team = require('../models/Team');
 const Task = require('../models/Task');
 const TaskAssignment = require('../models/TaskAssignment');
 const Batch = require('../models/Batch');
+const Resource = require('../models/Resource');
 
 /**
  * @desc    Get all registered users (Admin only)
@@ -132,6 +133,154 @@ const trackNames = {
 };
 
 /**
+ * Helper to compute standardized performance metrics for a team across a given timeframe.
+ * Used uniformly by both getTeams (/api/admin/teams) and getTeamPerformanceAnalytics (/api/admin/teams/analytics).
+ */
+const computeTeamMetrics = (teamDoc, allTasks, allAssignments, timeframe = 'overall', now = new Date()) => {
+  const team = teamDoc.toObject ? teamDoc.toObject() : teamDoc;
+  const teamNumber = team.teamNumber;
+  const teamLeadId = team.teamLeadId?._id ? team.teamLeadId._id.toString() : team.teamLeadId ? team.teamLeadId.toString() : null;
+  const memberIds = (team.members || []).map((m) => (m?._id ? m._id.toString() : m.toString()));
+  const allTeamUserIds = teamLeadId ? [teamLeadId, ...memberIds] : [...memberIds];
+
+  let windowStart = new Date(0);
+  if (timeframe === 'weekly') {
+    windowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  } else if (timeframe === 'monthly') {
+    windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  // Tasks associated with this team:
+  // 1. Explicitly assigned to teamNumber in assignedTeams
+  // 2. Created by this team's lead
+  // 3. Assigned directly to any of this team's members in assignedTo
+  const teamTasks = allTasks.filter((t) => {
+    const hasTeamNum = Array.isArray(t.assignedTeams) && t.assignedTeams.includes(teamNumber);
+    const isCreatedByLead = teamLeadId && t.createdBy && (t.createdBy._id || t.createdBy).toString() === teamLeadId;
+    const hasAssignedMember =
+      Array.isArray(t.assignedTo) && t.assignedTo.some((uid) => allTeamUserIds.includes((uid._id || uid).toString()));
+    return hasTeamNum || isCreatedByLead || hasAssignedMember;
+  });
+
+  // Filter tasks for requested timeframe
+  const relevantTasks = teamTasks.filter((t) => {
+    if (timeframe === 'overall') return true;
+    const createdAt = t.createdAt ? new Date(t.createdAt) : new Date(0);
+    const deadline = t.deadline ? new Date(t.deadline) : new Date(0);
+    return createdAt >= windowStart || deadline >= windowStart;
+  });
+
+  const relevantTaskIds = relevantTasks.map((t) => t._id.toString());
+
+  // Task assignments belonging to this team's members on these tasks
+  const relevantAssignments = allAssignments.filter((a) => {
+    const sId = (a.studentId?._id || a.studentId || '').toString();
+    const tId = (a.taskId?._id || a.taskId || '').toString();
+    if (!allTeamUserIds.includes(sId) || !relevantTaskIds.includes(tId)) return false;
+
+    if (timeframe === 'overall') return true;
+
+    const subTime = a.submittedAt
+      ? new Date(a.submittedAt)
+      : a.updatedAt
+      ? new Date(a.updatedAt)
+      : new Date(0);
+    return subTime >= windowStart || a.status === 'completed' || a.status === 'submitted';
+  });
+
+  const completedCount = relevantAssignments.filter((a) => a.status === 'completed').length;
+  const submittedCount = relevantAssignments.filter((a) => a.status === 'submitted').length;
+  const inProgressCount = relevantAssignments.filter((a) => a.status === 'in_progress').length;
+  const pendingCount = relevantAssignments.filter((a) => a.status === 'pending').length;
+
+  const overdueCount = relevantAssignments.filter((a) => {
+    const task = teamTasks.find((t) => t._id.toString() === (a.taskId?._id || a.taskId).toString());
+    if (!task || !task.deadline) return false;
+    return new Date(task.deadline) < now && a.status !== 'completed' && a.status !== 'submitted';
+  }).length;
+
+  // Calculate actual total expected assignments across relevant tasks
+  let totalExpectedAssignments = 0;
+  relevantTasks.forEach((t) => {
+    if (Array.isArray(t.assignedTo) && t.assignedTo.length > 0) {
+      const assignedInTeam = t.assignedTo.filter((uid) =>
+        allTeamUserIds.includes((uid._id || uid).toString())
+      ).length;
+      totalExpectedAssignments += Math.max(assignedInTeam, 1);
+    } else if (t.taskScope === 'team_lead') {
+      totalExpectedAssignments += 1;
+    } else if (t.targetGroup === 'junior_developers') {
+      const jdsCount = (team.members || []).filter((m) => m?.memberType === 'junior_developer').length || 4;
+      totalExpectedAssignments += jdsCount;
+    } else if (t.targetGroup === 'developer_interns') {
+      const sdsCount = (team.members || []).filter((m) => m?.memberType === 'senior_developer').length || 4;
+      totalExpectedAssignments += sdsCount;
+    } else {
+      // General team task: all team students (members + lead)
+      totalExpectedAssignments += Math.max(allTeamUserIds.length, 9);
+    }
+  });
+
+  // Completion percentage of approved deliverables
+  const completionPct =
+    totalExpectedAssignments > 0
+      ? Math.min(100, Math.round((completedCount / totalExpectedAssignments) * 100))
+      : 0;
+
+  // Calculate Performance Score (0 - 100)
+  let score = 0;
+  if (totalExpectedAssignments > 0) {
+    // Earned points: completed gives 100%, submitted (under review) gives 70%, in_progress gives 20%
+    const earned = completedCount * 1.0 + submittedCount * 0.7 + inProgressCount * 0.2;
+    const basePct = (earned / totalExpectedAssignments) * 100;
+
+    // Overdue penalty: capped at 15% maximum deduction so it never erases completed work
+    const overdueRatio = overdueCount / totalExpectedAssignments;
+    const penalty = Math.min(15, Math.round(overdueRatio * 15));
+
+    score = Math.max(0, Math.min(100, Math.round(basePct - penalty)));
+  }
+
+  // Count how many tasks have at least some progress or are completed by team
+  const tasksCompletedCount = relevantTasks.filter((t) => {
+    const tAssigns = relevantAssignments.filter((a) => (a.taskId?._id || a.taskId).toString() === t._id.toString());
+    return tAssigns.some((a) => a.status === 'completed');
+  }).length;
+
+  return {
+    ...team,
+    teamLeadName: team.teamLeadId?.name || 'Unassigned',
+    membersCount: (team.members || []).length + (teamLeadId ? 1 : 0),
+    score,
+    performancePct: `${score}%`,
+    progressPercentage: score,
+    tasksCount: relevantTasks.length,
+    tasksCompletedCount,
+    completedAssignments: completedCount,
+    submittedAssignments: submittedCount,
+    inProgressAssignments: inProgressCount,
+    pendingAssignments: pendingCount,
+    overdueAssignments: overdueCount,
+    totalExpectedAssignments,
+    completionPct,
+    taskCompletion:
+      relevantTasks.length === 0
+        ? '0/0 (0%)'
+        : `${completedCount}/${totalExpectedAssignments} (${completionPct}%)`,
+    status:
+      relevantTasks.length === 0
+        ? 'No Tasks'
+        : score >= 70
+        ? 'Optimal'
+        : score >= 40
+        ? 'Moderate'
+        : score > 0
+        ? 'Needs Attention'
+        : 'Inactive',
+  };
+};
+
+/**
  * @desc    Get all 9 cohort teams (auto-seeds 9 teams with track names & maxMembers: 9)
  * @route   GET /api/admin/teams
  * @access  Private/Admin
@@ -178,64 +327,11 @@ const getTeams = async (req, res) => {
       .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
       .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
 
-    // Fetch all published tasks to compute team progress
-    const allTasks = await Task.find().select('_id assignedTeams');
-    const allAssignments = await TaskAssignment.find().select('taskId studentId status');
+    // Fetch all published tasks and assignments to compute team progress
+    const allTasks = await Task.find().populate('createdBy', 'name role email');
+    const allAssignments = await TaskAssignment.find();
 
-    const enrichedTeams = teams.map((teamDoc) => {
-      const teamObj = teamDoc.toObject();
-      const teamNumber = teamObj.teamNumber;
-      const memberIds = (teamObj.members || []).map((m) => (m._id ? m._id.toString() : m.toString()));
-
-      // Tasks assigned to this team
-      const teamTasks = allTasks.filter((t) =>
-        Array.isArray(t.assignedTeams) && t.assignedTeams.includes(teamNumber)
-      );
-      const teamTaskIds = teamTasks.map((t) => t._id.toString());
-
-      // Assignments for this team's members on this team's tasks
-      const teamAssignments = allAssignments.filter(
-        (a) =>
-          teamTaskIds.includes(a.taskId.toString()) &&
-          memberIds.includes(a.studentId.toString())
-      );
-
-      const totalExpected = teamTasks.length * Math.max(memberIds.length, 1);
-      const completedCount = teamAssignments.filter((a) => a.status === 'completed').length;
-      const submittedCount = teamAssignments.filter((a) => a.status === 'submitted').length;
-      const overdueCount = teamAssignments.filter((a) => {
-        const task = teamTasks.find((t) => t._id.toString() === a.taskId.toString());
-        return (
-          task &&
-          task.deadline &&
-          new Date(task.deadline) < new Date() &&
-          a.status !== 'completed' &&
-          a.status !== 'submitted'
-        );
-      }).length;
-
-      let progressPercentage = 0;
-      if (totalExpected > 0) {
-        if (completedCount === 0 && submittedCount === 0) {
-          progressPercentage = 0;
-        } else {
-          const raw = ((completedCount * 1.0 + submittedCount * 0.6 - overdueCount * 0.2) / totalExpected) * 100;
-          progressPercentage = Math.max(0, Math.min(100, Math.round(raw)));
-        }
-      }
-
-      teamObj.tasksCount = teamTasks.length;
-      teamObj.totalExpectedAssignments = totalExpected;
-      teamObj.completedAssignments = completedCount;
-      teamObj.submittedAssignments = submittedCount;
-      teamObj.overdueAssignments = overdueCount;
-      teamObj.progressPercentage = progressPercentage;
-      teamObj.performancePct = `${progressPercentage}%`;
-      teamObj.taskCompletion = `${completedCount}/${Math.max(totalExpected, 1)} (${progressPercentage}%)`;
-      teamObj.membersCount = memberIds.length;
-
-      return teamObj;
-    });
+    const enrichedTeams = teams.map((teamDoc) => computeTeamMetrics(teamDoc, allTasks, allAssignments, 'overall'));
 
     res.status(200).json({
       success: true,
@@ -512,35 +608,10 @@ const createResource = async (req, res) => {
  */
 const getTasks = async (req, res) => {
   try {
-    let tasks = await Task.find()
+    const tasks = await Task.find()
       .sort({ createdAt: -1 })
       .populate('createdBy', 'name email avatar')
       .populate('relatedResources', 'title type description url topic');
-
-    // Auto-seed default task if none exist
-    if (tasks.length === 0) {
-      const adminUser = (await User.findOne({ role: 'admin' })) || (await User.findOne());
-      if (adminUser) {
-        const defaultTask = await Task.create({
-          title: 'Build Authentication Flow & Role Guards (Google SSO + RBAC)',
-          description:
-            'Connect Google OAuth 2.0 authentication with MongoDB Atlas users collection. Ensure Team Lead role gating and Admin privilege verification before granting workspace access. Provide unit tests and a live deployment preview link.',
-          topic: 'Full-Stack Web Dev / Security & RBAC / MongoDB Atlas',
-          targetGroup: 'both',
-          deadline: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000), // 6 days from now
-          priority: 'Normal',
-          assignedTeams: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-          deliverables: ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
-          status: 'Published',
-          createdBy: adminUser._id,
-        });
-        tasks = [
-          await Task.findById(defaultTask._id)
-            .populate('createdBy', 'name email avatar')
-            .populate('relatedResources', 'title type description url topic'),
-        ];
-      }
-    }
 
     const taskIds = tasks.map((t) => t._id);
     const taskAssignments = await TaskAssignment.find({ taskId: { $in: taskIds } })
@@ -617,6 +688,31 @@ const createTask = async (req, res) => {
     });
 
     const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
+
+    // Create initial TaskAssignment records for students in assigned teams so they appear in student/team lead dashboards
+    try {
+      const assignedTeamDocs = await Team.find({ teamNumber: { $in: task.assignedTeams } });
+      const studentIdsToAssign = [];
+      for (const tDoc of assignedTeamDocs) {
+        if (task.taskScope === 'team_lead') {
+          if (tDoc.teamLeadId) studentIdsToAssign.push(tDoc.teamLeadId);
+        } else {
+          if (Array.isArray(tDoc.members)) {
+            tDoc.members.forEach((m) => studentIdsToAssign.push(m));
+          }
+          if (tDoc.teamLeadId) studentIdsToAssign.push(tDoc.teamLeadId);
+        }
+      }
+      for (const sId of studentIdsToAssign) {
+        await TaskAssignment.findOneAndUpdate(
+          { taskId: task._id, studentId: sId },
+          { $setOnInsert: { status: 'pending' } },
+          { upsert: true }
+        );
+      }
+    } catch (assignErr) {
+      console.warn('Non-blocking assignment creation note:', assignErr.message);
+    }
 
     res.status(201).json({
       success: true,
@@ -1145,103 +1241,10 @@ const getTeamPerformanceAnalytics = async (req, res) => {
     const allTasks = await Task.find().populate('createdBy', 'name role email');
     const allAssignments = await TaskAssignment.find();
 
-    // Map each team with real submission metrics
-    const teamsAnalytics = teams.map((teamDoc) => {
-      const team = teamDoc.toObject();
-      const teamNumber = team.teamNumber;
-      const teamLeadId = team.teamLeadId?._id ? team.teamLeadId._id.toString() : null;
-      const memberIds = (team.members || []).map((m) => (m._id ? m._id.toString() : m.toString()));
-      const allTeamUserIds = teamLeadId ? [...memberIds, teamLeadId] : [...memberIds];
-
-      // Tasks associated with this team:
-      // - Admin or Team Lead task assigned to teamNumber
-      // - OR created by this team's lead
-      // - OR assigned directly to any of this team's members
-      const teamTasks = allTasks.filter((t) => {
-        const hasTeamNum = Array.isArray(t.assignedTeams) && t.assignedTeams.includes(teamNumber);
-        const isCreatedByLead = teamLeadId && t.createdBy?._id && t.createdBy._id.toString() === teamLeadId;
-        const hasAssignedMember =
-          Array.isArray(t.assignedTo) && t.assignedTo.some((uid) => allTeamUserIds.includes(uid.toString()));
-        return hasTeamNum || isCreatedByLead || hasAssignedMember;
-      });
-
-      // Filter tasks relevant to requested timeframe
-      const timeframeTasks = teamTasks.filter((t) => {
-        if (timeframe === 'overall') return true;
-        const createdAt = t.createdAt ? new Date(t.createdAt) : new Date(0);
-        const deadline = t.deadline ? new Date(t.deadline) : new Date(0);
-        return createdAt >= windowStart || deadline >= windowStart;
-      });
-
-      const timeframeTaskIds = timeframeTasks.map((t) => t._id.toString());
-      const allTeamTaskIds = teamTasks.map((t) => t._id.toString());
-      const relevantTaskIds = timeframe === 'overall' ? allTeamTaskIds : timeframeTaskIds;
-
-      // Task assignments for this team's members on these tasks
-      const activeAssignments = allAssignments.filter((a) => {
-        const isMember = memberIds.includes(a.studentId.toString());
-        const isRelevantTask = relevantTaskIds.includes(a.taskId.toString());
-        if (!isMember || !isRelevantTask) return false;
-
-        if (timeframe === 'overall') return true;
-
-        const subTime = a.submittedAt
-          ? new Date(a.submittedAt)
-          : a.updatedAt
-          ? new Date(a.updatedAt)
-          : new Date(0);
-        return subTime >= windowStart || a.status === 'completed' || a.status === 'submitted';
-      });
-
-      const completedCount = activeAssignments.filter((a) => a.status === 'completed').length;
-      const submittedCount = activeAssignments.filter((a) => a.status === 'submitted').length;
-      const inProgressCount = activeAssignments.filter((a) => a.status === 'in_progress').length;
-      const pendingCount = activeAssignments.filter((a) => a.status === 'pending').length;
-
-      // Overdue: deadline passed and neither completed nor submitted
-      const overdueCount = activeAssignments.filter((a) => {
-        const task = teamTasks.find((t) => t._id.toString() === a.taskId.toString());
-        if (!task || !task.deadline) return false;
-        return new Date(task.deadline) < now && a.status !== 'completed' && a.status !== 'submitted';
-      }).length;
-
-      const membersCount = Math.max(memberIds.length, 1);
-      const effectiveTasksCount = timeframe === 'overall' ? teamTasks.length : timeframeTasks.length;
-      const totalExpectedAssignments = effectiveTasksCount * membersCount;
-
-      let score = 0;
-      if (totalExpectedAssignments > 0) {
-        if (completedCount === 0 && submittedCount === 0) {
-          // If in team no task is performed, performance decreases to 0%
-          score = 0;
-        } else {
-          // Weighted scoring: completed (100%), submitted (60%), overdue penalty (-20%)
-          const raw = ((completedCount * 1.0 + submittedCount * 0.6 - overdueCount * 0.2) / totalExpectedAssignments) * 100;
-          score = Math.max(0, Math.min(100, Math.round(raw)));
-        }
-      } else {
-        score = 0;
-      }
-
-      return {
-        _id: team._id,
-        teamNumber: team.teamNumber,
-        name: team.name,
-        track: team.track,
-        teamLeadName: team.teamLeadId?.name || 'Unassigned',
-        membersCount: memberIds.length,
-        score,
-        tasksCount: effectiveTasksCount,
-        completedAssignments: completedCount,
-        submittedAssignments: submittedCount,
-        inProgressAssignments: inProgressCount,
-        pendingAssignments: pendingCount,
-        overdueAssignments: overdueCount,
-        totalExpectedAssignments,
-        taskCompletion: `${completedCount}/${Math.max(totalExpectedAssignments, 1)} (${score}%)`,
-        status: score >= 70 ? 'Optimal' : score >= 40 ? 'Moderate' : score > 0 ? 'Needs Attention' : 'Inactive',
-      };
-    });
+    // Map each team with unified, standardized submission metrics
+    const teamsAnalytics = teams.map((teamDoc) =>
+      computeTeamMetrics(teamDoc, allTasks, allAssignments, timeframe, now)
+    );
 
     // Generate Recharts timeline data points
     let trendData = [];
@@ -1268,12 +1271,26 @@ const getTeamPerformanceAnalytics = async (req, res) => {
       const avg = Math.round(
         teamsAnalytics.reduce((acc, t) => acc + t.score, 0) / Math.max(teamsAnalytics.length, 1)
       );
-      trendData = [
-        { label: 'Week 1', submissions: Math.round(allAssignments.length * 0.15), avgPerformance: Math.max(10, Math.round(avg * 0.7)) },
-        { label: 'Week 2', submissions: Math.round(allAssignments.length * 0.25), avgPerformance: Math.max(20, Math.round(avg * 0.85)) },
-        { label: 'Week 3', submissions: Math.round(allAssignments.length * 0.35), avgPerformance: Math.max(30, Math.round(avg * 0.95)) },
-        { label: 'Week 4', submissions: Math.round(allAssignments.length * 0.25), avgPerformance: avg },
+      const weekBuckets = [
+        { label: 'Week 1', startDays: 28, endDays: 21 },
+        { label: 'Week 2', startDays: 21, endDays: 14 },
+        { label: 'Week 3', startDays: 14, endDays: 7 },
+        { label: 'Week 4', startDays: 7, endDays: 0 },
       ];
+      trendData = weekBuckets.map((bucket) => {
+        const start = new Date(now.getTime() - bucket.startDays * 24 * 60 * 60 * 1000);
+        const end = new Date(now.getTime() - bucket.endDays * 24 * 60 * 60 * 1000);
+        const count = allAssignments.filter((a) => {
+          if (!a.submittedAt) return false;
+          const s = new Date(a.submittedAt);
+          return s >= start && s <= end;
+        }).length;
+        return {
+          label: bucket.label,
+          submissions: count,
+          avgPerformance: avg,
+        };
+      });
     } else {
       trendData = teamsAnalytics.map((t) => ({
         label: `T${t.teamNumber}`,

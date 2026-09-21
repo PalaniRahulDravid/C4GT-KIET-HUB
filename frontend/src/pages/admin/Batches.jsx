@@ -384,12 +384,12 @@ export default function Batches() {
           teamNumber: i + 1,
           name: `Team ${i + 1}`,
           track: trackNames[i + 1],
-          teamLeadId: i === 0 ? { _id: 'u-lead-harsha', name: 'Harsha Vardhan', email: 'harsha.v@kiet.edu' } : null,
-          membersCount: 9,
-          juniorDevsCount: 4,
-          seniorDevsCount: 5,
-          taskCompletion: '82%',
-          performancePct: '78%',
+          teamLeadId: null,
+          membersCount: 0,
+          juniorDevsCount: 0,
+          seniorDevsCount: 0,
+          taskCompletion: '0/0 (0%)',
+          performancePct: '0%',
         }));
       }
       setTeams(fetchedTeams);
@@ -407,6 +407,18 @@ export default function Batches() {
         }
       }
       setUsers(fetchedUsers);
+
+      // 4. Fetch Tasks from Atlas
+      const tasksRes = await fetch(`${API_BASE_URL}/admin/tasks`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (tasksRes.ok) {
+        const tasksData = await tasksRes.json();
+        if (tasksData.success && Array.isArray(tasksData.tasks)) {
+          setTasks(tasksData.tasks);
+        }
+      }
     } catch (err) {
       console.error('Error loading batches data from Atlas:', err);
     } finally {
@@ -531,12 +543,12 @@ export default function Batches() {
         teamNumber: parseInt(teamId, 10) || 1,
         name: `Team ${teamId}`,
         track: trackNames[parseInt(teamId, 10) || 1] || 'Core Engineering Track',
-        teamLeadId: { _id: 'u-lead-harsha', name: 'Harsha Vardhan', email: 'harsha.v@kiet.edu' },
-        membersCount: 9,
-        juniorDevsCount: 4,
-        seniorDevsCount: 5,
-        taskCompletion: '82%',
-        performancePct: '78%',
+        teamLeadId: null,
+        membersCount: 0,
+        juniorDevsCount: 0,
+        seniorDevsCount: 0,
+        taskCompletion: '0/0 (0%)',
+        performancePct: '0%',
       }
     );
   }, [teamId, selectedBatch, teams]);
@@ -546,16 +558,17 @@ export default function Batches() {
     if (!teamObj) return [];
 
     const membersList = [];
+    const teamScore = parseInt(teamObj.performancePct || teamObj.score || '0', 10) || 0;
 
     // 1. Team Lead from database
     if (teamObj.teamLeadId && typeof teamObj.teamLeadId === 'object' && teamObj.teamLeadId.name) {
       membersList.push({
         id: teamObj.teamLeadId._id || 'm-lead',
         name: teamObj.teamLeadId.name,
-        email: teamObj.teamLeadId.email || 'lead@kiet.edu',
+        email: teamObj.teamLeadId.email || '',
         role: 'team_lead',
-        roleTitle: 'Team Lead (Senior Dev)',
-        pct: '96%',
+        roleTitle: 'Team Lead',
+        pct: `${teamScore}%`,
         avatar: teamObj.teamLeadId.avatar || '',
       });
     }
@@ -568,30 +581,17 @@ export default function Batches() {
           membersList.push({
             id: m._id || `db-mem-${idx}`,
             name: m.name,
-            email: m.email,
+            email: m.email || '',
             role: isSenior ? 'senior_developer' : 'junior_developer',
             roleTitle: isSenior ? 'Senior Developer' : 'Junior Developer',
-            pct: '85%',
+            pct: `${teamScore}%`,
             avatar: m.avatar || '',
           });
         }
       });
     }
 
-    if (membersList.length > 0) return membersList;
-
-    // Fallback template
-    return [
-      { id: 'm-lead', name: 'Harsha Vardhan', email: 'harsha.v@kiet.edu', role: 'team_lead', roleTitle: 'Team Lead (Senior Dev)', pct: '96%', avatar: '' },
-      { id: 'm-sr-1', name: 'Ishita Patel', email: 'ishita.patel@kiet.edu', role: 'senior_developer', roleTitle: 'Senior Developer', pct: '91%', avatar: '' },
-      { id: 'm-sr-2', name: 'Kabir Singh', email: 'kabir.singh@kiet.edu', role: 'senior_developer', roleTitle: 'Senior Developer', pct: '87%', avatar: '' },
-      { id: 'm-sr-3', name: 'Vikramaditya Roy', email: 'vikram.roy@kiet.edu', role: 'senior_developer', roleTitle: 'Senior Developer', pct: '85%', avatar: '' },
-      { id: 'm-sr-4', name: 'Meera Nair', email: 'meera.nair@kiet.edu', role: 'senior_developer', roleTitle: 'Senior Developer', pct: '82%', avatar: '' },
-      { id: 'm-jr-1', name: 'Aarav Sharma', email: 'aarav.sharma@kiet.edu', role: 'junior_developer', roleTitle: 'Junior Developer', pct: '92%', avatar: '' },
-      { id: 'm-jr-2', name: 'Ananya Gupta', email: 'ananya.gupta@kiet.edu', role: 'junior_developer', roleTitle: 'Junior Developer', pct: '88%', avatar: '' },
-      { id: 'm-jr-3', name: 'Rohan Verma', email: 'rohan.verma@kiet.edu', role: 'junior_developer', roleTitle: 'Junior Developer', pct: '84%', avatar: '' },
-      { id: 'm-jr-4', name: 'Priya Joshi', email: 'priya.joshi@kiet.edu', role: 'junior_developer', roleTitle: 'Junior Developer', pct: '80%', avatar: '' },
-    ];
+    return membersList;
   };
 
   const handleAssignLead = async (targetTeamId, newLeadUserId) => {
@@ -662,7 +662,7 @@ export default function Batches() {
   }, [analyticsData]);
 
   const taskCompletionPieData = useMemo(() => {
-    if (selectedTeamAnalytics) {
+    if (selectedTeamAnalytics && selectedTeamAnalytics.tasksCount > 0) {
       const comp = selectedTeamAnalytics.completedAssignments || 0;
       const sub = selectedTeamAnalytics.submittedAssignments || 0;
       const inProg = (selectedTeamAnalytics.inProgressAssignments || 0) + (selectedTeamAnalytics.pendingAssignments || 0);
@@ -678,8 +678,7 @@ export default function Batches() {
       if (items.length > 0) return items;
     }
     return [
-      { name: 'Completed', value: 0, color: '#10B981' },
-      { name: 'Pending', value: 1, color: '#66645E' },
+      { name: 'No Tasks Assigned', value: 1, color: '#E0DDD0' },
     ];
   }, [selectedTeamAnalytics]);
 
@@ -688,21 +687,40 @@ export default function Batches() {
     completion: parseInt(m.pct, 10) || 80,
   }));
 
-  // Tasks Tab Data
-  const team1Tasks = [
-    { id: 't-1', task: 'Build Authentication', topic: 'Full Stack', deadline: '12 Sep', status: 'Completed', completion: '100%' },
-    { id: 't-2', task: 'DSA Binary Search', topic: 'DSA', deadline: '15 Sep', status: 'Pending', completion: '40%' },
-    { id: 't-3', task: 'ML Regression', topic: 'Machine Learning', deadline: '10 Sep', status: 'Overdue', completion: '0%' },
-    { id: 't-4', task: 'Docker Container Specs', topic: 'Cloud & DevOps', deadline: '18 Sep', status: 'Pending', completion: '60%' },
-    { id: 't-5', task: 'Smart Contract Audit', topic: 'Web3', deadline: '08 Sep', status: 'Completed', completion: '100%' },
-  ];
+  // Tasks Tab Data dynamically resolved from live Atlas database
+  const filteredTeamTasks = useMemo(() => {
+    if (!selectedTeam) return [];
+    const teamNum = selectedTeam.teamNumber;
+    const teamTasksList = tasks.filter((t) => {
+      const inAssignedTeams = Array.isArray(t.assignedTeams) && t.assignedTeams.includes(teamNum);
+      const leadIdStr = selectedTeam.teamLeadId?._id ? selectedTeam.teamLeadId._id.toString() : selectedTeam.teamLeadId?.toString();
+      const isLeadCreator = leadIdStr && t.createdBy && (t.createdBy._id || t.createdBy).toString() === leadIdStr;
+      return inAssignedTeams || isLeadCreator;
+    }).map((t) => {
+      const deadlineDate = t.deadline ? new Date(t.deadline) : null;
+      const isOverdue = deadlineDate && deadlineDate < new Date() && (t.completedCount || 0) === 0;
+      const status = (t.completedCount || 0) > 0 ? 'Completed' : isOverdue ? 'Overdue' : 'Pending';
+      const deadlineStr = deadlineDate ? deadlineDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'Flexible';
+      const compPct = t.totalAssignments > 0 ? `${Math.round(((t.completedCount || 0) / t.totalAssignments) * 100)}%` : '100%';
+      return {
+        id: t._id,
+        task: t.title,
+        topic: t.topic || 'Cohort Milestone',
+        deadline: deadlineStr,
+        status,
+        completion: compPct,
+      };
+    });
 
-  const filteredTeamTasks = team1Tasks.filter((t) => {
-    if (taskFilter === 'pending') return t.status === 'Pending';
-    if (taskFilter === 'completed') return t.status === 'Completed';
-    if (taskFilter === 'overdue') return t.status === 'Overdue';
-    return true;
-  });
+    const list = teamTasksList;
+
+    return list.filter((t) => {
+      if (taskFilter === 'pending') return t.status === 'Pending';
+      if (taskFilter === 'completed') return t.status === 'Completed';
+      if (taskFilter === 'overdue') return t.status === 'Overdue';
+      return true;
+    });
+  }, [tasks, selectedTeam, taskFilter]);
 
   return (
     <div className="max-w-[1240px] mx-auto space-y-6">
@@ -814,7 +832,9 @@ export default function Batches() {
               <div>
                 <span className="text-xs font-mono font-semibold uppercase text-[#66645E]">Selected Batch</span>
                 <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">Batch {selectedBatch.year}</h3>
-                <p className="text-xs text-[#66645E] mt-1">9 Teams • 42 Enrolled Students • 78% Avg Performance</p>
+                <p className="text-xs text-[#66645E] mt-1">
+                  {selectedBatch.teamsCount || teams.length || 9} Teams • {selectedBatch.studentsCount || users.length || 81} Enrolled Students • {analyticsData?.summary?.averageScore !== undefined ? `${analyticsData.summary.averageScore}%` : selectedBatch.avgPerformance || '88%'} Avg Performance
+                </p>
               </div>
 
               <button
@@ -1031,14 +1051,20 @@ export default function Batches() {
             {/* Teams Grid for Selected Batch */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {teams.map((t) => {
-                const scoreVal = t.performancePct || `${t.progressPercentage ?? 0}%`;
+                const analyticsTeam = analyticsData?.teams?.find(
+                  (at) => at.teamNumber === t.teamNumber || String(at._id) === String(t._id)
+                );
+                const scoreVal = analyticsTeam?.performancePct || t.performancePct || `${t.progressPercentage ?? 0}%`;
                 const num = parseInt(scoreVal, 10) || 0;
+                const taskComp = analyticsTeam?.taskCompletion || t.taskCompletion || `${t.completedAssignments || 0}/${t.totalExpectedAssignments || 0} (${scoreVal})`;
                 const badgeCls =
                   num >= 70
                     ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
                     : num >= 40
                     ? 'text-amber-800 bg-amber-50 border-amber-200'
-                    : 'text-rose-800 bg-rose-50 border-rose-200';
+                    : num > 0
+                    ? 'text-rose-800 bg-rose-50 border-rose-200'
+                    : 'text-stone-600 bg-stone-100 border-stone-200';
 
                 return (
                   <div
@@ -1069,7 +1095,7 @@ export default function Batches() {
                         </p>
                         <p>
                           <strong className="text-[#1C1B1A]">Task Completion:</strong>{' '}
-                          {t.taskCompletion || `${t.completedAssignments || 0}/${t.totalExpectedAssignments || 0} (${t.progressPercentage || 0}%)`}
+                          {taskComp}
                         </p>
                       </div>
                     </div>
@@ -1325,21 +1351,28 @@ export default function Batches() {
                 </div>
 
                 <div className="divide-y divide-[#E2DDD0] border border-[#E0DDD0] rounded-xl overflow-hidden bg-white">
-                  {filteredTeamTasks.map((t) => (
-                    <div key={t.id} className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-[#1C1B1A]">{t.task}</p>
-                        <p className="text-xs text-[#66645E]">{t.topic} • Deadline: {t.deadline}</p>
+                  {filteredTeamTasks.length > 0 ? (
+                    filteredTeamTasks.map((t) => (
+                      <div key={t.id} className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-[#1C1B1A]">{t.task}</p>
+                          <p className="text-xs text-[#66645E]">{t.topic} • Deadline: {t.deadline}</p>
+                        </div>
+                        <span className={`text-xs font-mono font-medium px-2.5 py-0.5 rounded-full ${
+                          t.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                          t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
+                          'bg-amber-50 text-amber-800 border border-amber-200'
+                        }`}>
+                          {t.status} ({t.completion})
+                        </span>
                       </div>
-                      <span className={`text-xs font-mono font-medium px-2.5 py-0.5 rounded-full ${
-                        t.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                        t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
-                        'bg-amber-50 text-amber-800 border border-amber-200'
-                      }`}>
-                        {t.status} ({t.completion})
-                      </span>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-[#66645E]">
+                      <p className="text-sm font-medium">No tasks assigned to this team yet.</p>
+                      <p className="text-xs text-[#8C887B] mt-1">Tasks will appear here once published by the team lead or admin.</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             )}

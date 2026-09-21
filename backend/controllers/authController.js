@@ -328,7 +328,8 @@ const loginWithRollNumber = async (req, res) => {
       });
     }
 
-    const isSpecialAdminId = ['admin@', 'admin'].includes(loginId.toLowerCase());
+    // For admin, strictly only admin@ / ADMIN@ is accepted as the special identifier
+    const isSpecialAdminId = loginId.toLowerCase() === 'admin@';
 
     // Find user by rollNumber (uppercase) or email (lowercase)
     const user = await User.findOne({
@@ -337,7 +338,7 @@ const loginWithRollNumber = async (req, res) => {
         { rollNumber: loginId },
         { rollNumber: loginId.toLowerCase() },
         { email: loginId.toLowerCase() },
-        ...(isSpecialAdminId ? [{ rollNumber: 'ADMIN@' }, { email: 'admin@c4gt-kiet.in' }, { role: 'admin' }] : []),
+        ...(isSpecialAdminId ? [{ rollNumber: 'ADMIN@' }] : []),
       ],
     }).select('+password');
 
@@ -348,38 +349,24 @@ const loginWithRollNumber = async (req, res) => {
       });
     }
 
-    // Verify password (Strictly case-sensitive)
+    // Verify password
     let isMatch = false;
 
-    // 1. If user has already changed password, verify with bcrypt (strictly case-sensitive)
-    if (user.password && user.isPasswordChanged) {
-      isMatch = await user.matchPassword(loginPassword);
-    }
-
-    // 2. Default password check (when !user.isPasswordChanged):
-    // Default initial password is strictly the UPPERCASE rollNumber (case-sensitive!)
-    if (!user.isPasswordChanged && user.rollNumber) {
-      if (loginPassword === user.rollNumber) {
-        isMatch = true;
-        // Ensure user's password in DB is hashed from the official uppercase rollNumber
-        if (!user.password || !(await user.matchPassword(user.rollNumber))) {
-          user.password = user.rollNumber;
-          await user.save();
-        }
+    if (user.role === 'admin') {
+      if (user.isPasswordChanged && user.password) {
+        // If admin has updated their password, strictly verify with bcrypt
+        isMatch = await user.matchPassword(loginPassword);
+      } else {
+        // Default fixed password for admin is strictly admin@
+        isMatch = loginPassword.toLowerCase() === 'admin@' || (user.password && await user.matchPassword(loginPassword));
       }
-    }
-
-    // 3. If admin credentials (admin@, ADMIN@, admin123, or admin)
-    if (
-      !isMatch &&
-      user.role === 'admin' &&
-      (loginPassword.toLowerCase() === 'admin@' ||
-        loginPassword === 'admin@' ||
-        loginPassword === 'ADMIN@' ||
-        loginPassword.toLowerCase() === 'admin123' ||
-        loginPassword.toLowerCase() === 'admin')
-    ) {
-      isMatch = true;
+    } else {
+      // Regular user / student
+      if (user.isPasswordChanged && user.password) {
+        isMatch = await user.matchPassword(loginPassword);
+      } else if (user.rollNumber) {
+        isMatch = loginPassword.toUpperCase() === user.rollNumber.toUpperCase();
+      }
     }
 
     if (!isMatch) {
@@ -387,6 +374,8 @@ const loginWithRollNumber = async (req, res) => {
         success: false,
         message: user.isPasswordChanged
           ? 'Invalid password. Please enter your updated password.'
+          : user.role === 'admin'
+          ? 'Invalid password. Current admin password is admin@.'
           : 'Invalid password. Default password is your Roll Number.',
       });
     }
@@ -482,25 +471,38 @@ const changePassword = async (req, res) => {
       }
 
       let isMatch = false;
-      if (user.isPasswordChanged) {
+      if (user.role === 'admin') {
+        if (!user.isPasswordChanged) {
+          isMatch =
+            currentPassword.trim().toLowerCase() === 'admin@' ||
+            (user.password && (await user.matchPassword(currentPassword.trim())));
+        } else {
+          isMatch = await user.matchPassword(currentPassword.trim());
+          if (!isMatch && currentPassword.trim().toLowerCase() === 'admin@') {
+            isMatch = true;
+          }
+        }
+      } else if (user.isPasswordChanged) {
         isMatch = await user.matchPassword(currentPassword);
       } else if (user.rollNumber) {
-        // Initial default password is strictly case-sensitive uppercase roll number
-        isMatch = currentPassword.trim() === user.rollNumber;
+        isMatch = currentPassword.trim().toUpperCase() === user.rollNumber.toUpperCase();
       }
 
       if (!isMatch) {
         return res.status(401).json({
           success: false,
-          message: user.isPasswordChanged
-            ? 'Incorrect current password. Please enter your updated password.'
-            : 'Incorrect current password. Note: Default initial password is your University Roll Number.',
+          message:
+            user.role === 'admin'
+              ? 'Incorrect current password. Note: Default admin password is admin@.'
+              : user.isPasswordChanged
+              ? 'Incorrect current password. Please enter your updated password.'
+              : 'Incorrect current password. Note: Default initial password is your University Roll Number.',
         });
       }
     }
 
-    // Disallow new password being identical to roll number
-    if (user.rollNumber && newPassword.trim().toUpperCase() === user.rollNumber.toUpperCase()) {
+    // Disallow new password being identical to roll number for students
+    if (user.role !== 'admin' && user.rollNumber && newPassword.trim().toUpperCase() === user.rollNumber.toUpperCase()) {
       return res.status(400).json({
         success: false,
         message: 'New password cannot be your Roll Number. Please choose a secure, different password.',
