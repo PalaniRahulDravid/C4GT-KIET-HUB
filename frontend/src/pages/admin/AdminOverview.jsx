@@ -160,7 +160,7 @@ export default function AdminOverview() {
             Welcome to C4GT Hub Administration
           </h2>
           <p className="text-[#66645E] text-sm leading-relaxed">
-            Manage your cohort members, assign team leads, monitor student project teams, and publish upcoming tasks from one centralized workspace.
+            Manage your C4GT HUB members, assign team leads, monitor student project teams, and publish upcoming tasks from one centralized workspace.
           </p>
         </div>
       </div>
@@ -249,9 +249,9 @@ export default function AdminOverview() {
                 <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
                   {stats.teamsCount || 9}
                 </div>
-                <span className="text-[11px] text-[#66645E]">ML & DSA Cohorts</span>
+                <span className="text-[11px] text-[#66645E]">ML & DSA Teams</span>
               </div>
-              <p className="text-xs text-[#66645E] mt-1">Cohort teams</p>
+              <p className="text-xs text-[#66645E] mt-1">C4GT HUB teams</p>
             </div>
           </>
         )}
@@ -299,14 +299,14 @@ export default function AdminOverview() {
                 <Award className="w-4.5 h-4.5" />
               </div>
               <h4 className="font-bold text-base text-[#1C1B1A] mb-1 group-hover:text-black">
-                Cohort Teams & Leads
+                C4GT HUB Teams & Leads
               </h4>
               <p className="text-xs text-[#66645E] leading-relaxed mb-6">
-                Oversee the 9 active cohort teams, assign team leads, and inspect rosters.
+                Oversee the 9 active C4GT HUB teams, assign team leads, and inspect rosters.
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-[#1C1B1A] group-hover:underline">
-              <span>Manage Cohort Teams</span>
+              <span>Manage C4GT HUB Teams</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
@@ -324,7 +324,7 @@ export default function AdminOverview() {
                 Batches Workspace
               </h4>
               <p className="text-xs text-[#66645E] leading-relaxed mb-6">
-                Organize academic cohorts, curricula, and track batch performance.
+                Organize academic batches, curricula, and track batch performance.
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-[#1C1B1A] group-hover:underline">

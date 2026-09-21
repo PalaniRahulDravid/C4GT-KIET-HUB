@@ -105,7 +105,7 @@ export default function AdminLayout() {
       icon: <Users className="w-6 h-6" strokeWidth={1.8} />,
     },
     {
-      name: 'Cohort Teams (9)',
+      name: 'C4GT HUB Teams (9)',
       to: '/admin/teams',
       description: '9 Teams & Lead Assignment',
       icon: <Award className="w-6 h-6" strokeWidth={1.8} />,
@@ -135,7 +135,7 @@ export default function AdminLayout() {
       return { breadcrumb: 'Manage Users', title: 'Manage Users & Permissions' };
     }
     if (location.pathname === '/admin/teams') {
-      return { breadcrumb: 'Cohort Teams', title: '9 Cohort Teams & Roster Management' };
+      return { breadcrumb: 'C4GT HUB Teams', title: '9 C4GT HUB Teams & Roster Management' };
     }
     if (location.pathname.startsWith('/admin/batches')) {
       return { breadcrumb: 'Batches', title: 'Batches Workspace' };

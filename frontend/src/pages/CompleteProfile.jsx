@@ -154,8 +154,10 @@ export default function CompleteProfile() {
       const userRole = updatedUser?.role || user?.role;
       if (userRole === 'admin') {
         navigate('/admin/dashboard', { replace: true });
+      } else if (userRole === 'teamlead' || userRole === 'team_lead') {
+        navigate('/teamlead', { replace: true });
       } else {
-        navigate('/', { replace: true });
+        navigate('/student', { replace: true });
       }
     } catch (err) {
       setErrorMessage(err.message || 'Failed to save student details. Please try again.');

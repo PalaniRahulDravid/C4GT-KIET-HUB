@@ -382,7 +382,7 @@ export default function TeamTasks() {
               Publish Next Team Task
             </h3>
             <p className="text-xs text-[#66645E] mt-0.5">
-              Assign milestones to teams across active academic cohorts.
+              Assign milestones to teams across active academic C4GT HUB batches.
             </p>
           </div>
 

@@ -15,6 +15,7 @@ const {
   deleteTask,
   getBatches,
   createBatchWithCohort,
+  deleteBatch,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -37,6 +38,7 @@ router.get('/tasks', getTasks);
 router.post('/tasks', createTask);
 router.get('/batches', getBatches);
 router.post('/batches', createBatchWithCohort);
+router.delete('/batches/:id', deleteBatch);
 router.patch('/tasks/:id', updateTask);
 router.delete('/tasks/:id', deleteTask);
 

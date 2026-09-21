@@ -723,7 +723,7 @@ export default function StudentDashboard() {
               <LayoutDashboard className="w-5 h-5" />
             </button>
             <div>
-              <div className="text-xs text-slate-500 font-medium">Cohort 2026 – 2027</div>
+              <div className="text-xs text-slate-500 font-medium">C4GT HUB 2026 – 2027</div>
               <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 capitalize">
                 {activeNav === 'overview' && 'Student Overview'}
                 {activeNav === 'my-tasks' && 'My Tasks & Deliverables'}
@@ -825,7 +825,7 @@ export default function StudentDashboard() {
                     <p className="text-sm text-slate-500 mt-1">
                       {studentTeam
                         ? `${studentTeam.name} • ${studentTeam.track || 'Engineering Track'}`
-                        : 'Cohort 2026 – 2027 • Track your progress and submit deliverables.'}
+                        : 'C4GT HUB 2026 – 2027 • Track your progress and submit deliverables.'}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2.5 sm:self-auto self-start">
@@ -1550,7 +1550,7 @@ export default function StudentDashboard() {
                             <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[10px] font-mono font-bold">
                               TEAM {studentTeam.teamNumber}
                             </span>
-                            <span className="text-xs text-slate-500 font-medium">Cohort 2026 – 2027</span>
+                            <span className="text-xs text-slate-500 font-medium">C4GT HUB 2026 – 2027</span>
                           </div>
                           <CardTitle className="text-xl font-bold text-slate-900 mt-1">
                             {studentTeam.name}
@@ -1644,7 +1644,7 @@ export default function StudentDashboard() {
                     <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                     <h3 className="text-sm font-bold text-slate-900">Not Assigned to a Team Yet</h3>
                     <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                      Your administrator will assign you to one of the 9 cohort teams shortly.
+                      Your administrator will assign you to one of the 9 C4GT HUB teams shortly.
                     </p>
                   </Card>
                 )}

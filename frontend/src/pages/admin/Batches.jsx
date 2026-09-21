@@ -24,6 +24,7 @@ import {
   Check,
   ShieldAlert,
   HelpCircle,
+  Trash2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -84,6 +85,10 @@ export default function Batches() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverErrors, setServerErrors] = useState([]);
+
+  // Batch deletion state
+  const [batchToDelete, setBatchToDelete] = useState(null);
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false);
 
   // Batches state list - loaded from MongoDB Atlas
   const [batches, setBatches] = useState([
@@ -186,7 +191,7 @@ export default function Batches() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'c4gt_cohort_batch_template_81_students.csv');
+    link.setAttribute('download', 'c4gt_hub_batch_template_81_students.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -310,7 +315,7 @@ export default function Batches() {
     }
 
     if (rows.length !== 81) {
-      errors.push(`Total cohort members is ${rows.length}/81 (exactly 81 students required)`);
+      errors.push(`Total C4GT HUB members is ${rows.length}/81 (exactly 81 students required)`);
     }
 
     const stats = {
@@ -521,6 +526,44 @@ export default function Batches() {
     }
   };
 
+  const handleDeleteBatch = async (batch) => {
+    if (!batch) return;
+    try {
+      setIsDeletingBatch(true);
+      const rawId = batch.id || batch._id;
+      const targetId = encodeURIComponent(rawId);
+      const res = await fetch(`${API_BASE_URL}/admin/batches/${targetId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Failed to delete batch.', 'error');
+        return;
+      }
+
+      showToast(data.message || `Batch ${batch.year || batch.id} deleted successfully.`, 'success');
+      setBatchToDelete(null);
+
+      // If user is currently viewing the deleted batch, navigate back to batches list
+      if (batchId && (batchId === batch.id || batchId === batch._id)) {
+        navigate('/admin/batches');
+      }
+
+      fetchData();
+    } catch (err) {
+      console.error('Error deleting batch:', err);
+      showToast('Network error while deleting batch.', 'error');
+    } finally {
+      setIsDeletingBatch(false);
+    }
+  };
+
   // Resolve selected Batch based on URL params
   const selectedBatch = useMemo(() => {
     if (!batchId) return null;
@@ -709,7 +752,7 @@ export default function Batches() {
       return {
         id: t._id,
         task: t.title,
-        topic: t.topic || 'Cohort Milestone',
+        topic: t.topic || 'C4GT HUB Milestone',
         deadline: deadlineStr,
         status,
         completion: compPct,
@@ -754,8 +797,8 @@ export default function Batches() {
               {selectedTeam
                 ? `${selectedTeam.name} Workspace`
                 : selectedBatch
-                ? `Batch ${selectedBatch.year} Overview`
-                : 'Academic Batches Workspace'}
+                  ? `Batch ${selectedBatch.year} Overview`
+                  : 'Academic Batches Workspace'}
             </h2>
           </div>
 
@@ -809,46 +852,61 @@ export default function Batches() {
                 ))
               ) : (
                 batches.map((b) => (
-                <div
-                  key={b.id}
-                  onClick={() => navigate(`/admin/batches/${b.id}`)}
-                  className="bg-[#FDFCF9] rounded-2xl p-6 sm:p-8 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-mono font-semibold uppercase px-3 py-1 rounded-full bg-[#1C1B1A] text-white">
-                        {b.status}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                        {b.avgPerformance} Avg Score
-                      </span>
+                  <div
+                    key={b.id}
+                    onClick={() => navigate(`/admin/batches/${b.id}`)}
+                    className="bg-[#FDFCF9] rounded-2xl p-6 sm:p-8 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-semibold uppercase px-3 py-1 rounded-full bg-[#1C1B1A] text-white">
+                            {b.status}
+                          </span>
+                          <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                            {b.avgPerformance} Avg Score
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBatchToDelete(b);
+                          }}
+                          title={`Delete Batch ${b.year}`}
+                          aria-label={`Delete Batch ${b.year}`}
+                          className="p-1.5 text-[#66645E] hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs"
+                        >
+                          <Trash2 className="w-4 h-4 text-[#66645E] hover:text-rose-600 transition-colors" />
+                        </button>
+                      </div>
+
+                      <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A] group-hover:text-black">
+                        Batch {b.year}
+                      </h3>
+                      <p className="text-xs text-[#66645E] mt-2">
+                        Academic C4GT HUB featuring {b.teamsCount} teams and {b.studentsCount} enrolled students.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-[#E0DDD0] text-xs">
+                        <div>
+                          <span className="text-[#66645E] font-mono uppercase text-[10px]">Teams</span>
+                          <p className="font-bold text-[#1C1B1A] text-sm mt-0.5">{b.teamsCount} Teams</p>
+                        </div>
+                        <div>
+                          <span className="text-[#66645E] font-mono uppercase text-[10px]">Enrolled Students</span>
+                          <p className="font-bold text-[#1C1B1A] text-sm mt-0.5">{b.studentsCount} Learners</p>
+                        </div>
+                      </div>
                     </div>
 
-                    <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A] group-hover:text-black">
-                      Batch {b.year}
-                    </h3>
-                    <p className="text-xs text-[#66645E] mt-2">
-                      Academic cohort featuring {b.teamsCount} teams and {b.studentsCount} enrolled students.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-[#E0DDD0] text-xs">
-                      <div>
-                        <span className="text-[#66645E] font-mono uppercase text-[10px]">Teams</span>
-                        <p className="font-bold text-[#1C1B1A] text-sm mt-0.5">{b.teamsCount} Teams</p>
-                      </div>
-                      <div>
-                        <span className="text-[#66645E] font-mono uppercase text-[10px]">Enrolled Students</span>
-                        <p className="font-bold text-[#1C1B1A] text-sm mt-0.5">{b.studentsCount} Learners</p>
-                      </div>
+                    <div className="mt-8 pt-4 border-t border-[#E0DDD0] flex items-center justify-between text-xs font-semibold text-[#1C1B1A] group-hover:underline">
+                      <span>Enter Batch Workspace</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
-
-                  <div className="mt-8 pt-4 border-t border-[#E0DDD0] flex items-center justify-between text-xs font-semibold text-[#1C1B1A] group-hover:underline">
-                    <span>Enter Batch Workspace</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-              )))}
+                )))}
             </div>
           </div>
         )}
@@ -865,12 +923,22 @@ export default function Batches() {
                 </p>
               </div>
 
-              <button
-                onClick={() => navigate('/admin/batches')}
-                className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-xs font-medium text-[#1C1B1A] cursor-pointer"
-              >
-                ← Back to All Batches
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBatchToDelete(selectedBatch)}
+                  className="px-4 py-2 rounded-full border border-rose-200 bg-rose-50 hover:bg-rose-100 text-xs font-medium text-rose-700 cursor-pointer flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Batch</span>
+                </button>
+                <button
+                  onClick={() => navigate('/admin/batches')}
+                  className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-xs font-medium text-[#1C1B1A] cursor-pointer"
+                >
+                  ← Back to All Batches
+                </button>
+              </div>
             </div>
 
             {/* ==================== TEAM PERFORMANCE ANALYTICS (RECHARTS) ==================== */}
@@ -879,7 +947,7 @@ export default function Batches() {
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1C1B1A] text-white text-[11px] font-mono font-bold tracking-wider uppercase mb-2">
                     <Award className="w-3.5 h-3.5 text-amber-300" />
-                    Live Cohort Analytics
+                    Live HUB Analytics
                   </div>
                   <h3 className="font-bold tracking-tight text-2xl font-bold text-[#1C1B1A]">
                     Team Performance Comparison
@@ -895,11 +963,10 @@ export default function Batches() {
                     <button
                       key={tf}
                       onClick={() => setAnalyticsTimeframe(tf)}
-                      className={`px-4 py-1.5 text-xs font-mono font-bold rounded-lg capitalize transition-all cursor-pointer ${
-                        analyticsTimeframe === tf
+                      className={`px-4 py-1.5 text-xs font-mono font-bold rounded-lg capitalize transition-all cursor-pointer ${analyticsTimeframe === tf
                           ? 'bg-[#1C1B1A] text-white shadow-xs'
                           : 'text-[#66645E] hover:text-[#1C1B1A]'
-                      }`}
+                        }`}
                     >
                       {tf === 'weekly' ? 'Weekly' : tf === 'monthly' ? 'Monthly' : 'Overall'}
                     </button>
@@ -985,44 +1052,44 @@ export default function Batches() {
                 const deliverablesData =
                   deliverablesTotal > 0
                     ? [
-                        {
-                          name: 'Approved & Completed',
-                          value: completedCount,
-                          count: completedCount,
-                          color: '#10B981',
-                          pct: Math.round((completedCount / deliverablesTotal) * 100),
-                        },
-                        {
-                          name: 'Under Review',
-                          value: submittedCount,
-                          count: submittedCount,
-                          color: '#F59E0B',
-                          pct: Math.round((submittedCount / deliverablesTotal) * 100),
-                        },
-                        {
-                          name: 'In Progress',
-                          value: inProgressCount,
-                          count: inProgressCount,
-                          color: '#3B82F6',
-                          pct: Math.round((inProgressCount / deliverablesTotal) * 100),
-                        },
-                        {
-                          name: 'Overdue Submissions',
-                          value: overdueCount,
-                          count: overdueCount,
-                          color: '#EF4444',
-                          pct: Math.round((overdueCount / deliverablesTotal) * 100),
-                        },
-                      ].filter((item) => item.value > 0)
+                      {
+                        name: 'Approved & Completed',
+                        value: completedCount,
+                        count: completedCount,
+                        color: '#10B981',
+                        pct: Math.round((completedCount / deliverablesTotal) * 100),
+                      },
+                      {
+                        name: 'Under Review',
+                        value: submittedCount,
+                        count: submittedCount,
+                        color: '#F59E0B',
+                        pct: Math.round((submittedCount / deliverablesTotal) * 100),
+                      },
+                      {
+                        name: 'In Progress',
+                        value: inProgressCount,
+                        count: inProgressCount,
+                        color: '#3B82F6',
+                        pct: Math.round((inProgressCount / deliverablesTotal) * 100),
+                      },
+                      {
+                        name: 'Overdue Submissions',
+                        value: overdueCount,
+                        count: overdueCount,
+                        color: '#EF4444',
+                        pct: Math.round((overdueCount / deliverablesTotal) * 100),
+                      },
+                    ].filter((item) => item.value > 0)
                     : [
-                        {
-                          name: 'Awaiting Submissions',
-                          value: 1,
-                          count: 0,
-                          color: '#CBD5E1',
-                          pct: 100,
-                        },
-                      ];
+                      {
+                        name: 'Awaiting Submissions',
+                        value: 1,
+                        count: 0,
+                        color: '#CBD5E1',
+                        pct: 100,
+                      },
+                    ];
 
                 // Mode 2: Team Performance Health Breakdown (9 Teams)
                 const activeTeamsList = currentTeamsList.filter(
@@ -1165,10 +1232,10 @@ export default function Batches() {
                                     entry.score >= 70
                                       ? '#10B981' // emerald
                                       : entry.score >= 40
-                                      ? '#F59E0B' // amber
-                                      : entry.score > 0
-                                      ? '#EF4444' // red
-                                      : '#D1D5DB'; // light gray for 0%
+                                        ? '#F59E0B' // amber
+                                        : entry.score > 0
+                                          ? '#EF4444' // red
+                                          : '#D1D5DB'; // light gray for 0%
                                   return <Cell key={`cell-${index}`} fill={fill} />;
                                 })}
                               </Bar>
@@ -1198,22 +1265,20 @@ export default function Batches() {
                             <button
                               type="button"
                               onClick={() => setDonutViewMode('deliverables')}
-                              className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${
-                                isDeliverablesMode
+                              className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${isDeliverablesMode
                                   ? 'bg-[#1C1B1A] text-white shadow-xs'
                                   : 'text-[#66645E] hover:text-[#1C1B1A]'
-                              }`}
+                                }`}
                             >
                               Deliverables
                             </button>
                             <button
                               type="button"
                               onClick={() => setDonutViewMode('teams')}
-                              className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${
-                                !isDeliverablesMode
+                              className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${!isDeliverablesMode
                                   ? 'bg-[#1C1B1A] text-white shadow-xs'
                                   : 'text-[#66645E] hover:text-[#1C1B1A]'
-                              }`}
+                                }`}
                             >
                               Teams
                             </button>
@@ -1373,10 +1438,10 @@ export default function Batches() {
                     num >= 70
                       ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
                       : num >= 40
-                      ? 'text-amber-800 bg-amber-50 border-amber-200'
-                      : num > 0
-                      ? 'text-rose-800 bg-rose-50 border-rose-200'
-                      : 'text-stone-600 bg-stone-100 border-stone-200';
+                        ? 'text-amber-800 bg-amber-50 border-amber-200'
+                        : num > 0
+                          ? 'text-rose-800 bg-rose-50 border-rose-200'
+                          : 'text-stone-600 bg-stone-100 border-stone-200';
 
                   return (
                     <div
@@ -1446,31 +1511,28 @@ export default function Batches() {
             <div className="inline-flex p-1 bg-[#EEECDF] rounded-full border border-[#E0DDD0]">
               <button
                 onClick={() => setActiveTab('members')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${
-                  activeTab === 'members'
+                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'members'
                     ? 'bg-[#1C1B1A] text-white shadow-xs'
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
-                }`}
+                  }`}
               >
                 Members ({currentTeamMembers.length})
               </button>
               <button
                 onClick={() => setActiveTab('performance')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${
-                  activeTab === 'performance'
+                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'performance'
                     ? 'bg-[#1C1B1A] text-white shadow-xs'
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
-                }`}
+                  }`}
               >
                 Performance Metrics
               </button>
               <button
                 onClick={() => setActiveTab('tasks')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${
-                  activeTab === 'tasks'
+                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'tasks'
                     ? 'bg-[#1C1B1A] text-white shadow-xs'
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
-                }`}
+                  }`}
               >
                 Assigned Tasks ({filteredTeamTasks.length})
               </button>
@@ -1565,20 +1627,18 @@ export default function Batches() {
                       {team1SeniorDevs.map((m, idx) => (
                         <div
                           key={m.id || idx}
-                          className={`bg-white rounded-2xl p-4 border shadow-2xs flex items-center justify-between transition-all ${
-                            m.role === 'team_lead'
+                          className={`bg-white rounded-2xl p-4 border shadow-2xs flex items-center justify-between transition-all ${m.role === 'team_lead'
                               ? 'border-purple-300 bg-purple-50/20'
                               : 'border-[#E0DDD0] hover:border-[#1C1B1A]'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-3.5">
                             <span className="w-7 h-7 rounded-lg bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
                               {idx + 1}.
                             </span>
                             <div
-                              className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${
-                                m.role === 'team_lead' ? 'bg-[#1C1B1A] text-amber-300' : 'bg-indigo-950 text-white'
-                              }`}
+                              className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${m.role === 'team_lead' ? 'bg-[#1C1B1A] text-amber-300' : 'bg-indigo-950 text-white'
+                                }`}
                             >
                               {getInitials(m.name)}
                             </div>
@@ -1765,9 +1825,8 @@ export default function Batches() {
                       <button
                         key={f}
                         onClick={() => setTaskFilter(f)}
-                        className={`px-3 py-1 text-xs font-mono rounded-full capitalize cursor-pointer ${
-                          taskFilter === f ? 'bg-[#1C1B1A] text-white' : 'bg-[#EEECDF] text-[#66645E]'
-                        }`}
+                        className={`px-3 py-1 text-xs font-mono rounded-full capitalize cursor-pointer ${taskFilter === f ? 'bg-[#1C1B1A] text-white' : 'bg-[#EEECDF] text-[#66645E]'
+                          }`}
                       >
                         {f}
                       </button>
@@ -1783,11 +1842,10 @@ export default function Batches() {
                           <p className="text-sm font-semibold text-[#1C1B1A]">{t.task}</p>
                           <p className="text-xs text-[#66645E]">{t.topic} • Deadline: {t.deadline}</p>
                         </div>
-                        <span className={`text-xs font-mono font-medium px-2.5 py-0.5 rounded-full ${
-                          t.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                          t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
-                          'bg-amber-50 text-amber-800 border border-amber-200'
-                        }`}>
+                        <span className={`text-xs font-mono font-medium px-2.5 py-0.5 rounded-full ${t.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                            t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
+                              'bg-amber-50 text-amber-800 border border-amber-200'
+                          }`}>
                           {t.status} ({t.completion})
                         </span>
                       </div>
@@ -1815,14 +1873,14 @@ export default function Batches() {
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                   <span className="text-[11px] font-mono uppercase tracking-wider text-[#66645E] font-semibold">
-                    Admin Cohort Onboarding
+                    Admin C4GT HUB Onboarding
                   </span>
                 </div>
                 <h3 className="font-bold tracking-tight text-2xl sm:text-3xl text-[#1C1B1A] mt-1">
                   Create Academic Batch
                 </h3>
                 <p className="text-xs text-[#66645E] mt-1">
-                  Strict Cohort Requirement: Exactly 9 teams, each with 1 Team Lead, 4 Senior Developers, and 4 Junior Developers (81 students total).
+                  Strict C4GT HUB Requirement: Exactly 9 teams, each with 1 Team Lead, 4 Senior Developers, and 4 Junior Developers (81 students total).
                 </p>
               </div>
               <button
@@ -1906,7 +1964,7 @@ export default function Batches() {
                 </div>
 
                 <p className="text-xs text-[#66645E]">
-                  Every new batch requires an exact cohort dataset of <strong>81 members</strong> organized into <strong>Teams 1 through 9</strong>. Each team must have exactly <strong>1 Team Lead (`LEAD`)</strong>, <strong>4 Senior Developers (`SD`)</strong>, and <strong>4 Junior Developers (`JD`)</strong>.
+                  Every new batch requires an exact C4GT HUB dataset of <strong>81 members</strong> organized into <strong>Teams 1 through 9</strong>. Each team must have exactly <strong>1 Team Lead (`LEAD`)</strong>, <strong>4 Senior Developers (`SD`)</strong>, and <strong>4 Junior Developers (`JD`)</strong>.
                 </p>
 
                 {/* CSV Headers Codebox */}
@@ -1940,7 +1998,7 @@ export default function Batches() {
               {/* 3. File Upload Area */}
               <div className="space-y-2">
                 <label className="block font-medium text-[#1C1B1A]">
-                  Upload Cohort CSV File <span className="text-rose-500">*</span>
+                  Upload C4GT HUB CSV File <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative border-2 border-dashed border-[#D2CEBE] hover:border-[#1C1B1A] rounded-2xl p-6 text-center bg-white transition-all">
                   <input
@@ -1961,7 +2019,7 @@ export default function Batches() {
                     ) : (
                       <div>
                         <p className="font-semibold text-sm text-[#1C1B1A]">
-                          Click to browse or drag & drop cohort CSV
+                          Click to browse or drag & drop C4GT HUB CSV
                         </p>
                         <p className="text-xs text-[#66645E]">Must adhere to the 81-student format</p>
                       </div>
@@ -1975,11 +2033,10 @@ export default function Batches() {
                 <div className="space-y-3">
                   {/* Status Banner */}
                   <div
-                    className={`rounded-2xl p-4 border flex items-start gap-3 ${
-                      validationResult.valid
+                    className={`rounded-2xl p-4 border flex items-start gap-3 ${validationResult.valid
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
                         : 'bg-amber-50/80 border-amber-300 text-amber-950'
-                    }`}
+                      }`}
                   >
                     {validationResult.valid ? (
                       <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -1989,23 +2046,22 @@ export default function Batches() {
                     <div className="space-y-1 w-full">
                       <p className="font-semibold text-sm">
                         {validationResult.valid
-                          ? 'Cohort CSV Fully Validated & Ready'
-                          : 'Cohort Dataset Validation Issues'}
+                          ? 'C4GT HUB CSV Fully Validated & Ready'
+                          : 'C4GT HUB Dataset Validation Issues'}
                       </p>
                       <p className="text-xs opacity-90">
                         {validationResult.valid
                           ? 'All 9 teams strictly have 1 Lead, 4 SDs, and 4 JDs (81 students total). You can now create the batch.'
-                          : 'The uploaded file does not satisfy the cohort quota requirements. See breakdown below.'}
+                          : 'The uploaded file does not satisfy the C4GT HUB quota requirements. See breakdown below.'}
                       </p>
 
                       {/* Quota Checklist Pills */}
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2">
                         <div
-                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
-                            validationResult.stats?.teamsDetected === 9
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.teamsDetected === 9
                               ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
                               : 'bg-rose-100/70 border-rose-300 text-rose-800'
-                          }`}
+                            }`}
                         >
                           <div>Teams</div>
                           <div className="text-sm font-bold mt-0.5">
@@ -2014,11 +2070,10 @@ export default function Batches() {
                         </div>
 
                         <div
-                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
-                            validationResult.stats?.totalLeads === 9
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalLeads === 9
                               ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
                               : 'bg-rose-100/70 border-rose-300 text-rose-800'
-                          }`}
+                            }`}
                         >
                           <div>Team Leads</div>
                           <div className="text-sm font-bold mt-0.5">
@@ -2027,11 +2082,10 @@ export default function Batches() {
                         </div>
 
                         <div
-                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
-                            validationResult.stats?.totalSds === 36
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalSds === 36
                               ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
                               : 'bg-rose-100/70 border-rose-300 text-rose-800'
-                          }`}
+                            }`}
                         >
                           <div>Senior Devs</div>
                           <div className="text-sm font-bold mt-0.5">
@@ -2040,11 +2094,10 @@ export default function Batches() {
                         </div>
 
                         <div
-                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
-                            validationResult.stats?.totalJds === 36
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalJds === 36
                               ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
                               : 'bg-rose-100/70 border-rose-300 text-rose-800'
-                          }`}
+                            }`}
                         >
                           <div>Junior Devs</div>
                           <div className="text-sm font-bold mt-0.5">
@@ -2053,11 +2106,10 @@ export default function Batches() {
                         </div>
 
                         <div
-                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${
-                            validationResult.stats?.totalRows === 81
+                          className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalRows === 81
                               ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
                               : 'bg-rose-100/70 border-rose-300 text-rose-800'
-                          }`}
+                            }`}
                         >
                           <div>Total Students</div>
                           <div className="text-sm font-bold mt-0.5">
@@ -2108,7 +2160,7 @@ export default function Batches() {
               <div className="pt-4 border-t border-[#E0DDD0] flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="text-xs text-[#66645E]">
                   {!uploadedCsvText ? (
-                    <span>Upload an 81-student cohort CSV to enable creation.</span>
+                    <span>Upload an 81-student C4GT HUB CSV to enable creation.</span>
                   ) : !validationResult.valid ? (
                     <span className="text-rose-600 font-medium">Fix CSV validation errors to proceed.</span>
                   ) : (
@@ -2133,16 +2185,15 @@ export default function Batches() {
                   <button
                     type="submit"
                     disabled={!validationResult.valid || isSubmitting}
-                    className={`px-6 py-2.5 rounded-full font-medium transition-all cursor-pointer flex items-center gap-2 ${
-                      validationResult.valid && !isSubmitting
+                    className={`px-6 py-2.5 rounded-full font-medium transition-all cursor-pointer flex items-center gap-2 ${validationResult.valid && !isSubmitting
                         ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md'
                         : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
-                    }`}
+                      }`}
                   >
                     {isSubmitting ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Seeding Batch Cohort...</span>
+                        <span>Seeding Batch C4GT HUB...</span>
                       </>
                     ) : (
                       <>
@@ -2154,6 +2205,66 @@ export default function Batches() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== DELETE BATCH CONFIRMATION MODAL ==================== */}
+      {batchToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isDeletingBatch && setBatchToDelete(null)}
+        >
+          <div
+            className="bg-[#FFFDF8] border border-[#E0DDD0] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-rose-100 border border-rose-200 text-rose-600 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="font-bold tracking-tight text-xl font-semibold text-[#1C1B1A]">
+                  Delete Batch {batchToDelete.year || batchToDelete.id}?
+                </h3>
+                <p className="text-xs text-[#66645E] leading-relaxed">
+                  Are you sure you want to permanently delete <strong className="text-[#1C1B1A]">Batch {batchToDelete.year || batchToDelete.id}</strong>? This will remove all associated teams, enrolled students, assignments, and analytics for this batch.
+                </p>
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 leading-relaxed mt-2 flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <span>This action cannot be undone. All C4GT HUB records tied to this batch will be removed.</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E0DDD0]">
+              <button
+                type="button"
+                onClick={() => setBatchToDelete(null)}
+                disabled={isDeletingBatch}
+                className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-xs font-medium text-[#1C1B1A] cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteBatch(batchToDelete)}
+                disabled={isDeletingBatch}
+                className="px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+              >
+                {isDeletingBatch ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Batch</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

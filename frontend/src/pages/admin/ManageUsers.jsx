@@ -144,8 +144,8 @@ export default function ManageUsers() {
       getNormalizedRoleKey(targetUser.role) === 'teamLead'
         ? 'teamlead'
         : getNormalizedRoleKey(targetUser.role) === 'admin'
-        ? 'admin'
-        : 'user';
+          ? 'admin'
+          : 'user';
     if (newRole === currentNormalized) return;
     setPendingRoleChange({
       user: targetUser,
@@ -270,11 +270,10 @@ export default function ManageUsers() {
         {/* Card 1: ALL USERS (Soft White / Neutral) */}
         <div
           onClick={() => setSelectedRole('all')}
-          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${
-            selectedRole === 'all'
+          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${selectedRole === 'all'
               ? 'bg-white text-[#1C1B1A] shadow-md border-2 border-[#1C1B1A] ring-2 ring-black/5'
               : 'bg-[#FDFCF9] text-[#1C1B1A] shadow-2xs border border-[#E0DDD0] hover:border-[#1C1B1A]/40'
-          }`}
+            }`}
         >
           <div className="space-y-1">
             <span className="text-[10px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">
@@ -300,11 +299,10 @@ export default function ManageUsers() {
         {/* Card 2: STUDENTS (Soft Pastel Sage Green) */}
         <div
           onClick={() => setSelectedRole('student')}
-          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${
-            selectedRole === 'student'
+          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${selectedRole === 'student'
               ? 'bg-[#EBF3EA] text-[#1C1B1A] shadow-md border-2 border-[#4A7C59] ring-2 ring-emerald-500/10'
               : 'bg-[#FDFCF9] text-[#1C1B1A] shadow-2xs border border-[#E0DDD0] hover:border-[#1C1B1A]/40'
-          }`}
+            }`}
         >
           <div className="space-y-1">
             <span className="text-[10px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">
@@ -330,11 +328,10 @@ export default function ManageUsers() {
         {/* Card 3: TEAM LEADS (Soft Pastel Peach) */}
         <div
           onClick={() => setSelectedRole('teamLead')}
-          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${
-            selectedRole === 'teamLead'
+          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${selectedRole === 'teamLead'
               ? 'bg-[#FCEEE9] text-[#1C1B1A] shadow-md border-2 border-[#D97706] ring-2 ring-amber-500/10'
               : 'bg-[#FDFCF9] text-[#1C1B1A] shadow-2xs border border-[#E0DDD0] hover:border-[#1C1B1A]/40'
-          }`}
+            }`}
         >
           <div className="space-y-1">
             <span className="text-[10px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">
@@ -366,11 +363,10 @@ export default function ManageUsers() {
         {/* Card 4: ADMINISTRATORS (Soft Warm Cream) */}
         <div
           onClick={() => setSelectedRole('admin')}
-          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${
-            selectedRole === 'admin'
+          className={`rounded-2xl p-5 transition-all duration-200 cursor-pointer flex items-center justify-between relative select-none ${selectedRole === 'admin'
               ? 'bg-[#F2EFE6] text-[#1C1B1A] shadow-md border-2 border-[#1C1B1A] ring-2 ring-black/5'
               : 'bg-[#FDFCF9] text-[#1C1B1A] shadow-2xs border border-[#E0DDD0] hover:border-[#1C1B1A]/40'
-          }`}
+            }`}
         >
           <div className="space-y-1">
             <span className="text-[10px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">
@@ -605,8 +601,8 @@ export default function ManageUsers() {
                 {pendingRoleChange.newRole === 'admin'
                   ? '⚠️ Promoting this user to Admin will grant full system access, including managing other users, team allocations, and batch submissions.'
                   : pendingRoleChange.newRole === 'teamlead'
-                  ? '💡 Promoting this user to Team Lead will allow them to review member tasks, supervise assignments, and mentor their assigned team.'
-                  : 'ℹ️ Changing this user to Student will restrict their privileges to viewing cohorts and submitting assignments.'}
+                    ? '💡 Promoting this user to Team Lead will allow them to review member tasks, supervise assignments, and mentor their assigned team.'
+                    : 'ℹ️ Changing this user to Student will restrict their privileges to viewing C4GT HUB teams and submitting assignments.'}
               </p>
             </div>
 

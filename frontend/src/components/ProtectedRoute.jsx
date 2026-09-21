@@ -81,17 +81,25 @@ export function PublicRoute({ children }) {
       return <Navigate to="/complete-profile" replace />;
     }
 
-    const userRole = normalizeRole(user.role);
-    if (userRole === 'admin') {
-      let targetPath = '/admin/dashboard';
-      if (location.state?.from?.pathname && location.state.from.pathname.startsWith('/admin')) {
-        targetPath = location.state.from.pathname;
-      }
-      return <Navigate to={targetPath} replace />;
+    if (
+      location.state?.from?.pathname &&
+      location.state.from.pathname !== '/' &&
+      location.state.from.pathname !== '/login'
+    ) {
+      return <Navigate to={location.state.from.pathname} replace />;
     }
 
-    // For team lead and student: first open main site ('/')
-    return <Navigate to="/" replace />;
+    const userRole = normalizeRole(user.role);
+    if (userRole === 'admin') {
+      return <Navigate to="/admin" replace />;
+    }
+
+    if (userRole === 'teamlead') {
+      return <Navigate to="/teamlead" replace />;
+    }
+
+    // For student / user: directly open student dashboard (/student)
+    return <Navigate to="/student" replace />;
   }
 
   return children;

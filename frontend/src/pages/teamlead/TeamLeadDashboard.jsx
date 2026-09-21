@@ -63,6 +63,7 @@ import {
   MessageSquare,
   Link2,
   Lock,
+  KeyRound,
 } from 'lucide-react';
 import { Skeleton, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
@@ -924,7 +925,7 @@ export default function TeamLeadDashboard() {
             </button>
             <div>
               <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
-                <span>{team?.name || 'Cohort Team'}</span>
+                <span>{team?.name || 'C4GT HUB Team'}</span>
                 <span>•</span>
                 <span>{team?.track || 'Engineering Track'}</span>
               </div>
@@ -1712,10 +1713,10 @@ export default function TeamLeadDashboard() {
                         <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[10px] font-mono font-bold">
                           TEAM {team?.teamNumber || '6'}
                         </span>
-                        <span className="text-xs text-slate-500 font-medium">Cohort 2026 – 2027</span>
+                        <span className="text-xs text-slate-500 font-medium">C4GT HUB 2026 – 2027</span>
                       </div>
                       <CardTitle className="text-xl font-bold text-slate-900 mt-1">
-                        {team?.name || 'Cohort Team'}
+                        {team?.name || 'C4GT HUB Team'}
                       </CardTitle>
                       <CardDescription className="text-xs text-slate-500">
                         {team?.track || 'Engineering Track'} • Capacity: {totalCount} / {maxMembers} Members

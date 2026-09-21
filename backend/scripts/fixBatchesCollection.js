@@ -13,6 +13,16 @@ async function fix() {
     console.log('dropIndex note:', err.message);
   }
 
+  const teamsColl = mongoose.connection.db.collection('teams');
+  try {
+    await teamsColl.dropIndex('name_1');
+    console.log('Successfully dropped old name_1 index on teams.');
+  } catch (err) {}
+  try {
+    await teamsColl.dropIndex('teamNumber_1');
+    console.log('Successfully dropped old teamNumber_1 index on teams.');
+  } catch (err) {}
+
   await coll.updateMany(
     {},
     {

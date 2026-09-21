@@ -1214,6 +1214,100 @@ const createBatchWithCohort = async (req, res) => {
 };
 
 /**
+ * @desc    Delete a batch permanently from MongoDB Atlas
+ * @route   DELETE /api/admin/batches/:id
+ * @access  Private/Admin
+ */
+const deleteBatch = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || !id.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Batch identifier is required',
+      });
+    }
+
+    const cleanId = id.trim();
+    const normalizedId = cleanId.replace(/\s+/g, '').replace(/–/g, '-');
+
+    // 1. Locate the batch document
+    let batch = await Batch.findOne({
+      $or: [
+        { id: cleanId },
+        { id: normalizedId },
+        { batchId: cleanId },
+        { batchId: normalizedId },
+        { year: cleanId },
+      ],
+    });
+
+    if (!batch && mongoose.Types.ObjectId.isValid(cleanId)) {
+      batch = await Batch.findById(cleanId);
+    }
+
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: `Batch '${cleanId}' not found`,
+      });
+    }
+
+    const batchKey = batch.id || normalizedId;
+    const batchYear = batch.year || batch.name || batchKey;
+
+    // 2. Find all teams in this batch to get their IDs
+    const teams = await Team.find({
+      $or: [{ batch: batchKey }, { batch: cleanId }, { batch: normalizedId }],
+    });
+    const teamIds = teams.map((t) => t._id);
+
+    // 3. Find all users associated with this batch (excluding admin accounts)
+    const batchUsers = await User.find({
+      $or: [{ batch: batchKey }, { batch: cleanId }, { batch: normalizedId }],
+      role: { $ne: 'admin' },
+    }).select('_id');
+    const userIds = batchUsers.map((u) => u._id);
+
+    // 4. Delete related task assignments and student activities for these users
+    if (userIds.length > 0) {
+      await TaskAssignment.deleteMany({ studentId: { $in: userIds } });
+      const StudentActivity = mongoose.models.StudentActivity || require('../models/StudentActivity');
+      await StudentActivity.deleteMany({ studentId: { $in: userIds } });
+      await User.deleteMany({ _id: { $in: userIds } });
+    }
+
+    // 5. Delete team requests related to these teams
+    if (teamIds.length > 0) {
+      const TeamRequest = mongoose.models.TeamRequest || require('../models/TeamRequest');
+      await TeamRequest.deleteMany({ teamId: { $in: teamIds } });
+    }
+
+    // 6. Delete teams in this batch
+    await Team.deleteMany({
+      $or: [{ batch: batchKey }, { batch: cleanId }, { batch: normalizedId }],
+    });
+
+    // 7. Delete the batch document itself
+    await Batch.deleteOne({ _id: batch._id });
+
+    console.log(`Successfully deleted Batch '${batchKey}' (${batchYear}) and all associated records.`);
+
+    res.status(200).json({
+      success: true,
+      message: `Batch '${batchYear}' deleted successfully.`,
+    });
+  } catch (error) {
+    console.error('Error deleting batch:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete batch',
+    });
+  }
+};
+
+/**
  * @desc    Get team-wise performance analytics across weekly, monthly, and overall timeframes
  * @route   GET /api/admin/teams/analytics
  * @access  Private/Admin
@@ -1353,6 +1447,7 @@ module.exports = {
   deleteTask,
   getBatches,
   createBatchWithCohort,
+  deleteBatch,
 };
 
 

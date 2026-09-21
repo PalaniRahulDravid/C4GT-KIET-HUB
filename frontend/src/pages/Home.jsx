@@ -482,7 +482,7 @@ export default function Home() {
               <div>
                 <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Academic Batches & Teams</span>
                 <h2 className="font-['Instrument_Serif',serif] text-4xl sm:text-6xl font-normal text-[#1C1B1A] leading-[1.1] mt-2">
-                  Organized cohort management.
+                  Organized C4GT HUB management.
                 </h2>
               </div>
 

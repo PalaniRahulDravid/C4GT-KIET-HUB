@@ -33,7 +33,7 @@ export default function TeamOverview() {
   const [assigningId, setAssigningId] = useState(null);
   const [viewingTeam, setViewingTeam] = useState(null);
   const [toast, setToast] = useState({
-    message: 'Cohort teams loaded from MongoDB Atlas.',
+    message: 'C4GT HUB teams loaded from MongoDB Atlas.',
     type: 'success',
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -174,7 +174,7 @@ export default function TeamOverview() {
   const getSectionTitle = () => {
     if (selectedFilter === 'assigned') return 'Teams With Assigned Leads';
     if (selectedFilter === 'pending') return 'Teams Awaiting Lead Assignment';
-    return 'Overview of Cohort Teams (1 – 9)';
+    return 'Overview of C4GT HUB Teams (1 – 9)';
   };
 
   return (
@@ -201,7 +201,7 @@ export default function TeamOverview() {
         <div>
           <h2 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">{getSectionTitle()}</h2>
           <p className="text-xs text-[#66645E] mt-1">
-            Manage all 9 cohort teams. Every team has a strict capacity limit of <strong>9 members</strong>. Assign Team Leads so they can search users and build their roster.
+            Manage all 9 C4GT HUB teams. Every team has a strict capacity limit of <strong>9 members</strong>. Assign Team Leads so they can search users and build their roster.
           </p>
         </div>
 

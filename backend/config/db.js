@@ -5,7 +5,7 @@ if (process.env.NODE_ENV !== 'production') {
   try {
     const dns = require('dns');
     dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4', '1.0.0.1']);
-  } catch (err) {}
+  } catch (err) { }
 }
 
 // Serverless connection cache
@@ -46,8 +46,20 @@ const connectDB = async () => {
 
     cached.promise = mongoose
       .connect(config.mongoUri, opts)
-      .then((mongooseInstance) => {
+      .then(async (mongooseInstance) => {
         console.log(`MongoDB Atlas connected successfully to host: ${mongooseInstance.connection.host}`);
+        try {
+          const teamsColl = mongooseInstance.connection.db.collection('teams');
+          const teamIndexes = await teamsColl.indexes();
+          if (teamIndexes.some((idx) => idx.name === 'name_1')) {
+            await teamsColl.dropIndex('name_1');
+          }
+          if (teamIndexes.some((idx) => idx.name === 'teamNumber_1')) {
+            await teamsColl.dropIndex('teamNumber_1');
+          }
+        } catch (idxErr) {
+          // non-blocking
+        }
         return mongooseInstance;
       })
       .catch((err) => {
