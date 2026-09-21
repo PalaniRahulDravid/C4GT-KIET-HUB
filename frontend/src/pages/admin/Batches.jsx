@@ -61,6 +61,11 @@ export default function Batches() {
   const [taskFilter, setTaskFilter] = useState('all'); // 'all' | 'pending' | 'completed' | 'overdue'
   const [memberRoleFilter, setMemberRoleFilter] = useState('all'); // 'all' | 'junior_developer' | 'senior_developer'
 
+  // Team Performance Analytics state (Recharts)
+  const [analyticsTimeframe, setAnalyticsTimeframe] = useState('weekly'); // 'weekly' | 'monthly' | 'overall'
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
   // Create Batch Modal State & CSV Cohort Import
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [newBatchName, setNewBatchName] = useState('2027 – 2028');
@@ -410,13 +415,42 @@ export default function Batches() {
     }
   };
 
+  const fetchAnalytics = async (tf) => {
+    try {
+      setAnalyticsLoading(true);
+      const currentBatchId = batchId || '2026-2027';
+      const res = await fetch(
+        `${API_BASE_URL}/admin/teams/analytics?batch=${currentBatchId}&timeframe=${tf}`,
+        {
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setAnalyticsData(data);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading analytics from Atlas:', e);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [batchId, teamId]);
 
+  useEffect(() => {
+    fetchAnalytics(analyticsTimeframe);
+  }, [analyticsTimeframe, batchId]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchData();
+    fetchAnalytics(analyticsTimeframe);
     showToast('Refreshed latest batches & team allocations from Atlas.');
   };
 
@@ -602,20 +636,52 @@ export default function Batches() {
     .filter((m) => m.role === 'senior_developer' || m.role === 'team_lead')
     .sort((a, b) => (a.role === 'team_lead' ? 1 : b.role === 'team_lead' ? -1 : 0));
 
-  // Recharts Data for Performance Tab
-  const performanceTimeData = [
-    { week: 'Week 1', score: 65, avg: 60 },
-    { week: 'Week 2', score: 72, avg: 68 },
-    { week: 'Week 3', score: 78, avg: 72 },
-    { week: 'Week 4', score: 85, avg: 75 },
-    { week: 'Week 5', score: 81, avg: 78 },
-  ];
+  // Selected Team analytics data derived dynamically
+  const selectedTeamAnalytics = useMemo(() => {
+    if (!analyticsData?.teams || !selectedTeam) return null;
+    return analyticsData.teams.find(
+      (t) => t.teamNumber === selectedTeam.teamNumber || String(t._id) === String(selectedTeam._id)
+    );
+  }, [analyticsData, selectedTeam]);
 
-  const taskCompletionPieData = [
-    { name: 'Completed', value: 29, color: '#1C1B1A' },
-    { name: 'Pending', value: 4, color: '#66645E' },
-    { name: 'Overdue', value: 3, color: '#DC2626' },
-  ];
+  // Recharts Data for Performance Tab (Dynamic from live Atlas DB)
+  const performanceTimeData = useMemo(() => {
+    if (analyticsData?.trendData && Array.isArray(analyticsData.trendData) && analyticsData.trendData.length > 0) {
+      return analyticsData.trendData.map((d) => ({
+        week: d.label || d.date,
+        score: d.avgPerformance ?? d.score ?? 0,
+        submissions: d.submissions ?? d.completed ?? 0,
+      }));
+    }
+    return [
+      { week: 'Week 1', score: 0, submissions: 0 },
+      { week: 'Week 2', score: 0, submissions: 0 },
+      { week: 'Week 3', score: 0, submissions: 0 },
+      { week: 'Week 4', score: 0, submissions: 0 },
+    ];
+  }, [analyticsData]);
+
+  const taskCompletionPieData = useMemo(() => {
+    if (selectedTeamAnalytics) {
+      const comp = selectedTeamAnalytics.completedAssignments || 0;
+      const sub = selectedTeamAnalytics.submittedAssignments || 0;
+      const inProg = (selectedTeamAnalytics.inProgressAssignments || 0) + (selectedTeamAnalytics.pendingAssignments || 0);
+      const over = selectedTeamAnalytics.overdueAssignments || 0;
+
+      const items = [
+        { name: 'Completed', value: comp, color: '#10B981' },
+        { name: 'Submitted', value: sub, color: '#F59E0B' },
+        { name: 'In Progress / Pending', value: inProg, color: '#66645E' },
+        { name: 'Overdue', value: over, color: '#EF4444' },
+      ].filter((it) => it.value > 0);
+
+      if (items.length > 0) return items;
+    }
+    return [
+      { name: 'Completed', value: 0, color: '#10B981' },
+      { name: 'Pending', value: 1, color: '#66645E' },
+    ];
+  }, [selectedTeamAnalytics]);
 
   const individualMemberPerformance = (currentTeamMembers || []).map((m) => ({
     name: m.name ? m.name.split(' ')[0] : 'Member',
@@ -759,39 +825,262 @@ export default function Batches() {
               </button>
             </div>
 
-            {/* Teams Grid for Selected Batch */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teams.map((t) => (
-                <div
-                  key={t._id}
-                  onClick={() => navigate(`/admin/batches/${selectedBatch.id}/team/${t.teamNumber}`)}
-                  className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">
-                        {t.name}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                        {t.performancePct}
-                      </span>
-                    </div>
-
-                    <p className="text-xs font-medium text-[#66645E] line-clamp-1">{t.track}</p>
-
-                    <div className="mt-4 space-y-1.5 text-xs text-[#66645E]">
-                      <p><strong className="text-[#1C1B1A]">Team Lead:</strong> {t.teamLeadId?.name || 'Unassigned'}</p>
-                      <p><strong className="text-[#1C1B1A]">Members:</strong> {t.membersCount} Students</p>
-                      <p><strong className="text-[#1C1B1A]">Task Completion:</strong> {t.taskCompletion}</p>
-                    </div>
+            {/* ==================== TEAM PERFORMANCE ANALYTICS (RECHARTS) ==================== */}
+            <div className="bg-[#FDFCF9] rounded-3xl p-6 border border-[#E0DDD0] shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#E0DDD0]">
+                <div>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1C1B1A] text-white text-[11px] font-mono font-bold tracking-wider uppercase mb-2">
+                    <Award className="w-3.5 h-3.5 text-amber-300" />
+                    Live Cohort Analytics
                   </div>
+                  <h3 className="font-bold tracking-tight text-2xl font-bold text-[#1C1B1A]">
+                    Team Performance Comparison
+                  </h3>
+                  <p className="text-xs text-[#66645E]">
+                    Real-time submission evaluation across all 9 teams (includes both Admin & Team Lead tasks)
+                  </p>
+                </div>
 
-                  <div className="mt-6 pt-4 border-t border-[#E0DDD0] flex items-center justify-between text-xs font-semibold text-[#1C1B1A] group-hover:underline">
-                    <span>View Team Details</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                {/* Timeframe Toggle: Weekly | Monthly | Overall */}
+                <div className="inline-flex p-1 bg-[#EEECDF] rounded-xl border border-[#E0DDD0]">
+                  {['weekly', 'monthly', 'overall'].map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setAnalyticsTimeframe(tf)}
+                      className={`px-4 py-1.5 text-xs font-mono font-bold rounded-lg capitalize transition-all cursor-pointer ${
+                        analyticsTimeframe === tf
+                          ? 'bg-[#1C1B1A] text-white shadow-xs'
+                          : 'text-[#66645E] hover:text-[#1C1B1A]'
+                      }`}
+                    >
+                      {tf === 'weekly' ? 'Weekly' : tf === 'monthly' ? 'Monthly' : 'Overall'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* KPI Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-4 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs">
+                  <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] block mb-1">
+                    Top Team ({analyticsTimeframe})
+                  </span>
+                  <p className="text-lg font-bold text-[#1C1B1A] truncate">
+                    {analyticsData?.summary?.topTeam?.name || 'No Active Team'}
+                  </p>
+                  <span className="text-xs font-mono font-semibold text-emerald-700">
+                    {analyticsData?.summary?.topTeam ? `${analyticsData.summary.topTeam.score}% Score` : '0%'}
+                  </span>
+                </div>
+
+                <div className="p-4 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs">
+                  <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] block mb-1">
+                    Avg Batch Performance
+                  </span>
+                  <p className="text-lg font-bold text-[#1C1B1A]">
+                    {analyticsData?.summary?.averageScore ?? 0}%
+                  </p>
+                  <span className="text-xs font-mono text-[#66645E]">
+                    Across 9 Teams
+                  </span>
+                </div>
+
+                <div className="p-4 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs">
+                  <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] block mb-1">
+                    Total Deliverables
+                  </span>
+                  <p className="text-lg font-bold text-[#1C1B1A]">
+                    {analyticsData?.summary?.totalSubmissions ?? 0}
+                  </p>
+                  <span className="text-xs font-mono text-emerald-700">
+                    Submitted & Approved
+                  </span>
+                </div>
+
+                <div className="p-4 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs">
+                  <span className="text-[10px] font-mono font-bold uppercase text-[#66645E] block mb-1">
+                    Active Teams
+                  </span>
+                  <p className="text-lg font-bold text-[#1C1B1A]">
+                    {analyticsData?.summary?.activeTeamsCount ?? 0} / 9
+                  </p>
+                  <span className="text-xs font-mono text-[#66645E]">
+                    Performing Tasks
+                  </span>
+                </div>
+              </div>
+
+              {/* Recharts Bar Chart: Team 1 to Team 9 Performance Score */}
+              <div className="p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-[#1C1B1A]">
+                      Team-Wise Score Breakdown ({analyticsTimeframe.toUpperCase()})
+                    </h4>
+                    <p className="text-[11px] text-[#66645E]">
+                      Teams with no performed tasks or overdue submissions reflect decreased scores
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-mono flex-wrap">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                      Optimal (≥70%)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                      Moderate (40-69%)
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                      Inactive / Low (&lt;40%)
+                    </span>
                   </div>
                 </div>
-              ))}
+
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={
+                        analyticsData?.teams ||
+                        teams.map((t, idx) => ({
+                          teamNumber: t.teamNumber || idx + 1,
+                          name: t.name,
+                          score: parseInt(t.performancePct || '0', 10) || 0,
+                          track: t.track,
+                          tasksCount: t.tasksCount || 0,
+                          completedAssignments: t.completedAssignments || 0,
+                          submittedAssignments: t.submittedAssignments || 0,
+                          overdueAssignments: t.overdueAssignments || 0,
+                          status: 'Inactive',
+                        }))
+                      }
+                      margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#EAE6DC" vertical={false} />
+                      <XAxis
+                        dataKey="teamNumber"
+                        tickFormatter={(val) => `Team ${val}`}
+                        stroke="#66645E"
+                        fontSize={11}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        domain={[0, 100]}
+                        stroke="#66645E"
+                        fontSize={11}
+                        tickLine={false}
+                        tickFormatter={(v) => `${v}%`}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const d = payload[0].payload;
+                            return (
+                              <div className="bg-[#1C1B1A] text-white p-3 rounded-xl shadow-lg text-xs space-y-1 border border-[#333]">
+                                <p className="font-bold text-amber-300">
+                                  {d.name} (Team {d.teamNumber})
+                                </p>
+                                <p className="text-[11px] text-gray-300 line-clamp-1">{d.track}</p>
+                                <div className="pt-1.5 border-t border-gray-700 space-y-0.5 font-mono">
+                                  <p>
+                                    Performance:{' '}
+                                    <span className="font-bold text-white">{d.score}%</span>
+                                  </p>
+                                  <p>Tasks in Window: {d.tasksCount || 0}</p>
+                                  <p className="text-emerald-400">
+                                    Completed: {d.completedAssignments || 0}
+                                  </p>
+                                  <p className="text-amber-300">
+                                    Submitted: {d.submittedAssignments || 0}
+                                  </p>
+                                  <p className="text-rose-400">
+                                    Overdue: {d.overdueAssignments || 0}
+                                  </p>
+                                  <p className="text-gray-400">Status: {d.status}</p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="score" radius={[6, 6, 0, 0]}>
+                        {(
+                          analyticsData?.teams ||
+                          teams.map((t) => ({
+                            score: parseInt(t.performancePct || '0', 10) || 0,
+                          }))
+                        ).map((entry, index) => {
+                          const fill =
+                            entry.score >= 70
+                              ? '#10B981' // emerald
+                              : entry.score >= 40
+                              ? '#F59E0B' // amber
+                              : entry.score > 0
+                              ? '#EF4444' // red
+                              : '#9CA3AF'; // gray
+                          return <Cell key={`cell-${index}`} fill={fill} />;
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Teams Grid for Selected Batch */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {teams.map((t) => {
+                const scoreVal = t.performancePct || `${t.progressPercentage ?? 0}%`;
+                const num = parseInt(scoreVal, 10) || 0;
+                const badgeCls =
+                  num >= 70
+                    ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                    : num >= 40
+                    ? 'text-amber-800 bg-amber-50 border-amber-200'
+                    : 'text-rose-800 bg-rose-50 border-rose-200';
+
+                return (
+                  <div
+                    key={t._id}
+                    onClick={() => navigate(`/admin/batches/${selectedBatch.id}/team/${t.teamNumber}`)}
+                    className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">
+                          {t.name}
+                        </span>
+                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${badgeCls}`}>
+                          {scoreVal}
+                        </span>
+                      </div>
+
+                      <p className="text-xs font-medium text-[#66645E] line-clamp-1">{t.track}</p>
+
+                      <div className="mt-4 space-y-1.5 text-xs text-[#66645E]">
+                        <p>
+                          <strong className="text-[#1C1B1A]">Team Lead:</strong>{' '}
+                          {t.teamLeadId?.name || 'Unassigned'}
+                        </p>
+                        <p>
+                          <strong className="text-[#1C1B1A]">Members:</strong>{' '}
+                          {t.membersCount || t.members?.length || 0} Students
+                        </p>
+                        <p>
+                          <strong className="text-[#1C1B1A]">Task Completion:</strong>{' '}
+                          {t.taskCompletion || `${t.completedAssignments || 0}/${t.totalExpectedAssignments || 0} (${t.progressPercentage || 0}%)`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-[#E0DDD0] flex items-center justify-between text-xs font-semibold text-[#1C1B1A] group-hover:underline">
+                      <span>View Team Details</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

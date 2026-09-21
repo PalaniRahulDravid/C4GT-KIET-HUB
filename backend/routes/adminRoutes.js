@@ -4,6 +4,7 @@ const {
   updateUserRole,
   getAdminStats,
   getTeams,
+  getTeamPerformanceAnalytics,
   assignTeamLead,
   removeTeamMember,
   getResources,
@@ -26,6 +27,7 @@ router.use(authorize('admin'));
 router.get('/stats', getAdminStats);
 router.get('/users', getUsers);
 router.patch('/users/:id/role', updateUserRole);
+router.get('/teams/analytics', getTeamPerformanceAnalytics);
 router.get('/teams', getTeams);
 router.patch('/teams/:id/lead', assignTeamLead);
 router.delete('/teams/:id/members/:memberId', removeTeamMember);
