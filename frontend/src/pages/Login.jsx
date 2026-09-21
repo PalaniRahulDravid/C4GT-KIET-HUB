@@ -125,7 +125,7 @@ export default function Login() {
                   type="text"
                   value={rollNumber}
                   onChange={(e) => setRollNumber(e.target.value)}
-                  placeholder="e.g. 23B21A4268 or admin@"
+                  placeholder="e.g. 23B21A4XXX"
                   autoFocus
                   required
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-xs font-mono text-[#1C1B1A] tracking-wider focus:outline-hidden focus:border-[#1C1B1A] shadow-2xs placeholder:normal-case placeholder:tracking-normal placeholder:font-sans"
