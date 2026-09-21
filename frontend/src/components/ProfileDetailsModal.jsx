@@ -13,6 +13,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  KeyRound,
 } from 'lucide-react';
 
 const BRANCH_OPTIONS = [
@@ -29,7 +30,7 @@ const YEAR_OPTIONS = [
   { value: 4, label: '4th Year', sub: '7th & 8th Sem', autoTrack: 'Senior Developer' },
 ];
 
-export default function ProfileDetailsModal({ isOpen, onClose }) {
+export default function ProfileDetailsModal({ isOpen, onClose, onChangePassword }) {
   const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -208,15 +209,30 @@ export default function ProfileDetailsModal({ isOpen, onClose }) {
                   </div>
                 </div>
 
-                {/* EDIT PROFILE BUTTON (ONLY INSIDE PROFILE DETAILS) */}
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Profile</span>
-                </button>
+                {/* ACTION BUTTONS (EDIT PROFILE & OPTIONAL CHANGE PASSWORD) */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {onChangePassword && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onChangePassword();
+                      }}
+                      className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Change Password</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Profile</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
