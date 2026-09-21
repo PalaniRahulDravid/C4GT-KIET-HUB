@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, Link, useLocation, Navigate } from 'react
 import { Button } from '../components/ui/button';
 import { useAuth, getRoleName, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
 import ProfileDetailsModal from '../components/ProfileDetailsModal';
+import UserAvatar from '../components/UserAvatar';
 
 export default function RootLayout() {
   const { user, isAuthenticated, loading, logout } = useAuth();
@@ -193,17 +194,7 @@ export default function RootLayout() {
                   aria-expanded={dropdownOpen}
                   aria-haspopup="true"
                 >
-                  {user?.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-8 h-8 rounded-full object-cover border border-gray-200"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold text-xs shadow-sm">
-                      {getInitials(user?.name)}
-                    </div>
-                  )}
+                  <UserAvatar user={user} size="w-8 h-8" rounded="rounded-full" animate="always" />
 
                   <div className="text-left hidden lg:block pr-1">
                     <p className="text-xs font-semibold text-gray-800 leading-tight">

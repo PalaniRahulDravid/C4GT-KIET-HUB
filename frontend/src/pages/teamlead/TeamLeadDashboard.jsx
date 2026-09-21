@@ -834,7 +834,7 @@ export default function TeamLeadDashboard() {
               logo={{
                 href: '/teamlead/tasks',
                 icon: (
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 border border-white/10 shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 border border-white shadow-md p-1">
                     <C4GTLogo showText={false} imgClassName="h-7" />
                   </div>
                 ),

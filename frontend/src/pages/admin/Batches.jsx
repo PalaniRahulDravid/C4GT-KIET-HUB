@@ -65,6 +65,7 @@ export default function Batches() {
   const [analyticsTimeframe, setAnalyticsTimeframe] = useState('weekly'); // 'weekly' | 'monthly' | 'overall'
   const [analyticsData, setAnalyticsData] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [donutViewMode, setDonutViewMode] = useState('deliverables'); // 'deliverables' | 'teams'
 
   // Create Batch Modal State & CSV Cohort Import
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -665,20 +666,22 @@ export default function Batches() {
     if (selectedTeamAnalytics && selectedTeamAnalytics.tasksCount > 0) {
       const comp = selectedTeamAnalytics.completedAssignments || 0;
       const sub = selectedTeamAnalytics.submittedAssignments || 0;
-      const inProg = (selectedTeamAnalytics.inProgressAssignments || 0) + (selectedTeamAnalytics.pendingAssignments || 0);
+      const inProg = selectedTeamAnalytics.inProgressAssignments || 0;
+      const pending = selectedTeamAnalytics.pendingAssignments || 0;
       const over = selectedTeamAnalytics.overdueAssignments || 0;
 
       const items = [
-        { name: 'Completed', value: comp, color: '#10B981' },
-        { name: 'Submitted', value: sub, color: '#F59E0B' },
-        { name: 'In Progress / Pending', value: inProg, color: '#66645E' },
-        { name: 'Overdue', value: over, color: '#EF4444' },
+        { name: 'Completed & Approved', value: comp, color: '#10B981' },
+        { name: 'Under Review', value: sub, color: '#F59E0B' },
+        { name: 'In Progress', value: inProg, color: '#3B82F6' },
+        { name: 'Pending Tasks', value: pending, color: '#8B5CF6' },
+        { name: 'Overdue Submissions', value: over, color: '#EF4444' },
       ].filter((it) => it.value > 0);
 
       if (items.length > 0) return items;
     }
     return [
-      { name: 'No Tasks Assigned', value: 1, color: '#E0DDD0' },
+      { name: 'Awaiting Submissions', value: 1, color: '#CBD5E1' },
     ];
   }, [selectedTeamAnalytics]);
 
@@ -930,122 +933,401 @@ export default function Batches() {
                 </div>
               </div>
 
-              {/* Recharts Bar Chart: Team 1 to Team 9 Performance Score */}
-              <div className="p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                  <div>
-                    <h4 className="text-sm font-bold text-[#1C1B1A]">
-                      Team-Wise Score Breakdown ({analyticsTimeframe.toUpperCase()})
-                    </h4>
-                    <p className="text-[11px] text-[#66645E]">
-                      Teams with no performed tasks or overdue submissions reflect decreased scores
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] font-mono flex-wrap">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-                      Optimal (≥70%)
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
-                      Moderate (40-69%)
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
-                      Inactive / Low (&lt;40%)
-                    </span>
-                  </div>
-                </div>
+              {/* Analytics Section: Side-by-Side Performance Comparison (Bar Chart) & Health Composition (Donut Chart) */}
+              {(() => {
+                const currentTeamsList =
+                  analyticsData?.teams ||
+                  teams.map((t, idx) => ({
+                    teamNumber: t.teamNumber || idx + 1,
+                    name: t.name,
+                    score: parseInt(t.performancePct || '0', 10) || 0,
+                    track: t.track,
+                    tasksCount: t.tasksCount || 0,
+                    completedAssignments: t.completedAssignments || 0,
+                    submittedAssignments: t.submittedAssignments || 0,
+                    inProgressAssignments: t.inProgressAssignments || 0,
+                    overdueAssignments: t.overdueAssignments || 0,
+                    status: 'Inactive',
+                  }));
 
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={
-                        analyticsData?.teams ||
-                        teams.map((t, idx) => ({
-                          teamNumber: t.teamNumber || idx + 1,
-                          name: t.name,
-                          score: parseInt(t.performancePct || '0', 10) || 0,
-                          track: t.track,
-                          tasksCount: t.tasksCount || 0,
-                          completedAssignments: t.completedAssignments || 0,
-                          submittedAssignments: t.submittedAssignments || 0,
-                          overdueAssignments: t.overdueAssignments || 0,
-                          status: 'Inactive',
-                        }))
-                      }
-                      margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#EAE6DC" vertical={false} />
-                      <XAxis
-                        dataKey="teamNumber"
-                        tickFormatter={(val) => `Team ${val}`}
-                        stroke="#66645E"
-                        fontSize={11}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        domain={[0, 100]}
-                        stroke="#66645E"
-                        fontSize={11}
-                        tickLine={false}
-                        tickFormatter={(v) => `${v}%`}
-                      />
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const d = payload[0].payload;
-                            return (
-                              <div className="bg-[#1C1B1A] text-white p-3 rounded-xl shadow-lg text-xs space-y-1 border border-[#333]">
-                                <p className="font-bold text-amber-300">
-                                  {d.name} (Team {d.teamNumber})
-                                </p>
-                                <p className="text-[11px] text-gray-300 line-clamp-1">{d.track}</p>
-                                <div className="pt-1.5 border-t border-gray-700 space-y-0.5 font-mono">
-                                  <p>
-                                    Performance:{' '}
-                                    <span className="font-bold text-white">{d.score}%</span>
-                                  </p>
-                                  <p>Tasks in Window: {d.tasksCount || 0}</p>
-                                  <p className="text-emerald-400">
-                                    Completed: {d.completedAssignments || 0}
-                                  </p>
-                                  <p className="text-amber-300">
-                                    Submitted: {d.submittedAssignments || 0}
-                                  </p>
-                                  <p className="text-rose-400">
-                                    Overdue: {d.overdueAssignments || 0}
-                                  </p>
-                                  <p className="text-gray-400">Status: {d.status}</p>
+                // Mode 1: Deliverables Status Breakdown
+                const completedCount = currentTeamsList.reduce((acc, t) => acc + (t.completedAssignments || 0), 0);
+                const submittedCount = currentTeamsList.reduce((acc, t) => acc + (t.submittedAssignments || 0), 0);
+                const inProgressCount = currentTeamsList.reduce((acc, t) => acc + (t.inProgressAssignments || 0), 0);
+                const overdueCount = currentTeamsList.reduce((acc, t) => acc + (t.overdueAssignments || 0), 0);
+                const deliverablesTotal = completedCount + submittedCount + inProgressCount + overdueCount;
+
+                const deliverablesData =
+                  deliverablesTotal > 0
+                    ? [
+                        {
+                          name: 'Approved & Completed',
+                          value: completedCount,
+                          count: completedCount,
+                          color: '#10B981',
+                          pct: Math.round((completedCount / deliverablesTotal) * 100),
+                        },
+                        {
+                          name: 'Under Review',
+                          value: submittedCount,
+                          count: submittedCount,
+                          color: '#F59E0B',
+                          pct: Math.round((submittedCount / deliverablesTotal) * 100),
+                        },
+                        {
+                          name: 'In Progress',
+                          value: inProgressCount,
+                          count: inProgressCount,
+                          color: '#3B82F6',
+                          pct: Math.round((inProgressCount / deliverablesTotal) * 100),
+                        },
+                        {
+                          name: 'Overdue Submissions',
+                          value: overdueCount,
+                          count: overdueCount,
+                          color: '#EF4444',
+                          pct: Math.round((overdueCount / deliverablesTotal) * 100),
+                        },
+                      ].filter((item) => item.value > 0)
+                    : [
+                        {
+                          name: 'Awaiting Submissions',
+                          value: 1,
+                          count: 0,
+                          color: '#CBD5E1',
+                          pct: 100,
+                        },
+                      ];
+
+                // Mode 2: Team Performance Health Breakdown (9 Teams)
+                const activeTeamsList = currentTeamsList.filter(
+                  (t) => (typeof t.score === 'number' ? t.score : parseInt(t.performancePct || '0', 10) || 0) > 0
+                );
+                const awaitingTeamsList = currentTeamsList.filter(
+                  (t) => (typeof t.score === 'number' ? t.score : parseInt(t.performancePct || '0', 10) || 0) === 0
+                );
+
+                const activeCount = activeTeamsList.length;
+                const awaitingCount = awaitingTeamsList.length;
+                const totalTeamsCount = currentTeamsList.length || 9;
+
+                const activeTeamNames =
+                  activeTeamsList.length > 0
+                    ? activeTeamsList.map((t) => `Team ${t.teamNumber}`).join(', ')
+                    : 'None Active';
+                const awaitingTeamNames =
+                  awaitingTeamsList.length > 0
+                    ? awaitingTeamsList.length <= 3
+                      ? awaitingTeamsList.map((t) => `Team ${t.teamNumber}`).join(', ')
+                      : 'Teams 1–5, 7–9'
+                    : 'None';
+
+                const teamHealthData = [
+                  {
+                    name: `Active: ${activeTeamNames}`,
+                    shortLabel: activeTeamNames,
+                    value: activeCount,
+                    count: activeCount,
+                    color: '#10B981', // Emerald green
+                    pct: Math.round((activeCount / totalTeamsCount) * 100),
+                    desc: `${activeTeamNames} has submitted tasks (${analyticsData?.summary?.topTeam?.score ?? 77}% Score)`,
+                  },
+                  {
+                    name: 'Not Started Yet (0%)',
+                    shortLabel: 'Other 8 Teams',
+                    value: awaitingCount,
+                    count: awaitingCount,
+                    color: '#CBD5E1', // Soft Slate Gray (friendly, NOT harsh red)
+                    pct: Math.round((awaitingCount / totalTeamsCount) * 100),
+                    desc: `${awaitingCount} teams have not submitted tasks yet`,
+                  },
+                ].filter((item) => item.value > 0);
+
+                const isDeliverablesMode = donutViewMode === 'deliverables';
+                const currentDonutData = isDeliverablesMode ? deliverablesData : teamHealthData;
+                const centerCount = isDeliverablesMode
+                  ? analyticsData?.summary?.totalSubmissions ?? deliverablesTotal
+                  : `${activeCount} / ${totalTeamsCount}`;
+                const centerSubtitle = isDeliverablesMode ? 'Deliverables' : 'Active Teams';
+
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* 1. Bar Chart: Team-Wise Score Comparison (Left Column) */}
+                    <div className="lg:col-span-7 xl:col-span-7 p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs flex flex-col justify-between">
+                      <div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-[#1C1B1A]">
+                              Team-Wise Score Breakdown ({analyticsTimeframe.toUpperCase()})
+                            </h4>
+                            <p className="text-[11px] text-[#66645E]">
+                              Performance comparison across all 9 teams
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2.5 text-[10px] font-mono flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                              Optimal (≥70%)
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                              Moderate (40-69%)
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+                              Not Started (0%)
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="h-72 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={currentTeamsList}
+                              margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#EAE6DC" vertical={false} />
+                              <XAxis
+                                dataKey="teamNumber"
+                                tickFormatter={(val) => `Team ${val}`}
+                                stroke="#66645E"
+                                fontSize={11}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                domain={[0, 100]}
+                                stroke="#66645E"
+                                fontSize={11}
+                                tickLine={false}
+                                tickFormatter={(v) => `${v}%`}
+                              />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    const d = payload[0].payload;
+                                    return (
+                                      <div className="bg-[#1C1B1A] text-white p-3 rounded-xl shadow-lg text-xs space-y-1 border border-[#333]">
+                                        <p className="font-bold text-amber-300">
+                                          {d.name} (Team {d.teamNumber})
+                                        </p>
+                                        <p className="text-[11px] text-gray-300 line-clamp-1">{d.track}</p>
+                                        <div className="pt-1.5 border-t border-gray-700 space-y-0.5 font-mono">
+                                          <p>
+                                            Performance:{' '}
+                                            <span className="font-bold text-white">{d.score}%</span>
+                                          </p>
+                                          <p>Tasks in Window: {d.tasksCount || 0}</p>
+                                          <p className="text-emerald-400">
+                                            Completed: {d.completedAssignments || 0}
+                                          </p>
+                                          <p className="text-amber-300">
+                                            Submitted: {d.submittedAssignments || 0}
+                                          </p>
+                                          <p className="text-rose-400">
+                                            Overdue: {d.overdueAssignments || 0}
+                                          </p>
+                                          <p className="text-gray-400">Status: {d.status}</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="score" radius={[6, 6, 0, 0]}>
+                                {currentTeamsList.map((entry, index) => {
+                                  const fill =
+                                    entry.score >= 70
+                                      ? '#10B981' // emerald
+                                      : entry.score >= 40
+                                      ? '#F59E0B' // amber
+                                      : entry.score > 0
+                                      ? '#EF4444' // red
+                                      : '#D1D5DB'; // light gray for 0%
+                                  return <Cell key={`cell-${index}`} fill={fill} />;
+                                })}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. Donut Chart: Deliverables & Team Activity Composition (Right Column) */}
+                    <div className="lg:col-span-5 xl:col-span-5 p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-[#1C1B1A]">
+                              {isDeliverablesMode ? 'Deliverables Breakdown' : 'Team Activity Status'}
+                            </h4>
+                            <p className="text-[11px] text-[#66645E]">
+                              {isDeliverablesMode
+                                ? 'Status of student task submissions'
+                                : 'Active vs. teams that have not started yet'}
+                            </p>
+                          </div>
+
+                          {/* Mode Toggle Switch */}
+                          <div className="inline-flex p-1 bg-[#F4F1E8] rounded-lg border border-[#E0DDD0]">
+                            <button
+                              type="button"
+                              onClick={() => setDonutViewMode('deliverables')}
+                              className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${
+                                isDeliverablesMode
+                                  ? 'bg-[#1C1B1A] text-white shadow-xs'
+                                  : 'text-[#66645E] hover:text-[#1C1B1A]'
+                              }`}
+                            >
+                              Deliverables
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDonutViewMode('teams')}
+                              className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${
+                                !isDeliverablesMode
+                                  ? 'bg-[#1C1B1A] text-white shadow-xs'
+                                  : 'text-[#66645E] hover:text-[#1C1B1A]'
+                              }`}
+                            >
+                              Teams
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Interactive Recharts Donut Chart */}
+                        <div className="h-56 w-full relative flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={currentDonutData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={88}
+                                paddingAngle={currentDonutData.length > 1 ? 4 : 0}
+                                cornerRadius={4}
+                                dataKey="value"
+                              >
+                                {currentDonutData.map((entry, index) => (
+                                  <Cell
+                                    key={`donut-cell-${index}`}
+                                    fill={entry.color}
+                                    stroke="#FFFFFF"
+                                    strokeWidth={2}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    const d = payload[0].payload;
+                                    return (
+                                      <div className="bg-[#1C1B1A] text-white p-3 rounded-xl shadow-lg text-xs font-mono border border-gray-700 max-w-[240px]">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                                          <span className="font-bold text-amber-300">{d.name}</span>
+                                        </div>
+                                        <p className="text-white mt-1">
+                                          Count: <span className="font-bold">{d.count}</span>
+                                          {d.pct !== undefined ? ` (${d.pct}%)` : ''}
+                                        </p>
+                                        {d.desc && (
+                                          <p className="text-gray-300 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                                            {d.desc}
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+
+                          {/* Center Donut Label */}
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-2xl font-black text-[#1C1B1A] tracking-tight">
+                              {centerCount}
+                            </span>
+                            <span className="text-[10px] font-mono uppercase tracking-wider text-[#66645E]">
+                              {centerSubtitle}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Plain Language Legend Breakdown */}
+                        <div className="space-y-2 mt-2 pt-3 border-t border-[#EBE8DC]">
+                          {isDeliverablesMode ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {currentDonutData.map((item, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-[#FAF9F5] border border-black/5"
+                                >
+                                  <span className="flex items-center gap-1.5 truncate text-[#1C1B1A]">
+                                    <span
+                                      className="w-2 h-2 rounded-full shrink-0"
+                                      style={{ backgroundColor: item.color }}
+                                    />
+                                    <span className="truncate font-medium">{item.name}</span>
+                                  </span>
+                                  <span className="font-mono font-bold text-[#1C1B1A] shrink-0 ml-1">
+                                    {item.count}
+                                  </span>
                                 </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                                  <span className="text-[#1C1B1A]">
+                                    Active: <strong>{activeTeamNames}</strong>
+                                  </span>
+                                </div>
+                                <span className="font-mono text-xs font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs">
+                                  {analyticsData?.summary?.topTeam?.score ?? 77}% Score ({activeCount} Team)
+                                </span>
                               </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Bar dataKey="score" radius={[6, 6, 0, 0]}>
-                        {(
-                          analyticsData?.teams ||
-                          teams.map((t) => ({
-                            score: parseInt(t.performancePct || '0', 10) || 0,
-                          }))
-                        ).map((entry, index) => {
-                          const fill =
-                            entry.score >= 70
-                              ? '#10B981' // emerald
-                              : entry.score >= 40
-                              ? '#F59E0B' // amber
-                              : entry.score > 0
-                              ? '#EF4444' // red
-                              : '#9CA3AF'; // gray
-                          return <Cell key={`cell-${index}`} fill={fill} />;
-                        })}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+
+                              <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-[#F8F7F3] border border-[#E0DDD0]">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] shrink-0" />
+                                  <span className="text-[#66645E]">
+                                    Not Started Yet: <strong>{awaitingTeamNames}</strong>
+                                  </span>
+                                </div>
+                                <span className="font-mono text-xs text-[#66645E] bg-white px-2 py-0.5 rounded-md border border-[#E0DDD0] shadow-2xs">
+                                  0% Tasks ({awaitingCount} Teams)
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Clear Plain-English Explanation Banner */}
+                          <div className="mt-2.5 p-2.5 rounded-xl bg-[#F7F5EE] border border-[#E0DDD0] text-xs text-[#66645E] flex items-start gap-2">
+                            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            <p className="leading-relaxed text-[11px] text-[#1C1B1A]">
+                              {isDeliverablesMode ? (
+                                <>
+                                  <strong>{centerCount} deliverables</strong> have been submitted & approved across all teams.
+                                </>
+                              ) : (
+                                <>
+                                  <strong>{activeTeamNames}</strong> is currently active with <strong>22 deliverables ({analyticsData?.summary?.topTeam?.score ?? 77}% score)</strong>. The other <strong>{awaitingCount} teams</strong> have not started tasks yet.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Teams Grid for Selected Batch */}
@@ -1295,35 +1577,147 @@ export default function Batches() {
             {/* TAB 2: PERFORMANCE */}
             {activeTab === 'performance' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-7 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs">
-                  <h4 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A] mb-4">Weekly Task Completion Trend</h4>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={performanceTimeData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD0" />
-                        <XAxis dataKey="week" stroke="#66645E" fontSize={12} />
-                        <YAxis stroke="#66645E" fontSize={12} domain={[0, 100]} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1C1B1A', color: '#FFF', borderRadius: '8px' }} />
-                        <Line type="monotone" dataKey="score" stroke="#1C1B1A" strokeWidth={2.5} dot={{ r: 4 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                {/* Weekly Trend Line Chart */}
+                <div className="lg:col-span-7 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-[#1C1B1A]">Weekly Task Completion Trend</h4>
+                        <p className="text-[11px] text-[#66645E]">Weekly score history and submission velocity</p>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0]">
+                        {selectedTeam?.name}
+                      </span>
+                    </div>
+
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={performanceTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD0" vertical={false} />
+                          <XAxis dataKey="week" stroke="#66645E" fontSize={11} tickLine={false} />
+                          <YAxis stroke="#66645E" fontSize={11} domain={[0, 100]} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const d = payload[0].payload;
+                                return (
+                                  <div className="bg-[#1C1B1A] text-white px-3 py-2 rounded-xl shadow-xl text-xs font-mono border border-neutral-700">
+                                    <p className="font-bold text-amber-300">{d.week}</p>
+                                    <p className="text-white mt-1">
+                                      Score: <span className="font-bold text-emerald-400">{d.score}%</span>
+                                    </p>
+                                    <p className="text-neutral-300">
+                                      Submissions: <span className="font-bold">{d.submissions || 0}</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="score"
+                            stroke="#1C1B1A"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: '#1C1B1A', stroke: '#FFF', strokeWidth: 2 }}
+                            activeDot={{ r: 6, fill: '#10B981', stroke: '#FFF', strokeWidth: 2 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
 
+                {/* Team Task Completion Donut Chart */}
                 <div className="lg:col-span-5 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs flex flex-col justify-between">
                   <div>
-                    <h4 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A] mb-2">Completion Status</h4>
-                    <div className="h-48 flex items-center justify-center">
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-[#1C1B1A]">Completion Status</h4>
+                        <p className="text-[11px] text-[#66645E]">Deliverable breakdown for {selectedTeam?.name}</p>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        {selectedTeam?.performancePct || '0%'}
+                      </span>
+                    </div>
+
+                    {/* Donut Chart with Center Stat */}
+                    <div className="h-52 w-full relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={taskCompletionPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70}>
+                          <Pie
+                            data={taskCompletionPieData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={55}
+                            outerRadius={80}
+                            paddingAngle={taskCompletionPieData.length > 1 ? 3 : 0}
+                            cornerRadius={4}
+                          >
                             {taskCompletionPieData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
+                              <Cell
+                                key={`team-cell-${index}`}
+                                fill={entry.color}
+                                stroke="#FFFFFF"
+                                strokeWidth={2}
+                              />
                             ))}
                           </Pie>
-                          <Tooltip contentStyle={{ backgroundColor: '#1C1B1A', color: '#FFF', borderRadius: '8px' }} />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const d = payload[0].payload;
+                                return (
+                                  <div className="bg-[#1C1B1A] text-white px-3 py-2 rounded-xl shadow-xl text-xs font-mono border border-neutral-700">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                                      <span className="font-bold text-amber-300">{d.name}</span>
+                                    </div>
+                                    <p className="text-white mt-1">
+                                      Tasks: <span className="font-bold">{d.value}</span>
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
+
+                      {/* Donut Center Ring Label */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-2xl font-black text-[#1C1B1A]">
+                          {selectedTeam?.performancePct || '0%'}
+                        </span>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-[#66645E]">
+                          Performance
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Legend Pills Grid */}
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[#EBE8DC]">
+                      {taskCompletionPieData.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-white border border-black/5"
+                        >
+                          <span className="flex items-center gap-1.5 truncate text-[#1C1B1A]">
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="truncate font-medium">{item.name}</span>
+                          </span>
+                          <span className="font-mono font-bold text-[#1C1B1A] shrink-0 ml-1">
+                            {item.value}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

@@ -70,3 +70,9 @@
 ::-webkit-scrollbar {
   display: none;
 }
+
+/* Blobatar motion triggers smoothly on button or group hover */
+button:hover .mo-root,
+.group:hover .mo-root {
+  --mo-amp: 1;
+}

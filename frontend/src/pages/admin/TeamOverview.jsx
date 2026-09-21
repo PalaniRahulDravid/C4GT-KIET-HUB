@@ -17,6 +17,10 @@ import {
   ShieldAlert,
   Mail,
   Phone,
+  Edit2,
+  Check,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 
 export default function TeamOverview() {
@@ -32,6 +36,7 @@ export default function TeamOverview() {
     type: 'success',
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [editingTeamId, setEditingTeamId] = useState(null);
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -280,13 +285,19 @@ export default function TeamOverview() {
           const maxLimit = t.maxMembers || 9;
           const pct = Math.min(100, Math.round((totalCount / maxLimit) * 100));
 
+          const isEditing = editingTeamId === t._id;
+
           return (
             <div
               key={t._id}
-              className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition-shadow"
+              className={`bg-[#FDFCF9] rounded-2xl p-6 border shadow-2xs space-y-4 flex flex-col justify-between transition-all ${
+                isEditing
+                  ? 'border-[#1C1B1A] ring-2 ring-[#1C1B1A]/10 shadow-md bg-white'
+                  : 'border-[#E0DDD0] hover:shadow-md'
+              }`}
             >
               <div>
-                {/* Header: Name & Status */}
+                {/* Header: Name, Edit Toggle & Status */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-lg bg-[#1C1B1A] text-white flex items-center justify-center text-xs font-bold font-mono">
@@ -295,15 +306,41 @@ export default function TeamOverview() {
                     <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">{t.name}</span>
                   </div>
 
-                  {t.teamLeadId ? (
-                    <span className="text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      Lead Active
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      Need Lead
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {/* EDIT TOGGLE BUTTON */}
+                    <button
+                      type="button"
+                      onClick={() => setEditingTeamId(isEditing ? null : t._id)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold transition-all cursor-pointer shadow-2xs border ${
+                        isEditing
+                          ? 'bg-[#1C1B1A] text-white border-[#1C1B1A] hover:bg-black'
+                          : 'bg-white text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#F2EFE6] border-[#E0DDD0]'
+                      }`}
+                      title={isEditing ? 'Done editing team' : 'Edit team lead and card'}
+                    >
+                      {isEditing ? (
+                        <>
+                          <Check className="w-2.5 h-2.5 text-emerald-400" />
+                          <span>Done</span>
+                        </>
+                      ) : (
+                        <>
+                          <Edit2 className="w-2.5 h-2.5 text-[#66645E]" />
+                          <span>Edit</span>
+                        </>
+                      )}
+                    </button>
+
+                    {t.teamLeadId ? (
+                      <span className="text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Lead Active
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        Need Lead
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <p className="text-xs font-medium text-[#66645E] mt-2">
@@ -389,14 +426,37 @@ export default function TeamOverview() {
               {/* Actions: Assign Lead & View Roster */}
               <div className="pt-3 border-t border-[#E0DDD0] space-y-2">
                 <div>
-                  <label className="text-[10px] font-mono uppercase text-[#66645E] block mb-1">
-                    Assign / Change Lead
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-mono uppercase text-[#66645E] flex items-center gap-1">
+                      {isEditing ? (
+                        <>
+                          <Unlock className="w-3 h-3 text-emerald-600" />
+                          <span className="font-bold text-[#1C1B1A]">Assign / Change Lead</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3 h-3 text-[#88867E]" />
+                          <span>Assign / Change Lead (Locked)</span>
+                        </>
+                      )}
+                    </label>
+
+                    {!isEditing && (
+                      <span className="text-[9px] font-mono text-[#88867E]">
+                        Click Edit to change
+                      </span>
+                    )}
+                  </div>
+
                   <select
                     onChange={(e) => handleAssignLead(t._id, t.teamNumber, e.target.value)}
                     value={t.teamLeadId?._id || ''}
-                    disabled={assigningId === t._id}
-                    className="w-full py-2 px-3 text-xs rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium cursor-pointer shadow-2xs hover:border-[#1C1B1A]/40 transition-colors"
+                    disabled={!isEditing || assigningId === t._id}
+                    className={`w-full py-2 px-3 text-xs rounded-xl border transition-all ${
+                      isEditing
+                        ? 'border-[#1C1B1A] bg-white text-[#1C1B1A] font-semibold ring-2 ring-[#1C1B1A]/10 cursor-pointer shadow-xs'
+                        : 'border-[#EAE7DF] bg-[#F7F6F2] text-[#88867E] cursor-not-allowed opacity-80'
+                    }`}
                   >
                     <option value="">-- No Lead (Unassigned) --</option>
                     {eligibleUsers.map((u) => (

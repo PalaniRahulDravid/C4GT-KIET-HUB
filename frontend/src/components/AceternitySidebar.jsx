@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Menu, X, LogOut, ChevronRight } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 /* --- Context --- */
 const SidebarContext = createContext(null);
@@ -238,15 +239,21 @@ export function SidebarUser({ user, getInitials, onProfileClick, onLogout, class
 
   return (
     <div className={`p-2 select-none overflow-hidden ${className}`}>
-      <div className="flex items-center gap-2.5 p-1.5 rounded-xl bg-neutral-800/80 border border-neutral-700/60 transition-colors">
-        {/* Avatar (Stable, never remounts or moves abruptly) */}
+      <div className="flex items-center gap-2.5 p-1 rounded-xl bg-neutral-800/80 border border-neutral-700/60 transition-colors">
+        {/* Avatar with live Blobatar animation filling the box */}
         <button
           type="button"
           onClick={onProfileClick}
-          title={`${user?.name || 'Student'} - View Profile`}
-          className="w-9 h-9 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-xs border border-neutral-700 flex-shrink-0 hover:border-neutral-500 transition-colors cursor-pointer shadow-xs"
+          title={`${user?.name || 'User'} - View Profile`}
+          className="w-11 h-11 rounded-lg bg-[#1C1B1A] border border-neutral-700/60 flex-shrink-0 hover:border-emerald-500/50 hover:shadow-lg transition-all cursor-pointer shadow-xs flex items-center justify-center overflow-hidden group"
         >
-          {getInitials ? getInitials(user?.name) : 'ST'}
+          <UserAvatar
+            user={user}
+            size="w-full h-full"
+            rounded="rounded-lg"
+            scale="scale-[1.18]"
+            animate="always"
+          />
         </button>
 
         {/* User Info (Smoothly fades in when expanded) */}

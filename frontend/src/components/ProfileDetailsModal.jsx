@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import UserAvatar from './UserAvatar';
 import {
   User,
   Mail,
@@ -198,9 +199,7 @@ export default function ProfileDetailsModal({ isOpen, onClose, onChangePassword 
             <div className="space-y-5">
               <div className="flex items-center justify-between p-4 bg-blue-50/70 border border-blue-100 rounded-2xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base font-bold shadow-xs">
-                    {user.name ? user.name[0].toUpperCase() : 'U'}
-                  </div>
+                  <UserAvatar user={user} size="w-12 h-12" className="rounded-xl shadow-xs" animate="hover" />
                   <div>
                     <h4 className="text-base font-extrabold text-gray-900">{user.name}</h4>
                     <p className="text-xs text-blue-700 font-mono flex items-center gap-1 mt-0.5">

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, getDashboardPath, getRoleName } from '../context/AuthContext';
 import { Menu, X, ChevronDown, LogOut, LayoutDashboard, Sparkles, ArrowRight, GraduationCap } from 'lucide-react';
 import C4GTLogo from './C4GTLogo';
+import UserAvatar from './UserAvatar';
 
 const NAV_ITEMS = [
   { id: 'about', label: 'About', sectionId: null },
@@ -178,23 +179,7 @@ export default function LandingHeader() {
                   className="flex items-center gap-2 p-1 rounded-full hover:bg-black/5 transition-colors cursor-pointer border border-[#E0DDD0] bg-white shadow-2xs"
                   aria-expanded={profileDropdownOpen}
                 >
-                  {user?.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.name || 'User'}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center text-xs font-bold shadow-inner tracking-tight">
-                      {(() => {
-                        if (!user?.name) return 'U';
-                        const parts = user.name.trim().split(/\s+/);
-                        return parts.length === 1
-                          ? parts[0].substring(0, 2).toUpperCase()
-                          : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-                      })()}
-                    </div>
-                  )}
+                  <UserAvatar user={user} size="w-8 h-8" rounded="rounded-full" animate="always" />
                   <ChevronDown className={`w-4 h-4 text-[#66645E] transition-transform ${profileDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 

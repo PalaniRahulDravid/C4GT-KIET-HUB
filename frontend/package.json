@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@blobatar/react": "^2.7.0",
+    "blobatar": "^2.7.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
     "motion": "^13.2.0",
