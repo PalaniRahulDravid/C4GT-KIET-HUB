@@ -194,7 +194,8 @@ const formatUserResponse = (user) => {
     teamId: user.teamId || null,
     isPasswordChanged: Boolean(user.isPasswordChanged),
     mustChangePassword:
-      (user.role === 'teamlead' || user.role === 'team_lead') && !user.isPasswordChanged,
+      ((user.role === 'teamlead' || user.role === 'team_lead') && !user.isPasswordChanged) ||
+      ((user.role === 'user' || user.role === 'student') && !user.isPasswordChanged && Boolean(user.rollNumber)),
     isProfileComplete: user.role === 'admin' ? true : hasStudentDetails,
   };
 };
@@ -461,8 +462,8 @@ const changePassword = async (req, res) => {
       });
     }
 
-    // If user already has a password, verify currentPassword
-    if (user.password) {
+    // If user already has a password or roll number, verify currentPassword
+    if (user.password || user.rollNumber) {
       if (!currentPassword) {
         return res.status(400).json({
           success: false,

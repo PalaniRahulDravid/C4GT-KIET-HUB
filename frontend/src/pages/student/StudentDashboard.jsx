@@ -54,10 +54,14 @@ import {
   RefreshCw,
   Award,
   Share2,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Check,
 } from 'lucide-react';
 
 export default function StudentDashboard() {
-  const { user, token, logout, apiBaseUrl } = useAuth();
+  const { user, token, logout, apiBaseUrl, changePassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -85,6 +89,66 @@ export default function StudentDashboard() {
 
   // Profile modal state
   const [showProfileModal, setShowProfileModal] = useState(false);
+
+  // Password change modal states
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passError, setPassError] = useState('');
+  const [passSuccess, setPassSuccess] = useState('');
+  const [isChangingPass, setIsChangingPass] = useState(false);
+
+  // Check if first-time password change is mandatory for this Student
+  const isMandatoryPasswordChange = Boolean(
+    (user?.role === 'user' || user?.role === 'student' || user?.role === 'teamlead' || user?.role === 'team_lead') &&
+    (user?.mustChangePassword || (!user?.isPasswordChanged && user?.rollNumber))
+  );
+
+  const isPasswordModalOpen = isMandatoryPasswordChange || showPasswordChangeModal;
+
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+    setPassError('');
+    setPassSuccess('');
+
+    if (!currentPassword.trim()) {
+      setPassError('Please enter your current password (default is your University Roll Number).');
+      return;
+    }
+    if (newPassword.trim().length < 6) {
+      setPassError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (user?.rollNumber && newPassword.trim().toUpperCase() === user.rollNumber.toUpperCase()) {
+      setPassError('New password cannot be your Roll Number. Please choose a different, secure password.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPassError('New password and confirm password do not match.');
+      return;
+    }
+
+    try {
+      setIsChangingPass(true);
+      await changePassword(currentPassword.trim(), newPassword.trim());
+      setPassSuccess('Password successfully updated! Opening Student Dashboard...');
+      setTimeout(() => {
+        setShowPasswordChangeModal(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setPassSuccess('');
+      }, 1000);
+    } catch (err) {
+      setPassError(err.message || 'Failed to change password. Please check your current password.');
+    } finally {
+      setIsChangingPass(false);
+    }
+  };
 
   // Data states
   const [tasks, setTasks] = useState([]);
@@ -303,15 +367,15 @@ export default function StudentDashboard() {
         setSelectedTask((prev) =>
           prev
             ? {
-                ...prev,
-                assignment: {
-                  ...prev.assignment,
-                  status: 'submitted',
-                  submissions: submissionsPayload,
-                  submissionNotes,
-                  submittedAt: new Date().toISOString(),
-                },
-              }
+              ...prev,
+              assignment: {
+                ...prev.assignment,
+                status: 'submitted',
+                submissions: submissionsPayload,
+                submissionNotes,
+                submittedAt: new Date().toISOString(),
+              },
+            }
             : null
         );
       } else {
@@ -358,7 +422,7 @@ export default function StudentDashboard() {
       method: 'POST',
       credentials: 'include',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }).catch(() => {});
+    }).catch(() => { });
 
     window.open(resource.url, '_blank', 'noopener,noreferrer');
   };
@@ -602,6 +666,25 @@ export default function StudentDashboard() {
                   setMobileSidebarOpen(false);
                 }}
               />
+
+              <SidebarSectionLabel label="Account & Security" />
+              <nav className="mt-1 space-y-1">
+                <SidebarLink
+                  link={{
+                    href: '#password',
+                    label: 'Change Password',
+                    icon: <KeyRound className="w-4 h-4 text-amber-600" />,
+                  }}
+                  isActive={false}
+                  onClick={(e) => {
+                    e?.preventDefault?.();
+                    setPassError('');
+                    setPassSuccess('');
+                    setShowPasswordChangeModal(true);
+                    setMobileSidebarOpen(false);
+                  }}
+                />
+              </nav>
             </nav>
 
             {isTeamLead && (
@@ -662,6 +745,21 @@ export default function StudentDashboard() {
               <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
               <span>{streakData.currentStreak} {streakData.currentStreak === 1 ? 'Day' : 'Days'} Streak</span>
             </div>
+
+            {/* Change Password Action Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPassError('');
+                setPassSuccess('');
+                setShowPasswordChangeModal(true);
+              }}
+              className="gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Change Password</span>
+            </Button>
 
             {/* Notifications Bell */}
             <div className="relative" ref={notificationsRef}>
@@ -733,13 +831,27 @@ export default function StudentDashboard() {
                         : 'Cohort 2026 – 2027 • Track your progress and submit deliverables.'}
                     </p>
                   </div>
-                  <Button
-                    onClick={() => navigate('/student/my-tasks')}
-                    className="self-start sm:self-auto gap-2"
-                  >
-                    <span>View All Tasks</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2.5 sm:self-auto self-start">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setPassError('');
+                        setPassSuccess('');
+                        setShowPasswordChangeModal(true);
+                      }}
+                      className="gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Change Password</span>
+                    </Button>
+                    <Button
+                      onClick={() => navigate('/student/my-tasks')}
+                      className="gap-2"
+                    >
+                      <span>View All Tasks</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 {/* 3 Core Stats Cards */}
@@ -810,11 +922,10 @@ export default function StudentDashboard() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <Badge variant="default">Priority Action Item</Badge>
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${
-                            isTaskAdmin(nextPriorityTask)
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase ${isTaskAdmin(nextPriorityTask)
                               ? 'bg-slate-100 text-slate-700'
                               : 'bg-amber-50 text-amber-800 border border-amber-200/80'
-                          }`}>
+                            }`}>
                             {isTaskAdmin(nextPriorityTask) ? 'Admin Milestone' : 'Team Lead Sprint'}
                           </span>
                         </div>
@@ -1021,41 +1132,37 @@ export default function StudentDashboard() {
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
                     <button
                       onClick={() => setTaskStatusFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        taskStatusFilter === 'all'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'all'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       All ({scopedTaskStats.total})
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('todo')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        taskStatusFilter === 'todo'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'todo'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       To Do ({scopedTaskStats.pending})
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('submitted')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        taskStatusFilter === 'submitted'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'submitted'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Under Review ({scopedTaskStats.submitted})
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('completed')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        taskStatusFilter === 'completed'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'completed'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Completed ({scopedTaskStats.completed})
                     </button>
@@ -1082,20 +1189,18 @@ export default function StudentDashboard() {
                       setTaskSourceTab('all');
                       setTaskStatusFilter('all');
                     }}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                      taskSourceTab === 'all'
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${taskSourceTab === 'all'
                         ? 'bg-[#1C1B1A] text-white shadow-xs'
                         : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <Layers className="w-3.5 h-3.5" />
                     <span>All Tasks</span>
                     <span
-                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                        taskSourceTab === 'all'
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${taskSourceTab === 'all'
                           ? 'bg-white/20 text-white'
                           : 'bg-slate-100 text-slate-700'
-                      }`}
+                        }`}
                     >
                       {tasks.length}
                     </span>
@@ -1107,20 +1212,18 @@ export default function StudentDashboard() {
                       setTaskSourceTab('teamlead');
                       setTaskStatusFilter('all');
                     }}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                      taskSourceTab === 'teamlead'
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${taskSourceTab === 'teamlead'
                         ? 'bg-[#1C1B1A] text-white shadow-xs'
                         : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <Users className="w-3.5 h-3.5" />
                     <span>Team Lead</span>
                     <span
-                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                        taskSourceTab === 'teamlead'
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${taskSourceTab === 'teamlead'
                           ? 'bg-white/20 text-white'
                           : 'bg-slate-100 text-slate-700'
-                      }`}
+                        }`}
                     >
                       {teamLeadTasks.length}
                     </span>
@@ -1132,20 +1235,18 @@ export default function StudentDashboard() {
                       setTaskSourceTab('admin');
                       setTaskStatusFilter('all');
                     }}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                      taskSourceTab === 'admin'
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${taskSourceTab === 'admin'
                         ? 'bg-[#1C1B1A] text-white shadow-xs'
                         : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Admin</span>
                     <span
-                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                        taskSourceTab === 'admin'
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${taskSourceTab === 'admin'
                           ? 'bg-white/20 text-white'
                           : 'bg-slate-100 text-slate-700'
-                      }`}
+                        }`}
                     >
                       {adminTasks.length}
                     </span>
@@ -1165,17 +1266,17 @@ export default function StudentDashboard() {
                       {taskSourceTab === 'teamlead'
                         ? 'No Team Lead tasks found'
                         : taskSourceTab === 'admin'
-                        ? 'No Admin tasks found'
-                        : 'No tasks found'}
+                          ? 'No Admin tasks found'
+                          : 'No tasks found'}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
                       {taskSearchQuery
                         ? 'Try clearing your search terms.'
                         : taskSourceTab === 'teamlead'
-                        ? 'Your Team Lead has not assigned any tasks in this category.'
-                        : taskSourceTab === 'admin'
-                        ? 'No admin milestones assigned in this category.'
-                        : 'No tasks assigned in this category.'}
+                          ? 'Your Team Lead has not assigned any tasks in this category.'
+                          : taskSourceTab === 'admin'
+                            ? 'No admin milestones assigned in this category.'
+                            : 'No tasks assigned in this category.'}
                     </p>
                   </div>
                 ) : (
@@ -1277,10 +1378,10 @@ export default function StudentDashboard() {
                                   ? '✓ Work reviewed and accepted by Admin'
                                   : '✓ Work reviewed and accepted by Team Lead'
                                 : isSubmitted
-                                ? isTaskAdmin(task)
-                                  ? '⏳ Work submitted — Admin review in progress'
-                                  : '⏳ Work submitted — Team Lead review in progress'
-                                : 'Google Drive links required for review'}
+                                  ? isTaskAdmin(task)
+                                    ? '⏳ Work submitted — Admin review in progress'
+                                    : '⏳ Work submitted — Team Lead review in progress'
+                                  : 'Google Drive links required for review'}
                             </span>
                             <Button
                               onClick={() => setSelectedTask(task)}
@@ -1290,8 +1391,8 @@ export default function StudentDashboard() {
                               {isCompleted
                                 ? 'View Details'
                                 : isSubmitted
-                                ? 'Submission Status'
-                                : 'Submit Work'}
+                                  ? 'Submission Status'
+                                  : 'Submit Work'}
                             </Button>
                           </CardFooter>
                         </Card>
@@ -1322,41 +1423,37 @@ export default function StudentDashboard() {
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
                     <button
                       onClick={() => setResourceCategory('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'all'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'all'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       All ({hubResources.length})
                     </button>
                     <button
                       onClick={() => setResourceCategory('docs')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'docs'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'docs'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Docs & PDFs
                     </button>
                     <button
                       onClick={() => setResourceCategory('code')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'code'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'code'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Repositories
                     </button>
                     <button
                       onClick={() => setResourceCategory('dsa')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'dsa'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'dsa'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       DSA Problems
                     </button>
@@ -1399,11 +1496,10 @@ export default function StudentDashboard() {
                             <button
                               onClick={() => handleToggleResourceComplete(resItem)}
                               disabled={togglingResourceId === resItem._id}
-                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                                resItem.isCompleted
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${resItem.isCompleted
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                              }`}
+                                }`}
                               title={resItem.isCompleted ? 'Mark as incomplete' : 'Mark as completed'}
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -1676,8 +1772,8 @@ export default function StudentDashboard() {
                         isDoc
                           ? 'https://docs.google.com/document/d/...'
                           : isSlide
-                          ? 'https://docs.google.com/presentation/d/...'
-                          : 'https://github.com/... or Google Drive link'
+                            ? 'https://docs.google.com/presentation/d/...'
+                            : 'https://github.com/... or Google Drive link'
                       }
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
                     />
@@ -1745,7 +1841,230 @@ export default function StudentDashboard() {
         <ProfileDetailsModal
           isOpen={showProfileModal}
           onClose={() => setShowProfileModal(false)}
+          onChangePassword={() => {
+            setPassError('');
+            setPassSuccess('');
+            setShowPasswordChangeModal(true);
+          }}
         />
+      )}
+
+      {/* MANDATORY / VOLUNTARY PASSWORD CHANGE MODAL */}
+      {isPasswordModalOpen && (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${isMandatoryPasswordChange
+              ? 'bg-black/85 backdrop-blur-md'
+              : 'bg-black/60 backdrop-blur-xs'
+            }`}
+          onClick={(e) => {
+            // Prevent dismissal if mandatory
+            if (!isMandatoryPasswordChange && e.target === e.currentTarget) {
+              setShowPasswordChangeModal(false);
+              setPassError('');
+              setPassSuccess('');
+            }
+          }}
+        >
+          <div
+            className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-[#E0DDD0]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold tracking-tight text-xl text-[#1C1B1A]">
+                    {isMandatoryPasswordChange ? 'Set Your New Password' : 'Change Account Password'}
+                  </h3>
+                  <p className="text-xs text-[#66645E]">
+                    {isMandatoryPasswordChange
+                      ? 'First-Time Login Security Requirement'
+                      : 'Update Student Login Password'}
+                  </p>
+                </div>
+              </div>
+              {!isMandatoryPasswordChange && (
+                <button
+                  onClick={() => {
+                    setShowPasswordChangeModal(false);
+                    setPassError('');
+                    setPassSuccess('');
+                  }}
+                  className="p-1.5 rounded-full hover:bg-[#EAE7DC] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Mandatory Alert Banner */}
+            {isMandatoryPasswordChange && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 text-xs text-amber-950 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Mandatory Security Requirement</span>
+                </div>
+                <p className="text-[11px] leading-relaxed opacity-90">
+                  Welcome <strong>{user?.name}</strong>! Your account is currently using the initial default password (your Roll Number: <code className="bg-amber-100/80 px-1.5 py-0.5 rounded font-mono font-bold">{user?.rollNumber || 'Roll Number'}</code>). You must set a personal password before opening the Student Dashboard.
+                </p>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handlePasswordChangeSubmit} className="space-y-4 text-xs">
+              {passError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{passError}</span>
+                </div>
+              )}
+
+              {passSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{passSuccess}</span>
+                </div>
+              )}
+
+              {/* Current Password */}
+              <div>
+                <label className="block font-medium text-[#1C1B1A] mb-1">
+                  Current Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPass ? 'text' : 'password'}
+                    required
+                    placeholder={user?.rollNumber ? `Initial: ${user.rollNumber}` : 'Current password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPass(!showCurrentPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A]"
+                  >
+                    {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#66645E] mt-1">Default initial password is your University Roll Number.</p>
+              </div>
+
+              {/* New Password */}
+              <div>
+                <label className="block font-medium text-[#1C1B1A] mb-1">
+                  New Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    required
+                    placeholder="Minimum 6 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPass(!showNewPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A]"
+                  >
+                    {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block font-medium text-[#1C1B1A] mb-1">
+                  Confirm New Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPass ? 'text' : 'password'}
+                    required
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium focus:border-[#1C1B1A] focus:outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPass(!showConfirmPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A]"
+                  >
+                    {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Checklist */}
+              <div className="bg-white/80 border border-[#E0DDD0] rounded-xl p-3 space-y-1.5 text-[11px] font-mono">
+                <div className={`flex items-center gap-1.5 ${newPassword.length >= 6 ? 'text-emerald-700 font-semibold' : 'text-[#66645E]'}`}>
+                  {newPassword.length >= 6 ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 text-center">•</span>}
+                  <span>At least 6 characters</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${user?.rollNumber && newPassword && newPassword.toUpperCase() !== user.rollNumber.toUpperCase() ? 'text-emerald-700 font-semibold' : 'text-[#66645E]'}`}>
+                  {user?.rollNumber && newPassword && newPassword.toUpperCase() !== user.rollNumber.toUpperCase() ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 text-center">•</span>}
+                  <span>Different from Roll Number</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${newPassword && confirmPassword && newPassword === confirmPassword ? 'text-emerald-700 font-semibold' : 'text-[#66645E]'}`}>
+                  {newPassword && confirmPassword && newPassword === confirmPassword ? <Check className="w-3.5 h-3.5" /> : <span className="w-3.5 text-center">•</span>}
+                  <span>Passwords match</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-[#E0DDD0] flex items-center justify-between gap-3">
+                {isMandatoryPasswordChange ? (
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="text-xs text-[#66645E] hover:text-rose-600 transition-colors underline cursor-pointer"
+                  >
+                    Sign out instead
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordChangeModal(false);
+                      setPassError('');
+                    }}
+                    className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-[#1C1B1A] font-medium cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isChangingPass || !currentPassword || newPassword.length < 6 || newPassword !== confirmPassword}
+                  className={`px-5 py-2.5 rounded-full font-medium transition-all flex items-center gap-2 ${!isChangingPass && currentPassword && newPassword.length >= 6 && newPassword === confirmPassword
+                      ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md cursor-pointer'
+                      : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
+                    }`}
+                >
+                  {isChangingPass ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Password...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>{isMandatoryPasswordChange ? 'Update & Enter Dashboard' : 'Save New Password'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -25,8 +25,13 @@ export default function Login() {
     }
 
     // If Team Lead must change initial password, navigate directly to team lead workspace
-    if ((role === 'teamlead' || role === 'team_lead') && user?.mustChangePassword) {
+    if ((role === 'teamlead' || role === 'team_lead') && (authUser?.mustChangePassword || user?.mustChangePassword)) {
       return '/teamlead';
+    }
+
+    // If Student must change initial password, navigate directly to student dashboard
+    if ((role === 'student' || role === 'user') && (authUser?.mustChangePassword || user?.mustChangePassword)) {
+      return '/student';
     }
 
     // After login, students and team leads first open the main site ('/')
