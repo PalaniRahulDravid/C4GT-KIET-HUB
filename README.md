@@ -13,7 +13,7 @@ This repository contains the foundation setup organized into completely decouple
 - Vite (v6)
 - JavaScript
 - Tailwind CSS (v4 via @tailwindcss/vite)
-- React Router DOM (v7)
+- React Router DOM 
 - shadcn/ui component architecture (with clsx and tailwind-merge)
 - Recharts (for future performance visualizations)
 - Lucide React (icons)
