@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Sparkles, Users, GraduationCap, Award, Layers, CheckSquare, ArrowRight, ShieldCheck } from 'lucide-react';
+import { SkeletonCard, SkeletonTable } from '../../components/skeleton';
 
 export default function AdminOverview() {
   const { user: currentUser } = useAuth();
@@ -147,7 +148,7 @@ export default function AdminOverview() {
   };
 
   return (
-    <div className="max-w-[1240px] mx-auto space-y-8">
+    <div className="w-full space-y-8">
       {/* 1. WELCOME HERO CARD */}
       <div className="relative rounded-2xl bg-gradient-to-r from-[#EBF3EA]/60 via-[#F8F6F0] to-[#FCEEE9]/50 border border-[#E0DDD0] p-8 text-[#1C1B1A] overflow-hidden shadow-2xs">
         <div className="relative z-10 max-w-[680px] space-y-3">
@@ -166,83 +167,94 @@ export default function AdminOverview() {
 
       {/* 2. FOUR KEY METRIC CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Card 1: TOTAL USERS */}
-        <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Total Users</span>
-            <div className="w-8 h-8 rounded-xl bg-[#1C1B1A] text-white flex items-center justify-center shadow-2xs">
-              <Users className="w-4 h-4" />
+        {loading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            {/* Card 1: TOTAL USERS */}
+            <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Total Users</span>
+                <div className="w-8 h-8 rounded-xl bg-[#1C1B1A] text-white flex items-center justify-center shadow-2xs">
+                  <Users className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
+                  {stats.totalUsers || 7}
+                </div>
+                <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Synced
+                </span>
+              </div>
+              <p className="text-xs text-[#66645E] mt-1">Registered users</p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-              {loading ? '...' : (stats.totalUsers || 7)}
-            </div>
-            <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-              Synced
-            </span>
-          </div>
-          <p className="text-xs text-[#66645E] mt-1">Registered users</p>
-        </div>
 
-        {/* Card 2: STUDENTS */}
-        <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Students</span>
-            <div className="w-8 h-8 rounded-xl bg-[#EEECDF] text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0]">
-              <GraduationCap className="w-4 h-4" />
+            {/* Card 2: STUDENTS */}
+            <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Students</span>
+                <div className="w-8 h-8 rounded-xl bg-[#EEECDF] text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0]">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
+                  {stats.students || 3}
+                </div>
+                <span className="text-[11px] text-[#66645E]">Active Learners</span>
+              </div>
+              <p className="text-xs text-[#66645E] mt-1">Active student accounts</p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-              {loading ? '...' : (stats.students || 3)}
-            </div>
-            <span className="text-[11px] text-[#66645E]">Active Learners</span>
-          </div>
-          <p className="text-xs text-[#66645E] mt-1">Active student accounts</p>
-        </div>
 
-        {/* Card 3: TEAM LEADS */}
-        <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Team Leads</span>
-            <div className="w-8 h-8 rounded-xl bg-[#EEECDF] text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0]">
-              <Award className="w-4 h-4" />
+            {/* Card 3: TEAM LEADS */}
+            <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Team Leads</span>
+                <div className="w-8 h-8 rounded-xl bg-[#EEECDF] text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0]">
+                  <Award className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
+                  {stats.teamLeads || 0}
+                </div>
+                {(stats.teamLeads || 0) === 0 ? (
+                  <span className="text-[11px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    Pending
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Active Leads
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[#66645E] mt-1">Assigned team leads</p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-              {loading ? '...' : (stats.teamLeads || 0)}
-            </div>
-            {(stats.teamLeads || 0) === 0 ? (
-              <span className="text-[11px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                Pending
-              </span>
-            ) : (
-              <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                Active Leads
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-[#66645E] mt-1">Assigned team leads</p>
-        </div>
 
-        {/* Card 4: ACTIVE TEAMS */}
-        <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Active Teams</span>
-            <div className="w-8 h-8 rounded-xl bg-[#EEECDF] text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0]">
-              <Layers className="w-4 h-4" />
+            {/* Card 4: ACTIVE TEAMS */}
+            <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs hover:border-[#1C1B1A]/30 transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#66645E]">Active Teams</span>
+                <div className="w-8 h-8 rounded-xl bg-[#EEECDF] text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0]">
+                  <Layers className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
+                  {stats.teamsCount || 9}
+                </div>
+                <span className="text-[11px] text-[#66645E]">ML & DSA Cohorts</span>
+              </div>
+              <p className="text-xs text-[#66645E] mt-1">Cohort teams</p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-              {loading ? '...' : (stats.teamsCount || 9)}
-            </div>
-            <span className="text-[11px] text-[#66645E]">ML & DSA Cohorts</span>
-          </div>
-          <p className="text-xs text-[#66645E] mt-1">Cohort teams</p>
-        </div>
+          </>
+        )}
       </div>
 
       {/* 3. ADMIN TASKS & QUICK ACTIONS */}
@@ -254,7 +266,7 @@ export default function AdminOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Card 1: Manage Users */}
           <Link
             to="/admin/users"
@@ -277,7 +289,29 @@ export default function AdminOverview() {
             </div>
           </Link>
 
-          {/* Card 2: Batches */}
+          {/* Card 2: Cohort Teams */}
+          <Link
+            to="/admin/teams"
+            className="group bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] hover:border-[#1C1B1A] transition-all flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-9 h-9 rounded-xl bg-[#1C1B1A] text-white flex items-center justify-center mb-4 group-hover:scale-105 transition-transform shadow-2xs">
+                <Award className="w-4.5 h-4.5" />
+              </div>
+              <h4 className="font-bold text-base text-[#1C1B1A] mb-1 group-hover:text-black">
+                Cohort Teams & Leads
+              </h4>
+              <p className="text-xs text-[#66645E] leading-relaxed mb-6">
+                Oversee the 9 active cohort teams, assign team leads, and inspect rosters.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#1C1B1A] group-hover:underline">
+              <span>Manage Cohort Teams</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          {/* Card 3: Batches */}
           <Link
             to="/admin/batches"
             className="group bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] hover:border-[#1C1B1A] transition-all flex flex-col justify-between"
@@ -287,10 +321,10 @@ export default function AdminOverview() {
                 <Layers className="w-4.5 h-4.5" />
               </div>
               <h4 className="font-bold text-base text-[#1C1B1A] mb-1 group-hover:text-black">
-                Batches & Teams Workspace
+                Batches Workspace
               </h4>
               <p className="text-xs text-[#66645E] leading-relaxed mb-6">
-                Organize academic cohorts, assign team leads, and track team performance.
+                Organize academic cohorts, curricula, and track batch performance.
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-[#1C1B1A] group-hover:underline">
@@ -299,7 +333,7 @@ export default function AdminOverview() {
             </div>
           </Link>
 
-          {/* Card 3: Team Tasks */}
+          {/* Card 4: Team Tasks */}
           <Link
             to="/admin/tasks"
             className="group bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] hover:border-[#1C1B1A] transition-all flex flex-col justify-between"
@@ -339,39 +373,43 @@ export default function AdminOverview() {
           </Link>
         </div>
 
-        <div className="divide-y divide-[#E2DDD0]">
-          {recentUsers.map((u, idx) => {
-            const isSelf = currentUser && (currentUser._id === u._id || currentUser.email === u.email);
-            return (
-              <div key={u._id || idx} className="p-4 sm:px-6 hover:bg-[#F4F1E8]/50 transition-colors flex items-center justify-between">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
-                    {getInitials(u.name)}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-[#1C1B1A] truncate">{u.name || 'User'}</span>
-                      {isSelf && (
-                        <span className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-1.5 py-0.5 rounded border border-[#E0DDD0]">
-                          You
-                        </span>
-                      )}
+        {loading ? (
+          <SkeletonTable rows={4} rowsOnly />
+        ) : (
+          <div className="divide-y divide-[#E2DDD0]">
+            {recentUsers.map((u, idx) => {
+              const isSelf = currentUser && (currentUser._id === u._id || currentUser.email === u.email);
+              return (
+                <div key={u._id || idx} className="p-4 sm:px-6 hover:bg-[#F4F1E8]/50 transition-colors flex items-center justify-between">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
+                      {getInitials(u.name)}
                     </div>
-                    <div className="text-xs text-[#66645E] font-mono truncate">{u.email}</div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-[#1C1B1A] truncate">{u.name || 'User'}</span>
+                        {isSelf && (
+                          <span className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-1.5 py-0.5 rounded border border-[#E0DDD0]">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#66645E] font-mono truncate">{u.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 sm:gap-8 flex-shrink-0">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-medium border ${getRoleBadgeStyle(u.role)}`}>
+                      {getRoleLabel(u.role)}
+                    </span>
+                    <span className="text-xs text-[#66645E] font-mono w-20 sm:w-24 text-right">
+                      {formatDate(u.createdAt)}
+                    </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 sm:gap-8 flex-shrink-0">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-medium border ${getRoleBadgeStyle(u.role)}`}>
-                    {getRoleLabel(u.role)}
-                  </span>
-                  <span className="text-xs text-[#66645E] font-mono w-20 sm:w-24 text-right">
-                    {formatDate(u.createdAt)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

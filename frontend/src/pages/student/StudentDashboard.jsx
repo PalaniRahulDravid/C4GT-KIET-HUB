@@ -59,6 +59,7 @@ import {
   EyeOff,
   Check,
 } from 'lucide-react';
+import { Skeleton, SkeletonCard, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
 export default function StudentDashboard() {
   const { user, token, logout, apiBaseUrl, changePassword } = useAuth();
@@ -613,7 +614,7 @@ export default function StudentDashboard() {
                 link={{
                   href: '/student/overview',
                   label: 'Overview',
-                  icon: <LayoutDashboard className="w-4 h-4" />,
+                  icon: <LayoutDashboard className="w-6 h-6" strokeWidth={1.8} />,
                 }}
                 isActive={activeNav === 'overview'}
                 onClick={() => {
@@ -626,7 +627,7 @@ export default function StudentDashboard() {
                 link={{
                   href: '/student/my-tasks',
                   label: 'My Tasks',
-                  icon: <CheckSquare className="w-4 h-4" />,
+                  icon: <CheckSquare className="w-6 h-6" strokeWidth={1.8} />,
                   badge: taskStats.pending > 0 ? taskStats.pending : undefined,
                 }}
                 isActive={activeNav === 'my-tasks'}
@@ -640,7 +641,7 @@ export default function StudentDashboard() {
                 link={{
                   href: '/student/resources',
                   label: 'Learning Resources',
-                  icon: <BookOpen className="w-4 h-4" />,
+                  icon: <BookOpen className="w-6 h-6" strokeWidth={1.8} />,
                   badge: hubResources.length > 0 ? hubResources.length : undefined,
                 }}
                 isActive={activeNav === 'resources'}
@@ -654,7 +655,7 @@ export default function StudentDashboard() {
                 link={{
                   href: '/student/progress',
                   label: 'My Team & Progress',
-                  icon: <Users className="w-4 h-4" />,
+                  icon: <Users className="w-6 h-6" strokeWidth={1.8} />,
                 }}
                 isActive={activeNav === 'progress'}
                 onClick={() => {
@@ -669,7 +670,7 @@ export default function StudentDashboard() {
                   link={{
                     href: '#password',
                     label: 'Change Password',
-                    icon: <KeyRound className="w-4 h-4 text-amber-600" />,
+                    icon: <KeyRound className="w-6 h-6 text-amber-600" strokeWidth={1.8} />,
                   }}
                   isActive={false}
                   onClick={(e) => {
@@ -691,7 +692,7 @@ export default function StudentDashboard() {
                     link={{
                       href: '/teamlead/tasks',
                       label: 'Team Lead Workspace',
-                      icon: <ShieldCheck className="w-4 h-4 text-amber-600" />,
+                      icon: <ShieldCheck className="w-6 h-6 text-amber-600" strokeWidth={1.8} />,
                     }}
                     isActive={false}
                     onClick={() => setMobileSidebarOpen(false)}
@@ -809,7 +810,7 @@ export default function StudentDashboard() {
 
         {/* Workspace Body */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
-          <div className="max-w-6xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             {/* ============================================================= */}
             {/* VIEW 1: OVERVIEW */}
             {/* ============================================================= */}
@@ -1251,9 +1252,10 @@ export default function StudentDashboard() {
 
                 {/* Tasks List */}
                 {loadingTasks ? (
-                  <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Loading your tasks...</span>
+                  <div className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, idx) => (
+                      <SkeletonTaskCard key={idx} />
+                    ))}
                   </div>
                 ) : filteredTasks.length === 0 ? (
                   <div className="p-12 text-center rounded-2xl border border-dashed border-slate-200 bg-white">
@@ -1470,9 +1472,10 @@ export default function StudentDashboard() {
 
                 {/* Resources Grid */}
                 {loadingHubResources ? (
-                  <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Loading resources repository...</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <SkeletonResourceCard key={idx} />
+                    ))}
                   </div>
                 ) : filteredResources.length === 0 ? (
                   <div className="p-12 text-center rounded-2xl border border-dashed border-slate-200 bg-white">

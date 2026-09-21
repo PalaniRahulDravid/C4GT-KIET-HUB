@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth, getRoleName } from '../../context/AuthContext';
 import { Users, GraduationCap, Award, ShieldCheck, Search, RefreshCw, CheckCircle2, ShieldAlert, ArrowRight, X } from 'lucide-react';
 import UserAvatar from '../../components/UserAvatar';
+import { Skeleton, SkeletonTable } from '../../components/skeleton';
 
 export default function ManageUsers() {
   const { user: currentUser } = useAuth();
@@ -237,7 +238,7 @@ export default function ManageUsers() {
   };
 
   return (
-    <div className="max-w-[1240px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Workspace Section Heading & Refresh Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -281,7 +282,7 @@ export default function ManageUsers() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-[#1C1B1A]">
-                {totalCount}
+                {loading ? <Skeleton className="w-12 h-8" /> : totalCount}
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0]">
                 Synced
@@ -311,7 +312,7 @@ export default function ManageUsers() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-[#1C1B1A]">
-                {studentCount}
+                {loading ? <Skeleton className="w-12 h-8" /> : studentCount}
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
                 Enrolled
@@ -341,7 +342,7 @@ export default function ManageUsers() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-[#1C1B1A]">
-                {teamLeadCount}
+                {loading ? <Skeleton className="w-12 h-8" /> : teamLeadCount}
               </span>
               {teamLeadCount === 0 ? (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
@@ -377,7 +378,7 @@ export default function ManageUsers() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-[#1C1B1A]">
-                {adminCount}
+                {loading ? <Skeleton className="w-12 h-8" /> : adminCount}
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1C1B1A]/[0.08] text-[#1C1B1A] border border-[#1C1B1A]/10">
                 Full RBAC
@@ -401,7 +402,7 @@ export default function ManageUsers() {
             <div className="flex items-center gap-2">
               <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">{getTableTitle()}</h3>
               <span className="px-2.5 py-0.5 text-xs font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
-                {filteredUsers.length}
+                {loading ? '...' : filteredUsers.length}
               </span>
             </div>
             <p className="text-xs text-[#66645E] mt-0.5">
@@ -424,7 +425,11 @@ export default function ManageUsers() {
 
         {/* Table Content */}
         <div className="overflow-x-auto">
-          {filteredUsers.length === 0 ? (
+          {loading ? (
+            <div className="p-4 sm:p-6">
+              <SkeletonTable rows={6} rowsOnly />
+            </div>
+          ) : filteredUsers.length === 0 ? (
             <div className="py-16 px-4 text-center flex flex-col items-center justify-center">
               <div className="w-12 h-12 rounded-full bg-[#EEECDF] flex items-center justify-center text-[#66645E] mb-3">
                 <Users className="w-6 h-6" />

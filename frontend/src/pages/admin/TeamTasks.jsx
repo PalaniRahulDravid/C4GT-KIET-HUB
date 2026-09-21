@@ -14,6 +14,7 @@ import {
   FileText,
   FileCode,
 } from 'lucide-react';
+import { Skeleton, SkeletonTaskCard } from '../../components/skeleton';
 
 export default function TeamTasks() {
   const { token, apiBaseUrl } = useAuth();
@@ -341,7 +342,7 @@ export default function TeamTasks() {
   });
 
   return (
-    <div className="max-w-[1240px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -552,7 +553,7 @@ export default function TeamTasks() {
                 Published Team Tasks
               </h3>
               <span className="px-2.5 py-0.5 text-xs font-mono font-semibold bg-[#EEECDF] text-[#1C1B1A] rounded-full border border-[#E0DDD0]">
-                {filteredTasks.length}
+                {loading ? '...' : filteredTasks.length}
               </span>
             </div>
             <p className="text-xs text-[#66645E] mt-0.5">Tasks published to student dashboards.</p>
@@ -577,71 +578,81 @@ export default function TeamTasks() {
 
         {/* Tasks List */}
         <div className="divide-y divide-[#E2DDD0]">
-          {filteredTasks.map((t) => (
-            <div key={t._id} className="p-6 hover:bg-[#F4F1E8]/50 transition-colors space-y-3">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <span className="text-xs font-mono font-bold text-[#1C1B1A]">{t.topic}</span>
-                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#EEECDF] text-[#4A4843] border border-[#E0DDD0]">
-                      {t.priority || 'Normal'}
-                    </span>
-                  </div>
-                  <h4 className="text-base font-bold text-[#1C1B1A]">{t.title}</h4>
-                  <p className="text-xs text-[#66645E] mt-1 leading-relaxed max-w-3xl">{t.description}</p>
-
-                  {/* Render attached related resources for admin list view */}
-                  {Array.isArray(t.relatedResources) && t.relatedResources.length > 0 && (
-                    <div className="mt-3 pt-2.5 border-t border-[#E0DDD0]/60 space-y-1.5">
-                      <div className="text-[11px] font-bold text-[#1C1B1A] flex items-center gap-1.5">
-                        <BookOpen className="w-3.5 h-3.5 text-[#4E7A53]" />
-                        <span>Attached Related Resources ({t.relatedResources.length})</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {t.relatedResources.map((res, idx) => (
-                          <a
-                            key={res._id || idx}
-                            href={res.url || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E0DDD0] hover:border-[#4E7A53] text-[11px] text-[#1C1B1A] transition-colors"
-                          >
-                            <span className="px-1.5 py-0.2 rounded bg-[#E3EFE1] text-[#2F5233] font-mono text-[9px] font-bold uppercase">
-                              {res.type || 'link'}
-                            </span>
-                            <span className="font-semibold">{res.title}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => setDeleteConfirmId(t._id)}
-                    className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                    title="Delete task"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between text-xs text-[#66645E] pt-2 border-t border-[#E2DDD0]/60 gap-3">
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-1.5 font-mono">
-                    <Clock className="w-3.5 h-3.5 text-[#66645E]" />
-                    <span>Deadline: {new Date(t.deadline).toLocaleDateString()}</span>
-                  </span>
-                  <span>Assigned to Teams 1–9</span>
-                </div>
-                <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Active
-                </span>
-              </div>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, idx) => (
+              <SkeletonTaskCard key={idx} />
+            ))
+          ) : filteredTasks.length === 0 ? (
+            <div className="p-12 text-center text-xs text-[#66645E]">
+              No tasks found for this filter.
             </div>
-          ))}
+          ) : (
+            filteredTasks.map((t) => (
+              <div key={t._id} className="p-6 hover:bg-[#F4F1E8]/50 transition-colors space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2.5 mb-1">
+                      <span className="text-xs font-mono font-bold text-[#1C1B1A]">{t.topic}</span>
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#EEECDF] text-[#4A4843] border border-[#E0DDD0]">
+                        {t.priority || 'Normal'}
+                      </span>
+                    </div>
+                    <h4 className="text-base font-bold text-[#1C1B1A]">{t.title}</h4>
+                    <p className="text-xs text-[#66645E] mt-1 leading-relaxed max-w-3xl">{t.description}</p>
+
+                    {/* Render attached related resources */}
+                    {Array.isArray(t.relatedResources) && t.relatedResources.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-[#E0DDD0]/60 space-y-1.5">
+                        <div className="text-[11px] font-bold text-[#1C1B1A] flex items-center gap-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-[#4E7A53]" />
+                          <span>Attached Related Resources ({t.relatedResources.length})</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {t.relatedResources.map((res, idx) => (
+                            <a
+                              key={res._id || idx}
+                              href={res.url || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-[#E0DDD0] hover:border-[#4E7A53] text-[11px] text-[#1C1B1A] transition-colors"
+                            >
+                              <span className="px-1.5 py-0.2 rounded bg-[#E3EFE1] text-[#2F5233] font-mono text-[9px] font-bold uppercase">
+                                {res.type || 'link'}
+                              </span>
+                              <span className="font-semibold">{res.title}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => setDeleteConfirmId(t._id)}
+                      className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      title="Delete task"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between text-xs text-[#66645E] pt-2 border-t border-[#E2DDD0]/60 gap-3">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1.5 font-mono">
+                      <Clock className="w-3.5 h-3.5 text-[#66645E]" />
+                      <span>Deadline: {t.deadline ? new Date(t.deadline).toLocaleDateString() : 'No deadline'}</span>
+                    </span>
+                    <span>Assigned to Teams 1–9</span>
+                  </div>
+                  <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    Active
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -677,7 +688,17 @@ export default function TeamTasks() {
 
             {/* Resource List */}
             <div className="overflow-y-auto space-y-2 flex-1 pr-1 max-h-[280px]">
-              {filteredAvailableResources.length === 0 ? (
+              {loadingResources ? (
+                Array.from({ length: 3 }).map((_, idx) => (
+                  <div key={idx} className="p-3 rounded-xl border border-[#E0DDD0] bg-white space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="w-40 h-4" />
+                      <Skeleton className="w-12 h-3.5 rounded" />
+                    </div>
+                    <Skeleton className="w-3/4 h-3" />
+                  </div>
+                ))
+              ) : filteredAvailableResources.length === 0 ? (
                 <div className="p-6 text-center text-xs text-[#8C8A84] bg-[#F9F8F3] rounded-xl border border-[#E0DDD0]">
                   No matching resources found.
                 </div>

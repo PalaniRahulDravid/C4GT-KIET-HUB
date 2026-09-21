@@ -16,6 +16,7 @@ import {
   Award,
   Layers,
   ChevronRight,
+  ChevronDown,
   Target,
   BarChart2,
   GraduationCap,
@@ -100,25 +101,26 @@ export default function Home() {
 
       <main className="w-full">
         {/* ========================================== */}
-        {/* 1. HERO SECTION                            */}
+        {/* 1. FULL SCREEN HERO SECTION (100vh)        */}
         {/* ========================================== */}
-        <section className="relative overflow-hidden pt-12 pb-20 md:pt-20 md:pb-32 bg-gradient-to-b from-[#EBF3EA]/50 via-[#F8F6F0] to-[#FCEEE9]/40 border-b border-[#E2DDD0]">
+        <section className="relative overflow-hidden min-h-[calc(100vh-78px)] flex flex-col justify-between items-center px-6 sm:px-10 lg:px-16 xl:px-20 py-8 sm:py-12 bg-gradient-to-b from-[#EBF3EA]/50 via-[#F8F6F0] to-[#FCEEE9]/40 border-b border-[#E2DDD0]">
           {/* Subtle Ambient Background Light */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] pointer-events-none opacity-60">
             <div className="absolute top-10 left-10 w-96 h-96 rounded-full bg-[#E3EFE1] blur-3xl" />
             <div className="absolute top-20 right-10 w-96 h-96 rounded-full bg-[#FBE5DC] blur-3xl" />
           </div>
 
-          <div className="relative max-w-[1340px] mx-auto px-6 sm:px-10 flex flex-col items-center text-center">
-            
+          {/* Invisible spacer to balance vertical centering with bottom prompt */}
+          <div className="w-full h-2 hidden sm:block pointer-events-none" />
 
-
+          {/* Centered Hero Main Content */}
+          <div className="my-auto relative w-full max-w-5xl mx-auto flex flex-col items-center text-center py-6">
             {/* Editorial Heading */}
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="font-['Instrument_Serif',serif] text-5xl sm:text-7xl md:text-8xl font-normal tracking-tight leading-[1.04] text-[#1C1B1A] max-w-4xl"
+              className="font-['Instrument_Serif',serif] text-6xl sm:text-7xl md:text-8xl lg:text-[96px] font-normal tracking-tight leading-[1.03] text-[#1C1B1A]"
             >
               Build Skills.<br />
               <span className="italic font-light">Build the Future.</span>
@@ -129,7 +131,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="mt-8 text-lg sm:text-xl text-[#66645E] max-w-2xl font-normal leading-relaxed"
+              className="mt-6 md:mt-8 text-lg sm:text-xl md:text-2xl text-[#66645E] max-w-3xl font-normal leading-relaxed"
             >
               A centralized learning and performance platform for C4GT KIET HUB — connecting Machine Learning, DSA, tasks, teams, and progress in one place.
             </motion.p>
@@ -139,11 +141,11 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="mt-10 flex flex-wrap items-center justify-center gap-4"
+              className="mt-8 md:mt-10 flex flex-wrap items-center justify-center gap-4"
             >
               <button
                 onClick={handleGetStarted}
-                className="inline-flex items-center justify-center gap-2.5 px-7 py-3.5 text-base font-medium text-white rounded-full bg-[#1C1B1A] hover:bg-black shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                className="inline-flex items-center justify-center gap-2.5 px-8 py-4 text-base font-medium text-white rounded-full bg-[#1C1B1A] hover:bg-black shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
               >
                 <span>{isAuthenticated ? 'Go to Dashboard' : 'Get started'}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -151,20 +153,65 @@ export default function Home() {
 
               <button
                 onClick={() => scrollToSection('curriculum')}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 text-base font-medium text-[#1C1B1A] rounded-full bg-white/90 hover:bg-white border border-black/10 shadow-2xs transition-all cursor-pointer hover:scale-[1.01]"
+                className="inline-flex items-center justify-center gap-2 px-7 py-4 text-base font-medium text-[#1C1B1A] rounded-full bg-white/90 hover:bg-white border border-black/10 shadow-2xs transition-all cursor-pointer hover:scale-[1.01]"
               >
                 <span>Explore Learning</span>
               </button>
             </motion.div>
+          </div>
 
-            {/* ========================================== */}
-            {/* 2. HERO PRODUCT VISUAL                     */}
-            {/* ========================================== */}
+          {/* Bottom Scroll Prompt Indicator */}
+          <motion.button
+            onClick={() => {
+              const el = document.getElementById('platform-preview');
+              if (el) {
+                const yOffset = -78;
+                const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+              }
+            }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.45 }}
+            className="mt-6 flex flex-col items-center gap-2 text-xs font-mono text-[#8C8A84] hover:text-[#1C1B1A] transition-colors cursor-pointer group relative z-10"
+          >
+            <span className="tracking-widest uppercase text-[11px] font-semibold text-[#66645E]">Explore Platform Preview</span>
+            <div className="w-8 h-8 rounded-full border border-[#D5D0C2] bg-white/70 backdrop-blur-xs flex items-center justify-center group-hover:border-[#1C1B1A] group-hover:bg-white transition-all shadow-xs animate-bounce">
+              <ChevronDown className="w-4 h-4 text-[#66645E] group-hover:text-[#1C1B1A]" />
+            </div>
+          </motion.button>
+        </section>
+
+        {/* ========================================== */}
+        {/* 2. DEDICATED PLATFORM PREVIEW SHOWCASE     */}
+        {/* ========================================== */}
+        <section id="platform-preview" className="py-20 md:py-28 bg-[#F8F6F0] border-b border-[#E2DDD0] relative overflow-hidden">
+          {/* Subtle Ambient Background Light */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] pointer-events-none opacity-50">
+            <div className="absolute top-10 left-1/4 w-96 h-96 rounded-full bg-[#E3EFE1] blur-3xl" />
+            <div className="absolute top-20 right-1/4 w-96 h-96 rounded-full bg-[#FBE5DC] blur-3xl" />
+          </div>
+
+          <div className="relative w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
+            <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E] bg-[#EEECDF] px-3.5 py-1.5 rounded-full border border-[#E0DDD0]">
+                Interactive Platform Preview
+              </span>
+              <h2 className="font-['Instrument_Serif',serif] text-4xl sm:text-6xl font-normal text-[#1C1B1A] leading-[1.1] mt-4">
+                Real-time visibility into learning & performance.
+              </h2>
+              <p className="mt-4 text-base sm:text-lg text-[#66645E] leading-relaxed">
+                Monitor curriculum progress, team standings, active submissions, and performance metrics across batches.
+              </p>
+            </div>
+
+            {/* Product Frame Card - Wide & Spacious */}
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              className="mt-16 w-full max-w-5xl rounded-2xl bg-[#FDFCF9] border border-[#E0DDD0] shadow-2xl shadow-[#1C1B1A]/8 p-4 sm:p-6 relative overflow-hidden"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.7 }}
+              className="w-full max-w-6xl xl:max-w-7xl mx-auto rounded-2xl md:rounded-3xl bg-[#FDFCF9] border border-[#E0DDD0] shadow-2xl shadow-[#1C1B1A]/8 p-5 sm:p-7 md:p-8 relative overflow-hidden"
             >
               {/* Product Frame Header */}
               <div className="flex items-center justify-between pb-4 border-b border-[#EBE8DC]">
@@ -184,22 +231,22 @@ export default function Home() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-6 border-b border-[#EBE8DC]">
                 <div className="text-left px-3">
                   <p className="text-xs font-mono uppercase tracking-wider text-[#66645E]">Students</p>
-                  <p className="text-3xl font-bold text-[#1C1B1A] mt-1">48</p>
+                  <p className="text-3xl lg:text-4xl font-bold text-[#1C1B1A] mt-1">48</p>
                   <p className="text-[11px] text-emerald-700 mt-0.5">Active Learners</p>
                 </div>
                 <div className="text-left px-3">
                   <p className="text-xs font-mono uppercase tracking-wider text-[#66645E]">Active Tasks</p>
-                  <p className="text-3xl font-bold text-[#1C1B1A] mt-1">32</p>
+                  <p className="text-3xl lg:text-4xl font-bold text-[#1C1B1A] mt-1">32</p>
                   <p className="text-[11px] text-[#66645E] mt-0.5">ML & DSA Modules</p>
                 </div>
                 <div className="text-left px-3">
                   <p className="text-xs font-mono uppercase tracking-wider text-[#66645E]">Completion</p>
-                  <p className="text-3xl font-bold text-[#1C1B1A] mt-1">78%</p>
+                  <p className="text-3xl lg:text-4xl font-bold text-[#1C1B1A] mt-1">78%</p>
                   <p className="text-[11px] text-emerald-700 mt-0.5">+12% this week</p>
                 </div>
                 <div className="text-left px-3">
                   <p className="text-xs font-mono uppercase tracking-wider text-[#66645E]">Teams</p>
-                  <p className="text-3xl font-bold text-[#1C1B1A] mt-1">9</p>
+                  <p className="text-3xl lg:text-4xl font-bold text-[#1C1B1A] mt-1">9</p>
                   <p className="text-[11px] text-[#66645E] mt-0.5">Batch 2026-2027</p>
                 </div>
               </div>
@@ -207,28 +254,28 @@ export default function Home() {
               {/* Product Live Demo Content */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-6 text-left">
                 {/* Active Tasks Widget */}
-                <div className="md:col-span-7 bg-[#F7F5EE] rounded-xl p-4 border border-[#E0DDD0]">
+                <div className="md:col-span-7 bg-[#F7F5EE] rounded-xl p-5 border border-[#E0DDD0]">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-mono font-semibold text-[#1C1B1A]">CURRENT CURRICULUM TASKS</span>
                     <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded border border-[#E0DDD0]">Priority</span>
                   </div>
-                  <div className="space-y-2.5">
-                    <div className="p-3 bg-white rounded-lg border border-black/5 flex items-center justify-between">
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-white rounded-lg border border-black/5 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-semibold text-[#1C1B1A]">PyTorch Model Training & Loss Curves</p>
                         <p className="text-xs text-[#66645E]">Machine Learning Track • Due in 2 days</p>
                       </div>
-                      <span className="text-xs font-mono font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                      <span className="text-xs font-mono font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
                         88% Done
                       </span>
                     </div>
 
-                    <div className="p-3 bg-white rounded-lg border border-black/5 flex items-center justify-between">
+                    <div className="p-3.5 bg-white rounded-lg border border-black/5 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-semibold text-[#1C1B1A]">Dynamic Programming: Knapsack & Grid Paths</p>
                         <p className="text-xs text-[#66645E]">DSA Track • Due in 4 days</p>
                       </div>
-                      <span className="text-xs font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] px-2 py-1 rounded border border-[#E0DDD0]">
+                      <span className="text-xs font-mono font-medium text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-1 rounded border border-[#E0DDD0]">
                         65% Done
                       </span>
                     </div>
@@ -236,10 +283,10 @@ export default function Home() {
                 </div>
 
                 {/* Team Standings Widget */}
-                <div className="md:col-span-5 bg-[#F7F5EE] rounded-xl p-4 border border-[#E0DDD0] flex flex-col justify-between">
+                <div className="md:col-span-5 bg-[#F7F5EE] rounded-xl p-5 border border-[#E0DDD0] flex flex-col justify-between">
                   <div>
                     <span className="text-xs font-mono font-semibold text-[#1C1B1A]">TEAM STANDINGS</span>
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-2.5">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-[#1C1B1A]">1. Team Alpha (6 members)</span>
                         <span className="font-mono text-emerald-700 font-bold">92%</span>
@@ -259,7 +306,12 @@ export default function Home() {
                   </div>
                   <div className="pt-3 text-[11px] text-[#66645E] border-t border-[#E0DDD0] flex items-center justify-between mt-3">
                     <span>Updated 5m ago</span>
-                    <span className="font-semibold text-[#1C1B1A]">View All Teams →</span>
+                    <button
+                      onClick={() => scrollToSection('roles')}
+                      className="font-semibold text-[#1C1B1A] hover:underline cursor-pointer"
+                    >
+                      View All Teams →
+                    </button>
                   </div>
                 </div>
               </div>
@@ -271,7 +323,7 @@ export default function Home() {
         {/* 3. ABOUT SECTION                           */}
         {/* ========================================== */}
         <section className="py-24 bg-[#F9F8F3] border-b border-[#E2DDD0]">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
             <div className="max-w-3xl">
               <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">About C4GT KIET HUB</span>
               <h2 className="font-['Instrument_Serif',serif] text-4xl sm:text-6xl font-normal text-[#1C1B1A] leading-[1.1] mt-3">
@@ -320,7 +372,7 @@ export default function Home() {
         {/* 4. LEARNING SECTION                        */}
         {/* ========================================== */}
         <section id="curriculum" className="py-24 bg-[#F4F1E8] border-b border-[#E2DDD0]">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
               <div>
                 <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Curriculum Tracks</span>
@@ -425,7 +477,7 @@ export default function Home() {
         {/* 5. TEAMS & BATCHES SECTION                 */}
         {/* ========================================== */}
         <section id="roles" className="py-24 bg-[#F9F8F3] border-b border-[#E2DDD0]">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
               <div>
                 <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Academic Batches & Teams</span>
@@ -507,7 +559,7 @@ export default function Home() {
         {/* 6. FEATURES SECTION                        */}
         {/* ========================================== */}
         <section id="features" className="py-24 bg-[#F4F1E8] border-b border-[#E2DDD0]">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
             <div className="max-w-2xl mb-16">
               <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Platform Features</span>
               <h2 className="font-['Instrument_Serif',serif] text-4xl sm:text-6xl font-normal text-[#1C1B1A] leading-[1.1] mt-2">
@@ -604,7 +656,7 @@ export default function Home() {
         {/* 7. PERFORMANCE / ANALYTICS SECTION         */}
         {/* ========================================== */}
         <section id="analytics" className="py-24 bg-[#F9F8F3] border-b border-[#E2DDD0]">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
               <div>
                 <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Performance Analytics</span>
@@ -671,7 +723,7 @@ export default function Home() {
         {/* 8. HOW IT WORKS                            */}
         {/* ========================================== */}
         <section className="py-24 bg-[#F4F1E8] border-b border-[#E2DDD0]">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
             <div className="max-w-2xl mb-16">
               <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Workflow</span>
               <h2 className="font-['Instrument_Serif',serif] text-4xl sm:text-6xl font-normal text-[#1C1B1A] leading-[1.1] mt-2">
@@ -711,7 +763,7 @@ export default function Home() {
         {/* 9. ROLE SECTION                            */}
         {/* ========================================== */}
         <section className="py-24 bg-[#F9F8F3] border-b border-[#E2DDD0]">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20">
             <div className="max-w-2xl mb-16">
               <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Role Viewports</span>
               <h2 className="font-['Instrument_Serif',serif] text-4xl sm:text-6xl font-normal text-[#1C1B1A] leading-[1.1] mt-2">
@@ -799,7 +851,7 @@ export default function Home() {
         {/* 10. CTA SECTION                            */}
         {/* ========================================== */}
         <section className="py-28 bg-gradient-to-tr from-[#EBF3EA] via-[#F8F6F0] to-[#FCEEE9] border-b border-[#E2DDD0] relative overflow-hidden">
-          <div className="max-w-[1340px] mx-auto px-6 sm:px-10 text-center relative z-10">
+          <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20 text-center relative z-10">
             <h2 className="font-['Instrument_Serif',serif] text-5xl sm:text-7xl font-normal text-[#1C1B1A] leading-[1.05]">
               Ready to build what's next?
             </h2>

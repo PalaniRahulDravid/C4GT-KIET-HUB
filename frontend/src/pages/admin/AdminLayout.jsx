@@ -96,37 +96,37 @@ export default function AdminLayout() {
       to: '/admin',
       end: true,
       description: 'System stats & quick actions',
-      icon: <LayoutDashboard className="w-4.5 h-4.5" />,
+      icon: <LayoutDashboard className="w-6 h-6" strokeWidth={1.8} />,
     },
     {
       name: 'Manage Users',
       to: '/admin/users',
       description: 'Role RBAC & permissions',
-      icon: <Users className="w-4.5 h-4.5" />,
+      icon: <Users className="w-6 h-6" strokeWidth={1.8} />,
     },
     {
       name: 'Cohort Teams (9)',
       to: '/admin/teams',
       description: '9 Teams & Lead Assignment',
-      icon: <Award className="w-4.5 h-4.5" />,
+      icon: <Award className="w-6 h-6" strokeWidth={1.8} />,
     },
     {
       name: 'Batches',
       to: '/admin/batches',
       description: 'Academic batches & teams',
-      icon: <Layers className="w-4.5 h-4.5" />,
+      icon: <Layers className="w-6 h-6" strokeWidth={1.8} />,
     },
     {
       name: 'Next Tasks for Teams',
       to: '/admin/tasks',
       description: 'Milestones & deliverables',
-      icon: <CheckSquare className="w-4.5 h-4.5" />,
+      icon: <CheckSquare className="w-6 h-6" strokeWidth={1.8} />,
     },
     {
       name: 'Resource Library',
       to: '/admin/resources',
       description: 'Cloudinary media & links',
-      icon: <UploadCloud className="w-4.5 h-4.5" />,
+      icon: <UploadCloud className="w-6 h-6" strokeWidth={1.8} />,
     },
   ];
 
@@ -180,14 +180,14 @@ export default function AdminLayout() {
                 badge: 'ADMIN',
                 sublabel: 'Operations Portal',
               }}
-              className="mb-4"
+              className="mb-2"
             />
 
-            {/* Section label */}
+            {/* Section label (Height locked, zero vertical shift) */}
             <SidebarSectionLabel label="Admin Operations" />
 
             {/* Nav links */}
-            <nav className="mt-2 space-y-1">
+            <nav className="mt-1 space-y-1">
               {navItems.map((item) => {
                 const isActive = item.end
                   ? location.pathname === item.to
@@ -199,7 +199,7 @@ export default function AdminLayout() {
                       href: item.to,
                       label: item.name,
                       icon: (
-                        <span className={`w-5 h-5 flex items-center justify-center ${isActive ? 'text-white' : 'text-neutral-400'}`}>
+                        <span className={`w-6 h-6 flex items-center justify-center ${isActive ? 'text-white' : 'text-neutral-400'}`}>
                           {item.icon}
                         </span>
                       ),
@@ -219,7 +219,7 @@ export default function AdminLayout() {
               link={{
                 href: '/',
                 label: 'Exit to Main Site',
-                icon: <HomeIcon className="w-5 h-5 text-neutral-400" />,
+                icon: <HomeIcon className="w-6 h-6 text-neutral-400" strokeWidth={1.8} />,
               }}
               onClick={() => setMobileSidebarOpen(false)}
             />

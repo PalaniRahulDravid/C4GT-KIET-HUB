@@ -23,6 +23,7 @@ import {
   Layers,
   CheckSquare,
 } from 'lucide-react';
+import { Skeleton, SkeletonResourceCard } from '../../components/skeleton';
 
 export default function AdminResources() {
   const { token, apiBaseUrl } = useAuth();
@@ -179,7 +180,7 @@ export default function AdminResources() {
   };
 
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-8 font-sans">
+    <div className="w-full space-y-8 font-sans">
       {/* Toast Notification */}
       {toast && (
         <div
@@ -243,7 +244,9 @@ export default function AdminResources() {
             <span>Total Resources</span>
             <BookOpen className="w-4 h-4 text-neutral-400" />
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">{stats.total}</div>
+          <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">
+            {loading ? <Skeleton className="w-12 h-8" /> : stats.total}
+          </div>
           <div className="text-xs text-[#57564F] mt-1">Available across all tracks</div>
         </div>
 
@@ -252,7 +255,9 @@ export default function AdminResources() {
             <span>Cloudinary Media</span>
             <UploadCloud className="w-4 h-4 text-sky-500" />
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">{stats.files}</div>
+          <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">
+            {loading ? <Skeleton className="w-12 h-8" /> : stats.files}
+          </div>
           <div className="text-xs text-sky-600 font-medium mt-1">Docs, PDFs, Excel & Images</div>
         </div>
 
@@ -261,7 +266,9 @@ export default function AdminResources() {
             <span>DSA & Git Links</span>
             <Code2 className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">{stats.links}</div>
+          <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">
+            {loading ? <Skeleton className="w-12 h-8" /> : stats.links}
+          </div>
           <div className="text-xs text-amber-600 font-medium mt-1">Practice sets & repositories</div>
         </div>
 
@@ -271,7 +278,13 @@ export default function AdminResources() {
             <CheckSquare className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">
-            {stats.totalDownloads} <span className="text-xs font-normal text-neutral-400">/ {stats.totalCompletions}</span>
+            {loading ? (
+              <Skeleton className="w-20 h-8" />
+            ) : (
+              <>
+                {stats.totalDownloads} <span className="text-xs font-normal text-neutral-400">/ {stats.totalCompletions}</span>
+              </>
+            )}
           </div>
           <div className="text-xs text-emerald-600 font-medium mt-1">Downloads / Completed marks</div>
         </div>
@@ -337,9 +350,10 @@ export default function AdminResources() {
 
       {/* Resources Cards Grid */}
       {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center text-center space-y-3">
-          <div className="w-8 h-8 rounded-full border-2 border-black border-t-transparent animate-spin" />
-          <p className="text-sm text-[#57564F]">Loading learning resources...</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <SkeletonResourceCard key={idx} />
+          ))}
         </div>
       ) : filteredResources.length === 0 ? (
         <div className="py-16 text-center bg-white rounded-2xl border border-[#E2DDD0] p-8 space-y-3">

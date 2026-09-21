@@ -63,8 +63,8 @@ import {
   MessageSquare,
   Link2,
   Lock,
-  KeyRound,
 } from 'lucide-react';
+import { Skeleton, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
 export default function TeamLeadDashboard() {
   const { user, token, apiBaseUrl, logout, changePassword } = useAuth();
@@ -852,7 +852,7 @@ export default function TeamLeadDashboard() {
                 link={{
                   href: '/teamlead/tasks',
                   label: 'Tasks & Milestones',
-                  icon: <CheckSquare className="w-4 h-4" />,
+                  icon: <CheckSquare className="w-6 h-6" strokeWidth={1.8} />,
                   badge: teamTasks.length > 0 ? teamTasks.length : undefined,
                 }}
                 isActive={activeTab === 'tasks'}
@@ -866,7 +866,7 @@ export default function TeamLeadDashboard() {
                 link={{
                   href: '/teamlead/roster',
                   label: 'Team Roster',
-                  icon: <Users className="w-4 h-4" />,
+                  icon: <Users className="w-6 h-6" strokeWidth={1.8} />,
                   badge: `${totalCount}/${maxMembers}`,
                 }}
                 isActive={activeTab === 'roster'}
@@ -880,7 +880,7 @@ export default function TeamLeadDashboard() {
                 link={{
                   href: '/teamlead/resources',
                   label: 'Learning Resources',
-                  icon: <BookOpen className="w-4 h-4" />,
+                  icon: <BookOpen className="w-6 h-6" strokeWidth={1.8} />,
                   badge: hubResources.length > 0 ? hubResources.length : undefined,
                 }}
                 isActive={activeTab === 'resources'}
@@ -894,7 +894,7 @@ export default function TeamLeadDashboard() {
                 link={{
                   href: '/student',
                   label: 'Student Dashboard',
-                  icon: <GraduationCap className="w-4 h-4 text-blue-400" />,
+                  icon: <GraduationCap className="w-6 h-6 text-blue-400" strokeWidth={1.8} />,
                 }}
                 isActive={false}
                 onClick={() => setMobileSidebarOpen(false)}
@@ -975,7 +975,7 @@ export default function TeamLeadDashboard() {
 
         {/* Scrollable Content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
-          <div className="max-w-6xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             {/* ============================================================= */}
             {/* VIEW 1: TASKS & MILESTONE MANAGEMENT */}
             {/* ============================================================= */}
@@ -1312,9 +1312,10 @@ export default function TeamLeadDashboard() {
                 {/* TASKS LIST */}
                 {/* ========================================================= */}
                 {loadingTasks ? (
-                  <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2 bg-white rounded-2xl border border-slate-200">
-                    <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />
-                    <span>Loading tasks and deliverables in chronological order...</span>
+                  <div className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, idx) => (
+                      <SkeletonTaskCard key={idx} />
+                    ))}
                   </div>
                 ) : processedTasks.length === 0 ? (
                   <Card className="p-12 text-center bg-white border-dashed rounded-2xl">
@@ -1757,10 +1758,25 @@ export default function TeamLeadDashboard() {
                 {/* Team Members List */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                    Assigned Team Members ({members.length} Members)
+                    Assigned Team Members ({loadingTeam ? '...' : `${members.length} Members`})
                   </h3>
 
-                  {members.length === 0 ? (
+                  {loadingTeam ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {Array.from({ length: 6 }).map((_, idx) => (
+                        <Card key={idx} className="p-4 space-y-3 bg-white">
+                          <div className="flex items-start gap-3">
+                            <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                              <Skeleton className="w-28 h-4" />
+                              <Skeleton className="w-36 h-3" />
+                            </div>
+                          </div>
+                          <Skeleton className="w-full h-8 rounded-lg" />
+                        </Card>
+                      ))}
+                    </div>
+                  ) : members.length === 0 ? (
                     <Card className="p-8 text-center bg-white border-dashed">
                       <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                       <p className="text-xs text-slate-500">
@@ -1911,9 +1927,10 @@ export default function TeamLeadDashboard() {
 
                 {/* Resources Grid */}
                 {loadingResources ? (
-                  <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Loading resources...</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <SkeletonResourceCard key={idx} />
+                    ))}
                   </div>
                 ) : filteredResources.length === 0 ? (
                   <Card className="p-12 text-center bg-white border-dashed">

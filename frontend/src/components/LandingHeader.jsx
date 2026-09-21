@@ -117,7 +117,7 @@ export default function LandingHeader() {
           : 'bg-[#F9F8F3]/80 backdrop-blur-md border-b border-[#E6E2D8]/60'
       }`}
     >
-      <div className="max-w-[1340px] mx-auto px-6 sm:px-10 h-[78px] flex items-center justify-between gap-4">
+      <div className="w-full px-6 sm:px-10 lg:px-14 xl:px-16 h-[78px] flex items-center justify-between gap-4">
         
         {/* BRAND */}
         <Link to="/" className="flex items-center gap-3 group relative flex-shrink-0 hover:opacity-90 transition-opacity">

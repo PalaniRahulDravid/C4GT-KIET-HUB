@@ -39,6 +39,7 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
+import { Skeleton, SkeletonCohortCard } from '../../components/skeleton';
 
 export default function Batches() {
   const { batchId, teamId } = useParams();
@@ -726,7 +727,7 @@ export default function Batches() {
   }, [tasks, selectedTeam, taskFilter]);
 
   return (
-    <div className="max-w-[1240px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* ==================== TOP HEADER & BREADCRUMBS ==================== */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -783,7 +784,31 @@ export default function Batches() {
           <div className="space-y-6">
             {/* Batches Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {batches.map((b) => (
+              {loading ? (
+                Array.from({ length: 2 }).map((_, idx) => (
+                  <div key={idx} className="bg-[#FDFCF9] rounded-2xl p-6 sm:p-8 border border-[#E0DDD0] shadow-2xs space-y-6">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="w-28 h-6 rounded-full" />
+                      <Skeleton className="w-24 h-6 rounded-full" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="w-48 h-8" />
+                      <Skeleton className="w-full max-w-sm h-4" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 pt-6 border-t border-[#E0DDD0]">
+                      <div className="space-y-1.5">
+                        <Skeleton className="w-16 h-3" />
+                        <Skeleton className="w-24 h-5" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Skeleton className="w-24 h-3" />
+                        <Skeleton className="w-24 h-5" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                batches.map((b) => (
                 <div
                   key={b.id}
                   onClick={() => navigate(`/admin/batches/${b.id}`)}
@@ -823,7 +848,7 @@ export default function Batches() {
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
         )}
@@ -1332,63 +1357,69 @@ export default function Batches() {
 
             {/* Teams Grid for Selected Batch */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teams.map((t) => {
-                const analyticsTeam = analyticsData?.teams?.find(
-                  (at) => at.teamNumber === t.teamNumber || String(at._id) === String(t._id)
-                );
-                const scoreVal = analyticsTeam?.performancePct || t.performancePct || `${t.progressPercentage ?? 0}%`;
-                const num = parseInt(scoreVal, 10) || 0;
-                const taskComp = analyticsTeam?.taskCompletion || t.taskCompletion || `${t.completedAssignments || 0}/${t.totalExpectedAssignments || 0} (${scoreVal})`;
-                const badgeCls =
-                  num >= 70
-                    ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
-                    : num >= 40
-                    ? 'text-amber-800 bg-amber-50 border-amber-200'
-                    : num > 0
-                    ? 'text-rose-800 bg-rose-50 border-rose-200'
-                    : 'text-stone-600 bg-stone-100 border-stone-200';
+              {loading ? (
+                Array.from({ length: 9 }).map((_, idx) => (
+                  <SkeletonCohortCard key={idx} />
+                ))
+              ) : (
+                teams.map((t) => {
+                  const analyticsTeam = analyticsData?.teams?.find(
+                    (at) => at.teamNumber === t.teamNumber || String(at._id) === String(t._id)
+                  );
+                  const scoreVal = analyticsTeam?.performancePct || t.performancePct || `${t.progressPercentage ?? 0}%`;
+                  const num = parseInt(scoreVal, 10) || 0;
+                  const taskComp = analyticsTeam?.taskCompletion || t.taskCompletion || `${t.completedAssignments || 0}/${t.totalExpectedAssignments || 0} (${scoreVal})`;
+                  const badgeCls =
+                    num >= 70
+                      ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                      : num >= 40
+                      ? 'text-amber-800 bg-amber-50 border-amber-200'
+                      : num > 0
+                      ? 'text-rose-800 bg-rose-50 border-rose-200'
+                      : 'text-stone-600 bg-stone-100 border-stone-200';
 
-                return (
-                  <div
-                    key={t._id}
-                    onClick={() => navigate(`/admin/batches/${selectedBatch.id}/team/${t.teamNumber}`)}
-                    className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">
-                          {t.name}
-                        </span>
-                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${badgeCls}`}>
-                          {scoreVal}
-                        </span>
+                  return (
+                    <div
+                      key={t._id}
+                      onClick={() => navigate(`/admin/batches/${selectedBatch.id}/team/${t.teamNumber}`)}
+                      className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-mono font-bold uppercase text-[#1C1B1A]">
+                            {t.name}
+                          </span>
+                          <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${badgeCls}`}>
+                            {scoreVal}
+                          </span>
+                        </div>
+
+                        <p className="text-xs font-medium text-[#66645E] line-clamp-1">{t.track}</p>
+
+                        <div className="mt-4 space-y-1.5 text-xs text-[#66645E]">
+                          <p>
+                            <strong className="text-[#1C1B1A]">Team Lead:</strong>{' '}
+                            {t.teamLeadId?.name || 'Unassigned'}
+                          </p>
+                          <p>
+                            <strong className="text-[#1C1B1A]">Members:</strong>{' '}
+                            {t.membersCount || t.members?.length || 0} Students
+                          </p>
+                          <p>
+                            <strong className="text-[#1C1B1A]">Task Completion:</strong>{' '}
+                            {taskComp}
+                          </p>
+                        </div>
                       </div>
 
-                      <p className="text-xs font-medium text-[#66645E] line-clamp-1">{t.track}</p>
-
-                      <div className="mt-4 space-y-1.5 text-xs text-[#66645E]">
-                        <p>
-                          <strong className="text-[#1C1B1A]">Team Lead:</strong>{' '}
-                          {t.teamLeadId?.name || 'Unassigned'}
-                        </p>
-                        <p>
-                          <strong className="text-[#1C1B1A]">Members:</strong>{' '}
-                          {t.membersCount || t.members?.length || 0} Students
-                        </p>
-                        <p>
-                          <strong className="text-[#1C1B1A]">Task Completion:</strong>{' '}
-                          {taskComp}
-                        </p>
+                      <div className="mt-6 pt-4 border-t border-[#E0DDD0] flex items-center justify-between text-xs font-semibold text-[#1C1B1A] group-hover:underline">
+                        <span>View Team Details</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                       </div>
                     </div>
-
-                    <div className="mt-6 pt-4 border-t border-[#E0DDD0] flex items-center justify-between text-xs font-semibold text-[#1C1B1A] group-hover:underline">
-                      <span>View Team Details</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         )}

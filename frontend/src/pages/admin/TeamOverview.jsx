@@ -22,6 +22,7 @@ import {
   Lock,
   Unlock,
 } from 'lucide-react';
+import { Skeleton, SkeletonCohortCard } from '../../components/skeleton';
 
 export default function TeamOverview() {
   const { token, apiBaseUrl } = useAuth();
@@ -177,7 +178,7 @@ export default function TeamOverview() {
   };
 
   return (
-    <div className="max-w-[1240px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Toast Alert */}
       {toast && (
         <div
@@ -228,7 +229,9 @@ export default function TeamOverview() {
             <span className={`text-[10px] font-mono font-semibold tracking-wider uppercase ${selectedFilter === 'all' ? 'text-[#CCCCCC]' : 'text-[#66645E]'}`}>
               TOTAL TEAMS
             </span>
-            <div className="text-3xl font-bold mt-1">{teams.length || 9}</div>
+            <div className="text-3xl font-bold mt-1">
+              {loading ? <Skeleton className="w-12 h-8" /> : (teams.length || 9)}
+            </div>
             <p className={`text-xs mt-0.5 ${selectedFilter === 'all' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Teams 1 through 9 (Limit: 9/team)</p>
           </div>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedFilter === 'all' ? 'bg-white/10 text-white' : 'bg-[#EEECDF] text-[#1C1B1A]'}`}>
@@ -248,7 +251,9 @@ export default function TeamOverview() {
             <span className={`text-[10px] font-mono font-semibold tracking-wider uppercase ${selectedFilter === 'assigned' ? 'text-[#CCCCCC]' : 'text-[#66645E]'}`}>
               ASSIGNED LEADS
             </span>
-            <div className="text-3xl font-bold mt-1">{assignedCount}</div>
+            <div className="text-3xl font-bold mt-1">
+              {loading ? <Skeleton className="w-12 h-8" /> : assignedCount}
+            </div>
             <p className={`text-xs mt-0.5 ${selectedFilter === 'assigned' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Active Team Leads</p>
           </div>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedFilter === 'assigned' ? 'bg-white/10 text-white' : 'bg-[#EEECDF] text-[#1C1B1A]'}`}>
@@ -268,7 +273,9 @@ export default function TeamOverview() {
             <span className={`text-[10px] font-mono font-semibold tracking-wider uppercase ${selectedFilter === 'pending' ? 'text-[#CCCCCC]' : 'text-[#66645E]'}`}>
               PENDING LEADS
             </span>
-            <div className="text-3xl font-bold mt-1">{pendingCount}</div>
+            <div className="text-3xl font-bold mt-1">
+              {loading ? <Skeleton className="w-12 h-8" /> : pendingCount}
+            </div>
             <p className={`text-xs mt-0.5 ${selectedFilter === 'pending' ? 'text-[#9E9C94]' : 'text-[#66645E]'}`}>Requires Assignment</p>
           </div>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedFilter === 'pending' ? 'bg-white/10 text-white' : 'bg-[#EEECDF] text-[#1C1B1A]'}`}>
@@ -279,7 +286,12 @@ export default function TeamOverview() {
 
       {/* Teams Grid (9 Teams) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {displayedTeams.map((t) => {
+        {loading ? (
+          Array.from({ length: 9 }).map((_, idx) => (
+            <SkeletonCohortCard key={idx} />
+          ))
+        ) : (
+          displayedTeams.map((t) => {
           const membersCount = Array.isArray(t.members) ? t.members.length : 0;
           const totalCount = membersCount + (t.teamLeadId ? 1 : 0);
           const maxLimit = t.maxMembers || 9;
@@ -477,7 +489,7 @@ export default function TeamOverview() {
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
 
       {/* Team Roster Details Modal */}

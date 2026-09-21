@@ -60,8 +60,8 @@ function DesktopSidebar({ children, className = '', style = {} }) {
         width: animate ? (open ? '260px' : '68px') : '260px',
       }}
       transition={{
-        duration: 0.22,
-        ease: [0.25, 0.1, 0.25, 1.0],
+        duration: 0.24,
+        ease: [0.16, 1, 0.3, 1],
       }}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
@@ -97,7 +97,7 @@ function MobileSidebar({ children, className = '' }) {
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
-            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1.0] }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           >
             {/* Close Button */}
             <button
@@ -117,7 +117,7 @@ function MobileSidebar({ children, className = '' }) {
   );
 }
 
-/* --- Sidebar Link --- */
+/* --- Sidebar Link (Fixed height h-11, zero vertical shift) --- */
 export function SidebarLink({ link, isActive = false, className = '', onClick }) {
   const { open, animate } = useSidebar();
 
@@ -126,7 +126,7 @@ export function SidebarLink({ link, isActive = false, className = '', onClick })
       to={link.href}
       onClick={onClick}
       title={!open ? link.label : undefined}
-      className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-150 group cursor-pointer ${
+      className={`relative flex items-center h-11 px-3 rounded-xl transition-colors duration-150 group cursor-pointer ${
         isActive
           ? 'bg-neutral-800 text-white font-medium shadow-xs'
           : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
@@ -137,19 +137,19 @@ export function SidebarLink({ link, isActive = false, className = '', onClick })
         <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r" />
       )}
 
-      {/* Icon */}
-      <span className={`flex-shrink-0 flex items-center justify-center w-5 h-5 transition-colors duration-150 ${isActive ? 'text-white' : 'text-neutral-400 group-hover:text-white'}`}>
+      {/* Icon (permanently centered and locked in place) */}
+      <span className={`flex-shrink-0 flex items-center justify-center w-6 h-6 transition-colors duration-150 ${isActive ? 'text-white' : 'text-neutral-400 group-hover:text-white'}`}>
         {link.icon}
       </span>
 
-      {/* Animated Label */}
+      {/* Animated Label (smooth horizontal reveal, no layout push) */}
       <motion.span
         animate={{
-          display: animate ? (open ? 'inline-block' : 'none') : 'inline-block',
           opacity: animate ? (open ? 1 : 0) : 1,
+          x: animate ? (open ? 0 : -6) : 0,
         }}
-        transition={{ duration: 0.16 }}
-        className="text-sm font-medium whitespace-nowrap overflow-hidden leading-none"
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        className={`ml-3 text-sm font-medium whitespace-nowrap overflow-hidden leading-none ${!open ? 'pointer-events-none' : ''}`}
       >
         {link.label}
       </motion.span>
@@ -158,11 +158,11 @@ export function SidebarLink({ link, isActive = false, className = '', onClick })
       {link.badge !== undefined && (
         <motion.span
           animate={{
-            display: animate ? (open ? 'inline-flex' : 'none') : 'inline-flex',
             opacity: animate ? (open ? 1 : 0) : 1,
+            scale: animate ? (open ? 1 : 0.8) : 1,
           }}
-          transition={{ duration: 0.14 }}
-          className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-700/80 text-neutral-200 border border-neutral-600 leading-tight whitespace-nowrap"
+          transition={{ duration: 0.16 }}
+          className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-700/80 text-neutral-200 border border-neutral-600 leading-tight whitespace-nowrap ${!open ? 'pointer-events-none' : ''}`}
         >
           {link.badge}
         </motion.span>
@@ -171,14 +171,14 @@ export function SidebarLink({ link, isActive = false, className = '', onClick })
   );
 }
 
-/* --- Brand / Logo Component --- */
+/* --- Brand / Logo Component (Fixed height h-12, locked icon position) --- */
 export function SidebarLogo({ logo, className = '' }) {
   const { open, animate } = useSidebar();
 
   return (
     <Link
       to={logo.href || '/'}
-      className={`flex items-center gap-3 px-1 py-1 rounded-xl group transition-colors overflow-hidden ${className}`}
+      className={`flex items-center h-12 gap-3 px-1 rounded-xl group transition-colors overflow-hidden ${className}`}
     >
       <span className="flex-shrink-0 flex items-center justify-center w-10 h-10">
         {logo.icon}
@@ -186,11 +186,11 @@ export function SidebarLogo({ logo, className = '' }) {
 
       <motion.div
         animate={{
-          display: animate ? (open ? 'flex' : 'none') : 'flex',
           opacity: animate ? (open ? 1 : 0) : 1,
+          x: animate ? (open ? 0 : -6) : 0,
         }}
-        transition={{ duration: 0.16 }}
-        className="flex-col min-w-0 overflow-hidden"
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        className={`flex flex-col min-w-0 overflow-hidden ${!open ? 'pointer-events-none' : ''}`}
       >
         <div className="flex items-center gap-2">
           <span className="font-bold text-white text-[15px] tracking-tight whitespace-nowrap leading-tight">
@@ -212,34 +212,41 @@ export function SidebarLogo({ logo, className = '' }) {
   );
 }
 
-/* --- Section Label --- */
+/* --- Section Label (Constant height h-7, no vertical layout shift) --- */
 export function SidebarSectionLabel({ label, className = '' }) {
   const { open, animate } = useSidebar();
 
   return (
-    <motion.div
-      animate={{
-        display: animate ? (open ? 'flex' : 'none') : 'flex',
-        opacity: animate ? (open ? 1 : 0) : 1,
-      }}
-      transition={{ duration: 0.14 }}
-      className={`items-center justify-between px-3 py-1.5 mt-3 mb-1 select-none overflow-hidden ${className}`}
-    >
-      <span className="text-[10px] font-semibold tracking-widest text-neutral-400 uppercase whitespace-nowrap">
-        {label}
-      </span>
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-    </motion.div>
+    <div className={`h-7 flex items-center px-3 my-1.5 select-none overflow-hidden ${className}`}>
+      {open ? (
+        <motion.div
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -4 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="flex items-center justify-between w-full min-w-0"
+        >
+          <span className="text-[10px] font-semibold tracking-widest text-neutral-400 uppercase whitespace-nowrap truncate">
+            {label}
+          </span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 ml-2 animate-pulse" />
+        </motion.div>
+      ) : (
+        <div className="w-full flex items-center justify-center">
+          <div className="w-6 h-[1px] bg-neutral-800/80 rounded-full" />
+        </div>
+      )}
+    </div>
   );
 }
 
-/* --- User Profile Card at Bottom (No Layout Jumping) --- */
+/* --- User Profile Card at Bottom (Fixed height h-[54px], no layout jumping) --- */
 export function SidebarUser({ user, getInitials, onProfileClick, onLogout, className = '' }) {
   const { open, animate } = useSidebar();
 
   return (
     <div className={`p-2 select-none overflow-hidden ${className}`}>
-      <div className="flex items-center gap-2.5 p-1 rounded-xl bg-neutral-800/80 border border-neutral-700/60 transition-colors">
+      <div className="flex items-center h-[54px] gap-2.5 p-1 rounded-xl bg-neutral-800/80 border border-neutral-700/60 transition-colors">
         {/* Avatar with live Blobatar animation filling the box */}
         <button
           type="button"
@@ -261,27 +268,22 @@ export function SidebarUser({ user, getInitials, onProfileClick, onLogout, class
           type="button"
           onClick={onProfileClick}
           animate={{
-            display: animate ? (open ? 'flex' : 'none') : 'flex',
             opacity: animate ? (open ? 1 : 0) : 1,
+            x: animate ? (open ? 0 : -6) : 0,
           }}
-          transition={{ duration: 0.16 }}
-          className="flex-col overflow-hidden text-left hover:opacity-90 transition-opacity cursor-pointer flex-1 min-w-0"
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className={`flex flex-col overflow-hidden text-left hover:opacity-90 transition-opacity cursor-pointer flex-1 min-w-0 ${!open ? 'pointer-events-none' : ''}`}
           title="View & Edit Profile Details"
         >
           <div className="font-semibold text-xs text-white truncate leading-tight w-full">
-            {user?.name || 'Student Account'}
+            {user?.name || 'User Account'}
           </div>
           <div className="text-[10px] text-neutral-400 truncate leading-tight w-full mt-0.5">
-            {user?.email || 'student@c4gt.in'}
+            {user?.email || 'user@c4gt.in'}
           </div>
           <div className="flex items-center gap-1.5 mt-1">
-            {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
-              <span className="inline-block px-1.5 py-0.5 text-[8px] font-bold rounded bg-emerald-900/80 text-emerald-300 border border-emerald-700 leading-none">
-                LEAD
-              </span>
-            )}
-            <span className="inline-block px-1.5 py-0.5 text-[8px] font-semibold rounded bg-neutral-700 text-neutral-300 leading-none">
-              STUDENT
+            <span className="inline-block px-1.5 py-0.5 text-[8px] font-bold rounded bg-neutral-700 text-neutral-200 leading-none uppercase">
+              {user?.role || 'Portal'}
             </span>
             <span className="text-[9px] text-neutral-300 underline font-medium hover:text-white leading-none">
               Profile
@@ -294,12 +296,12 @@ export function SidebarUser({ user, getInitials, onProfileClick, onLogout, class
           type="button"
           onClick={onLogout}
           animate={{
-            display: animate ? (open ? 'flex' : 'none') : 'flex',
             opacity: animate ? (open ? 1 : 0) : 1,
+            scale: animate ? (open ? 1 : 0.8) : 1,
           }}
-          transition={{ duration: 0.16 }}
+          transition={{ duration: 0.18 }}
           title="Log out"
-          className="w-8 h-8 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-rose-400 items-center justify-center transition-colors flex-shrink-0 cursor-pointer"
+          className={`w-8 h-8 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-rose-400 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer ${!open ? 'pointer-events-none' : ''}`}
         >
           <LogOut className="w-4 h-4" />
         </motion.button>
