@@ -16,6 +16,7 @@ const {
   getBatches,
   createBatchWithCohort,
   deleteBatch,
+  reviewTaskSubmission,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -41,6 +42,7 @@ router.post('/batches', createBatchWithCohort);
 router.delete('/batches/:id', deleteBatch);
 router.patch('/tasks/:id', updateTask);
 router.delete('/tasks/:id', deleteTask);
+router.post('/tasks/:taskId/review/:studentId', reviewTaskSubmission);
 
 module.exports = router;
 

@@ -57,6 +57,12 @@ const resourceSchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
+  targetGroup: {
+    type: String,
+    enum: ['junior_developers', 'developer_interns', 'both', 'all'],
+    default: 'all',
+    index: true,
+  },
   targetTeamId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Team',

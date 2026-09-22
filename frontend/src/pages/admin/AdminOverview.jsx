@@ -5,7 +5,7 @@ import { Sparkles, Users, GraduationCap, Award, Layers, CheckSquare, ArrowRight,
 import { SkeletonCard, SkeletonTable } from '../../components/skeleton';
 
 export default function AdminOverview() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, token, apiBaseUrl } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 7,
     students: 3,
@@ -17,15 +17,19 @@ export default function AdminOverview() {
   const [recentUsers, setRecentUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     const fetchOverviewData = async () => {
       try {
         setLoading(true);
+        const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+        const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
         // Fetch stats
         const statsRes = await fetch(`${API_BASE_URL}/admin/stats`, {
           credentials: 'include',
+          headers: authHeaders,
         });
         if (statsRes.ok) {
           const statsData = await statsRes.json();
@@ -37,6 +41,7 @@ export default function AdminOverview() {
         // Fetch users
         const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
           credentials: 'include',
+          headers: authHeaders,
         });
         if (usersRes.ok) {
           const usersData = await usersRes.json();
@@ -57,7 +62,7 @@ export default function AdminOverview() {
     };
 
     fetchOverviewData();
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, token]);
 
   const getDefaultUsers = () => [
     {

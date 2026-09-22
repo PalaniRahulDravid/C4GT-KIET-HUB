@@ -5,6 +5,7 @@ const Task = require('../models/Task');
 const TaskAssignment = require('../models/TaskAssignment');
 const Batch = require('../models/Batch');
 const Resource = require('../models/Resource');
+const Notification = require('../models/Notification');
 
 /**
  * @desc    Get all registered users (Admin only)
@@ -267,6 +268,12 @@ const computeTeamMetrics = (teamDoc, allTasks, allAssignments, timeframe = 'over
       pct: `${mScore}%`,
     };
   });
+
+  // Count how many tasks have at least one completed assignment by this team
+  const tasksCompletedCount = relevantTasks.filter((t) => {
+    const tAssigns = relevantAssignments.filter((a) => (a.taskId?._id || a.taskId).toString() === t._id.toString());
+    return tAssigns.some((a) => a.status === 'completed');
+  }).length;
 
   return {
     ...team,
@@ -630,19 +637,49 @@ const createResource = async (req, res) => {
  */
 const getTasks = async (req, res) => {
   try {
-    const tasks = await Task.find()
+    // Admin workspace strictly manages tasks created by administrators.
+    // Team lead tasks are internal to their teams and are not displayed or reviewed in the admin tasks dashboard.
+    const adminUsers = await User.find({ role: 'admin' }).select('_id');
+    const adminUserIds = adminUsers.map((u) => u._id);
+
+    const tasks = await Task.find({
+      $or: [
+        { createdBy: { $in: adminUserIds } },
+        { createdBy: req.user._id },
+      ],
+    })
       .sort({ createdAt: -1 })
-      .populate('createdBy', 'name email avatar')
-      .populate('relatedResources', 'title type description url topic');
+      .populate('createdBy', 'name email avatar role')
+      .populate('relatedResources', 'title type description url topic fileSize fileFormat');
 
     const taskIds = tasks.map((t) => t._id);
     const taskAssignments = await TaskAssignment.find({ taskId: { $in: taskIds } })
-      .populate('studentId', 'name rollNumber email avatar')
-      .populate('reviewedBy', 'name email avatar');
+      .populate('studentId', 'name rollNumber email avatar memberType teamId')
+      .populate('reviewedBy', 'name email avatar role');
+
+    // Fetch team map to associate each student with their team number
+    const teams = await Team.find().select('teamNumber name members teamLeadId');
+    const userTeamMap = {};
+    teams.forEach((tm) => {
+      if (tm.teamLeadId) userTeamMap[tm.teamLeadId.toString()] = tm.teamNumber;
+      if (Array.isArray(tm.members)) {
+        tm.members.forEach((m) => {
+          userTeamMap[m.toString()] = tm.teamNumber;
+        });
+      }
+    });
 
     const tasksWithStats = tasks.map((t) => {
       const tObj = t.toObject ? t.toObject() : t;
-      const relatedAssignments = taskAssignments.filter((a) => a.taskId.toString() === t._id.toString());
+      const relatedAssignments = taskAssignments
+        .filter((a) => a.taskId.toString() === t._id.toString())
+        .map((a) => {
+          const aObj = a.toObject ? a.toObject() : a;
+          const sid = aObj.studentId?._id ? aObj.studentId._id.toString() : (aObj.studentId ? aObj.studentId.toString() : '');
+          aObj.teamNumber = userTeamMap[sid] || null;
+          return aObj;
+        });
+
       tObj.totalAssignments = relatedAssignments.length;
       tObj.completedCount = relatedAssignments.filter((a) => a.status === 'completed').length;
       tObj.submittedCount = relatedAssignments.filter((a) => a.status === 'submitted').length;
@@ -707,24 +744,51 @@ const createTask = async (req, res) => {
       relatedResources: Array.isArray(relatedResources) ? relatedResources : [],
       status: 'Published',
       createdBy: req.user._id,
+      taskScope: 'students',
     });
 
-    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
+    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar role');
 
-    // Create initial TaskAssignment records for students in assigned teams so they appear in student/team lead dashboards
+    // Create initial TaskAssignment records ONLY for students matching targetGroup in assigned teams
     try {
-      const assignedTeamDocs = await Team.find({ teamNumber: { $in: task.assignedTeams } });
+      const assignedTeamDocs = await Team.find({ teamNumber: { $in: task.assignedTeams } })
+        .populate('members', 'role memberType')
+        .populate('teamLeadId', 'role memberType');
+
       const studentIdsToAssign = [];
       for (const tDoc of assignedTeamDocs) {
-        if (task.taskScope === 'team_lead') {
-          if (tDoc.teamLeadId) studentIdsToAssign.push(tDoc.teamLeadId);
-        } else {
-          if (Array.isArray(tDoc.members)) {
-            tDoc.members.forEach((m) => studentIdsToAssign.push(m));
+        const potentialMembers = [];
+        if (Array.isArray(tDoc.members)) {
+          potentialMembers.push(...tDoc.members);
+        }
+        if (tDoc.teamLeadId) {
+          potentialMembers.push(tDoc.teamLeadId);
+        }
+
+        for (const userObj of potentialMembers) {
+          if (!userObj || !userObj._id) continue;
+          const uId = userObj._id.toString();
+          const mType = userObj.memberType;
+
+          // Target group check:
+          // 'junior_developers' -> only junior_developer
+          // 'developer_interns' -> developer_intern or senior_developer
+          // 'both' / 'all' -> both junior_developer and developer_intern / senior_developer
+          let isEligible = false;
+          if (task.targetGroup === 'junior_developers') {
+            isEligible = mType === 'junior_developer';
+          } else if (task.targetGroup === 'developer_interns') {
+            isEligible = mType === 'developer_intern' || mType === 'senior_developer';
+          } else {
+            isEligible = true;
           }
-          if (tDoc.teamLeadId) studentIdsToAssign.push(tDoc.teamLeadId);
+
+          if (isEligible && !studentIdsToAssign.includes(uId)) {
+            studentIdsToAssign.push(uId);
+          }
         }
       }
+
       for (const sId of studentIdsToAssign) {
         await TaskAssignment.findOneAndUpdate(
           { taskId: task._id, studentId: sId },
@@ -777,6 +841,9 @@ const updateTask = async (req, res) => {
       status,
     } = req.body;
 
+    const oldTargetGroup = task.targetGroup;
+    const oldAssignedTeams = task.assignedTeams;
+
     if (title) task.title = title.trim();
     if (description) task.description = description.trim();
     if (topic !== undefined) task.topic = topic.trim();
@@ -790,7 +857,57 @@ const updateTask = async (req, res) => {
 
     await task.save();
 
-    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar');
+    // If targetGroup or assignedTeams changed, re-sync eligible assignments
+    if (
+      (targetGroup && targetGroup !== oldTargetGroup) ||
+      (assignedTeams && JSON.stringify(assignedTeams) !== JSON.stringify(oldAssignedTeams))
+    ) {
+      try {
+        const assignedTeamDocs = await Team.find({ teamNumber: { $in: task.assignedTeams } })
+          .populate('members', 'role memberType')
+          .populate('teamLeadId', 'role memberType');
+
+        const eligibleIds = new Set();
+        for (const tDoc of assignedTeamDocs) {
+          const potential = [...(tDoc.members || [])];
+          if (tDoc.teamLeadId) potential.push(tDoc.teamLeadId);
+
+          for (const u of potential) {
+            if (!u || !u._id) continue;
+            const mType = u.memberType;
+            let isEligible = false;
+            if (task.targetGroup === 'junior_developers') {
+              isEligible = mType === 'junior_developer';
+            } else if (task.targetGroup === 'developer_interns') {
+              isEligible = mType === 'developer_intern' || mType === 'senior_developer';
+            } else {
+              isEligible = true;
+            }
+            if (isEligible) eligibleIds.add(u._id.toString());
+          }
+        }
+
+        // Add missing eligible ones
+        for (const sId of eligibleIds) {
+          await TaskAssignment.findOneAndUpdate(
+            { taskId: task._id, studentId: sId },
+            { $setOnInsert: { status: 'pending' } },
+            { upsert: true }
+          );
+        }
+
+        // Remove pending assignments that are no longer eligible
+        await TaskAssignment.deleteMany({
+          taskId: task._id,
+          studentId: { $nin: Array.from(eligibleIds) },
+          status: 'pending',
+        });
+      } catch (syncErr) {
+        console.warn('Re-sync assignment warning:', syncErr.message);
+      }
+    }
+
+    const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar role');
 
     res.status(200).json({
       success: true,
@@ -801,6 +918,121 @@ const updateTask = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to update task',
+    });
+  }
+};
+
+/**
+ * @desc    Admin review student deliverables submission (Accept & Mark Completed or Request Revision)
+ * @route   POST /api/admin/tasks/:taskId/review/:studentId
+ * @access  Private/Admin
+ */
+const reviewTaskSubmission = async (req, res) => {
+  try {
+    const { taskId, studentId } = req.params;
+    const { action, reviewNotes } = req.body; // 'accept' or 'request_revision'
+
+    if (!['accept', 'request_revision'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid action. Must be 'accept' or 'request_revision'",
+      });
+    }
+
+    const task = await Task.findById(taskId).populate('createdBy', 'name email role');
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    // Admin can ONLY review tasks assigned by administrators.
+    // Tasks created by Team Leads are internal and reviewed exclusively by their Team Lead.
+    const creatorRole = task.createdBy?.role ? String(task.createdBy.role).toLowerCase().trim() : '';
+    if (creatorRole && creatorRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admins can only review tasks created by administrators. Team Lead tasks are reviewed by the respective Team Lead.',
+      });
+    }
+
+    const studentUser = await User.findById(studentId);
+    if (!studentUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
+    let assignment = await TaskAssignment.findOne({ taskId: task._id, studentId: studentUser._id });
+
+    // Once approved, status is finalized and cannot be modified or undone
+    if (assignment && assignment.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'This task submission has already been approved and completed. Approvals are final and cannot be undone.',
+      });
+    }
+
+    if (!assignment) {
+      assignment = new TaskAssignment({
+        taskId: task._id,
+        studentId: studentUser._id,
+        status: action === 'accept' ? 'completed' : 'revision_requested',
+      });
+    } else {
+      assignment.status = action === 'accept' ? 'completed' : 'revision_requested';
+    }
+
+    assignment.reviewedBy = req.user._id;
+    assignment.reviewedAt = new Date();
+    if (reviewNotes !== undefined) {
+      assignment.reviewNotes = reviewNotes ? reviewNotes.trim() : '';
+    }
+
+    if (action === 'accept') {
+      assignment.completedAt = new Date();
+    } else {
+      assignment.completedAt = null;
+    }
+
+    await assignment.save();
+
+    // Dispatch notification to student
+    try {
+      await Notification.create({
+        studentId: studentUser._id,
+        taskId: task._id,
+        title: action === 'accept' ? `Admin Task Approved: ${task.title}` : `Admin Requested Changes: ${task.title}`,
+        message:
+          action === 'accept'
+            ? `Admin ${req.user.name} reviewed and accepted your deliverables! Task is marked Completed.`
+            : `Admin ${req.user.name} reviewed your submission and requested updates: ${reviewNotes || 'Please update your deliverables.'}`,
+        type: action === 'accept' ? 'task_completed' : 'task_assigned',
+        assignedBy: `Admin (${req.user.name})`,
+      });
+    } catch (notifErr) {
+      console.warn('Notification creation error:', notifErr.message);
+    }
+
+    const populatedAssignment = await TaskAssignment.findById(assignment._id)
+      .populate('studentId', 'name rollNumber email memberType avatar')
+      .populate('reviewedBy', 'name email avatar role');
+
+    res.status(200).json({
+      success: true,
+      message:
+        action === 'accept'
+          ? `Work accepted and marked as completed for ${studentUser.name}`
+          : `Revision requested from ${studentUser.name}`,
+      assignment: populatedAssignment,
+    });
+  } catch (error) {
+    console.error('Error reviewing task submission by admin:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to review task submission',
     });
   }
 };
@@ -1471,6 +1703,7 @@ module.exports = {
   getBatches,
   createBatchWithCohort,
   deleteBatch,
+  reviewTaskSubmission,
 };
 
 

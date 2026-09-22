@@ -3,6 +3,7 @@ const { Readable } = require('stream');
 const https = require('https');
 const http = require('http');
 const Resource = require('../models/Resource');
+const Team = require('../models/Team');
 const StudentResourceProgress = require('../models/StudentResourceProgress');
 const { cloudinary, isCloudinaryConfigured } = require('../config/cloudinary');
 
@@ -89,6 +90,65 @@ const getResources = async (req, res) => {
       ];
     }
 
+    // Role-based visibility and targetGroup filtering
+    if (req.user) {
+      const userRole = req.user.role ? String(req.user.role).toLowerCase() : '';
+      if (userRole === 'admin') {
+        // Admins have complete visibility
+      } else if (userRole === 'teamlead' || userRole === 'team_lead') {
+        // Team Leads see general cohort resources, their own team's resources, and resources they created
+        let leadTeam = null;
+        if (req.user.teamId) {
+          leadTeam = await Team.findById(req.user.teamId);
+        }
+        if (!leadTeam) {
+          leadTeam = await Team.findOne({ teamLeadId: req.user._id });
+        }
+        const teamConditions = [{ targetTeamId: null }, { createdBy: req.user._id }];
+        if (leadTeam) {
+          teamConditions.push({ targetTeamId: leadTeam._id });
+        }
+        query.$and = query.$and || [];
+        query.$and.push({ $or: teamConditions });
+      } else {
+        // Students see general resources or resources targeted to their team, filtered by memberType / targetGroup
+        let studentTeam = null;
+        if (req.user.teamId) {
+          studentTeam = await Team.findById(req.user.teamId);
+        }
+        if (!studentTeam) {
+          studentTeam = await Team.findOne({ members: req.user._id });
+        }
+
+        const teamConditions = [{ targetTeamId: null }];
+        if (studentTeam) {
+          teamConditions.push({ targetTeamId: studentTeam._id });
+        }
+
+        let allowedGroups = ['all', 'both'];
+        if (req.user.memberType === 'junior_developer') {
+          allowedGroups.push('junior_developers');
+        } else if (
+          req.user.memberType === 'developer_intern' ||
+          req.user.memberType === 'senior_developer'
+        ) {
+          allowedGroups.push('developer_interns');
+        } else {
+          allowedGroups.push('junior_developers', 'developer_interns');
+        }
+
+        query.$and = query.$and || [];
+        query.$and.push({ $or: teamConditions });
+        query.$and.push({
+          $or: [
+            { targetGroup: { $in: allowedGroups } },
+            { targetGroup: { $exists: false } },
+            { targetGroup: null },
+          ],
+        });
+      }
+    }
+
     // Auto-seed starter learning resources if collection is completely empty
     const totalCount = await Resource.countDocuments();
     if (totalCount === 0) {
@@ -100,6 +160,7 @@ const getResources = async (req, res) => {
           url: 'https://leetcode.com/problem-list/top-interview-questions/',
           topic: 'Data Structures & Algorithms',
           difficulty: 'Medium',
+          targetGroup: 'all',
           createdBy: userId,
         },
         {
@@ -109,6 +170,7 @@ const getResources = async (req, res) => {
           url: 'https://github.com/c4gt-kiet/c4gt-hub',
           topic: 'Full-Stack Web Dev',
           difficulty: 'General',
+          targetGroup: 'all',
           createdBy: userId,
         },
         {
@@ -120,6 +182,7 @@ const getResources = async (req, res) => {
           fileFormat: 'pdf',
           fileSize: 1048576,
           originalFilename: 'C4GT_Security_RBAC_Spec.pdf',
+          targetGroup: 'all',
           createdBy: userId,
         },
         {
@@ -131,6 +194,7 @@ const getResources = async (req, res) => {
           fileFormat: 'xlsx',
           fileSize: 524288,
           originalFilename: 'Student_Milestone_Tracker_2026.xlsx',
+          targetGroup: 'all',
           createdBy: userId,
         },
       ];
@@ -139,16 +203,18 @@ const getResources = async (req, res) => {
 
     const resources = await Resource.find(query)
       .sort({ createdAt: -1 })
-      .populate('createdBy', 'name email role avatar');
+      .populate('createdBy', 'name email role avatar')
+      .populate('targetTeamId', 'name teamNumber');
 
     // Calculate completion metrics for the requesting user
     const formatted = resources.map((r) => {
       const isCompleted = Boolean(
         userId && r.completedBy && r.completedBy.some((uid) => uid.toString() === userId.toString())
       );
-      // For Cloudinary files, use the authenticated streaming endpoint to avoid Cloudinary's 401 ACL block on PDFs
+      const host = req.get ? req.get('host') : (req.headers && req.headers.host) || 'localhost:5000';
+      const protocol = req.protocol || 'http';
       const fileUrl = r.cloudinaryPublicId
-        ? `${req.protocol}://${req.get('host')}/api/resources/${r._id}/file`
+        ? `${protocol}://${host}/api/resources/${r._id}/file`
         : r.url;
 
       return {
@@ -165,6 +231,8 @@ const getResources = async (req, res) => {
         fileFormat: r.fileFormat,
         originalFilename: r.originalFilename,
         cloudinaryPublicId: r.cloudinaryPublicId,
+        targetGroup: r.targetGroup || 'all',
+        targetTeamId: r.targetTeamId,
         downloadsCount: r.downloadsCount || 0,
         createdBy: r.createdBy,
         isCompleted,
@@ -210,7 +278,7 @@ const uploadResourceFile = async (req, res) => {
       });
     }
 
-    const { title, topic, description, difficulty, targetTeamId } = req.body;
+    const { title, topic, description, difficulty, targetTeamId, targetGroup } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, message: 'Resource title is required.' });
@@ -239,6 +307,12 @@ const uploadResourceFile = async (req, res) => {
       publicId = `local_${Date.now()}`;
     }
 
+    let resolvedTeamId = targetTeamId || null;
+    if (!resolvedTeamId && (req.user.role === 'teamlead' || req.user.role === 'team_lead')) {
+      const leadTeam = await Team.findOne({ teamLeadId: req.user._id });
+      if (leadTeam) resolvedTeamId = leadTeam._id;
+    }
+
     const resource = await Resource.create({
       title: title.trim(),
       type: detectedType,
@@ -250,7 +324,8 @@ const uploadResourceFile = async (req, res) => {
       fileFormat,
       originalFilename,
       cloudinaryPublicId: publicId,
-      targetTeamId: targetTeamId || null,
+      targetGroup: targetGroup || 'all',
+      targetTeamId: resolvedTeamId,
       createdBy: req.user._id,
     });
 
@@ -280,7 +355,7 @@ const uploadResourceFile = async (req, res) => {
  */
 const createLinkResource = async (req, res) => {
   try {
-    const { title, url, type, topic, description, difficulty, targetTeamId } = req.body;
+    const { title, url, type, topic, description, difficulty, targetTeamId, targetGroup } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, message: 'Resource title is required.' });
@@ -295,6 +370,12 @@ const createLinkResource = async (req, res) => {
     const validTypes = ['git_repo', 'dsa_problem', 'link', 'note'];
     const safeType = validTypes.includes(type) ? type : 'link';
 
+    let resolvedTeamId = targetTeamId || null;
+    if (!resolvedTeamId && (req.user.role === 'teamlead' || req.user.role === 'team_lead')) {
+      const leadTeam = await Team.findOne({ teamLeadId: req.user._id });
+      if (leadTeam) resolvedTeamId = leadTeam._id;
+    }
+
     const resource = await Resource.create({
       title: title.trim(),
       url: url.trim(),
@@ -302,7 +383,8 @@ const createLinkResource = async (req, res) => {
       topic: topic.trim(),
       description: description ? description.trim() : '',
       difficulty: difficulty || 'General',
-      targetTeamId: targetTeamId || null,
+      targetGroup: targetGroup || 'all',
+      targetTeamId: resolvedTeamId,
       createdBy: req.user._id,
     });
 

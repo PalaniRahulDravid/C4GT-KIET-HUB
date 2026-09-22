@@ -400,6 +400,21 @@ export default function AdminResources() {
                         <span className="inline-block px-2 py-0.5 rounded-md bg-[#F2EFE9] text-[#57564F] text-[10px] font-semibold uppercase tracking-wider">
                           {getTypeLabel(res.type)}
                         </span>
+                        {res.targetGroup === 'junior_developers' && (
+                          <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            Junior Devs
+                          </span>
+                        )}
+                        {res.targetGroup === 'developer_interns' && (
+                          <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Interns
+                          </span>
+                        )}
+                        {res.targetGroup === 'both' && (
+                          <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                            Junior & Interns
+                          </span>
+                        )}
                         {res.difficulty && (
                           <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/50">
                             {res.difficulty}

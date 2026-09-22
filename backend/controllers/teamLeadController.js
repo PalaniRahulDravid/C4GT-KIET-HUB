@@ -538,6 +538,16 @@ const reviewTaskSubmission = async (req, res) => {
       });
     }
 
+    // Strict Role Separation: Team Lead can ONLY review tasks created by themselves.
+    // Admin tasks are reviewed exclusively by Admin on the Admin dashboard.
+    const isCreator = task.createdBy.toString() === req.user._id.toString();
+    if (!isCreator && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only review tasks created by you. Admin tasks are reviewed exclusively by the Admin.',
+      });
+    }
+
     const studentUser = await User.findById(studentId);
     if (!studentUser) {
       return res.status(404).json({
@@ -547,6 +557,15 @@ const reviewTaskSubmission = async (req, res) => {
     }
 
     let assignment = await TaskAssignment.findOne({ taskId: task._id, studentId: studentUser._id });
+
+    // Once approved, status is finalized and cannot be modified or undone
+    if (assignment && assignment.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'This task submission has already been approved and completed. Approvals are final and cannot be undone.',
+      });
+    }
+
     if (!assignment) {
       assignment = new TaskAssignment({
         taskId: task._id,

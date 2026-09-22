@@ -61,9 +61,12 @@ export default function TeamOverview() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
       const teamsRes = await fetch(`${API_BASE_URL}/admin/teams`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders,
       });
       if (teamsRes.ok) {
         const teamsData = await teamsRes.json();
@@ -79,7 +82,7 @@ export default function TeamOverview() {
 
       const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders,
       });
       if (usersRes.ok) {
         const usersData = await usersRes.json();
@@ -97,7 +100,7 @@ export default function TeamOverview() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [token, API_BASE_URL]);
 
   const handleRefreshTeams = () => {
     setIsRefreshing(true);

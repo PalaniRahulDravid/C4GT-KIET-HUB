@@ -13,6 +13,13 @@ import {
   Link as LinkIcon,
   FileText,
   FileCode,
+  ExternalLink,
+  Eye,
+  UserCheck,
+  MessageSquare,
+  Check,
+  ShieldCheck,
+  Users,
 } from 'lucide-react';
 import { Skeleton, SkeletonTaskCard } from '../../components/skeleton';
 
@@ -23,6 +30,12 @@ export default function TeamTasks() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFormVisible, setIsFormVisible] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Review Submissions Modal State
+  const [selectedTaskForReview, setSelectedTaskForReview] = useState(null);
+  const [reviewFilter, setReviewFilter] = useState('all'); // 'all', 'submitted', 'completed', 'revision_requested', 'pending'
+  const [reviewLoadingStudentId, setReviewLoadingStudentId] = useState(null);
+  const [reviewNotesMap, setReviewNotesMap] = useState({});
 
   // Temporary toast notification state (auto-disappears after 3.5 seconds)
   const [toastMessage, setToastMessage] = useState(null);
@@ -89,12 +102,51 @@ export default function TeamTasks() {
         const data = await res.json();
         if (data.success && Array.isArray(data.tasks)) {
           setTasks(data.tasks);
+          // Keep review modal data synchronized
+          setSelectedTaskForReview((prev) => {
+            if (!prev) return null;
+            return data.tasks.find((t) => t._id === prev._id) || prev;
+          });
         }
       }
     } catch (err) {
       console.error('Failed to load tasks:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdminReview = async (taskId, studentId, action, reviewNotes = '') => {
+    try {
+      setReviewLoadingStudentId(studentId);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const res = await fetch(`${API_BASE_URL}/admin/tasks/${taskId}/review/${studentId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ action, reviewNotes }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(
+          action === 'accept'
+            ? 'Work approved and marked as completed! ✓'
+            : 'Revision feedback sent to student.',
+          'success'
+        );
+        fetchTasks();
+      } else {
+        showToast(data.message || 'Failed to review submission', 'error');
+      }
+    } catch (err) {
+      console.error('Review submission error:', err);
+      showToast('Network error while reviewing submission', 'error');
+    } finally {
+      setReviewLoadingStudentId(null);
     }
   };
 
@@ -318,6 +370,11 @@ export default function TeamTasks() {
 
 
   const filteredTasks = tasks.filter((t) => {
+    // Only display tasks created by Admin in Admin Task Management
+    const creatorRole = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
+    if (t.createdBy && creatorRole && creatorRole !== 'admin') {
+      return false;
+    }
     if (activeFilter === 'junior_developers' && t.targetGroup !== 'junior_developers' && t.targetGroup !== 'both') {
       return false;
     }
@@ -590,21 +647,57 @@ export default function TeamTasks() {
             </div>
           ) : (
             filteredTasks.map((t) => (
-              <div key={t._id} className="p-6 hover:bg-[#F4F1E8]/50 transition-colors space-y-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-1">
+              <div key={t._id} className="p-6 hover:bg-[#F4F1E8]/50 transition-colors space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-mono font-bold text-[#1C1B1A]">{t.topic}</span>
                       <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#EEECDF] text-[#4A4843] border border-[#E0DDD0]">
                         {t.priority || 'Normal'}
                       </span>
+                      {/* Target Group Badge */}
+                      {t.targetGroup === 'junior_developers' && (
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
+                          Junior Developers Only
+                        </span>
+                      )}
+                      {t.targetGroup === 'developer_interns' && (
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                          Developer Interns Only
+                        </span>
+                      )}
+                      {(t.targetGroup === 'both' || !t.targetGroup || t.targetGroup === 'all') && (
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Both Junior Devs & Interns
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-amber-700" />
+                        <span>Admin Task</span>
+                      </span>
                     </div>
+
                     <h4 className="text-base font-bold text-[#1C1B1A]">{t.title}</h4>
                     <p className="text-xs text-[#66645E] mt-1 leading-relaxed max-w-3xl">{t.description}</p>
 
+                    {/* Deliverables Required */}
+                    {Array.isArray(t.deliverables) && t.deliverables.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[11px] font-medium text-[#8C8A84]">Deliverables:</span>
+                        {t.deliverables.map((deliv, dIdx) => (
+                          <span
+                            key={dIdx}
+                            className="px-2 py-0.5 text-[10px] font-mono rounded bg-[#EEECDF] text-[#4A4843] border border-[#E0DDD0]"
+                          >
+                            {typeof deliv === 'string' ? deliv : deliv.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Render attached related resources */}
                     {Array.isArray(t.relatedResources) && t.relatedResources.length > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-[#E0DDD0]/60 space-y-1.5">
+                      <div className="mt-2.5 pt-2 border-t border-[#E0DDD0]/60 space-y-1.5">
                         <div className="text-[11px] font-bold text-[#1C1B1A] flex items-center gap-1.5">
                           <BookOpen className="w-3.5 h-3.5 text-[#4E7A53]" />
                           <span>Attached Related Resources ({t.relatedResources.length})</span>
@@ -629,7 +722,23 @@ export default function TeamTasks() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <button
+                      onClick={() => {
+                        setSelectedTaskForReview(t);
+                        setReviewFilter('all');
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs ${
+                        t.submittedCount > 0
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse'
+                          : 'bg-[#1C1B1A] hover:bg-black text-white'
+                      }`}
+                      title="Review student deliverables"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Review Submissions ({t.submittedCount || 0})</span>
+                    </button>
+
                     <button
                       onClick={() => setDeleteConfirmId(t._id)}
                       className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
@@ -640,13 +749,21 @@ export default function TeamTasks() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between text-xs text-[#66645E] pt-2 border-t border-[#E2DDD0]/60 gap-3">
-                  <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center justify-between text-xs text-[#66645E] pt-2.5 border-t border-[#E2DDD0]/60 gap-3">
+                  <div className="flex flex-wrap items-center gap-4">
                     <span className="flex items-center gap-1.5 font-mono">
                       <Clock className="w-3.5 h-3.5 text-[#66645E]" />
                       <span>Deadline: {t.deadline ? new Date(t.deadline).toLocaleDateString() : 'No deadline'}</span>
                     </span>
-                    <span>Assigned to Teams 1–9</span>
+                    <span className="font-mono text-[#8C8A84]">
+                      Assigned: {t.totalAssignments || 0} students
+                    </span>
+                    <span className="font-mono text-amber-700 font-semibold">
+                      Under Review: {t.submittedCount || 0}
+                    </span>
+                    <span className="font-mono text-emerald-700 font-semibold">
+                      Approved: {t.completedCount || 0}
+                    </span>
                   </div>
                   <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
                     Active
@@ -872,7 +989,355 @@ export default function TeamTasks() {
       )}
 
 
-      {/* Temporary Auto-Disappearing Toast Notification (3.5 seconds) */}
+      {/* REVIEW SUBMISSIONS MODAL */}
+      {selectedTaskForReview && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
+          <div className="bg-[#FFFDF8] border border-[#E0DDD0] rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-[#E0DDD0]">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-[#1C1B1A]">
+                    {selectedTaskForReview.topic}
+                  </span>
+                  {selectedTaskForReview.targetGroup === 'junior_developers' && (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
+                      Junior Developers Only
+                    </span>
+                  )}
+                  {selectedTaskForReview.targetGroup === 'developer_interns' && (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                      Developer Interns Only
+                    </span>
+                  )}
+                  {(selectedTaskForReview.targetGroup === 'both' || !selectedTaskForReview.targetGroup || selectedTaskForReview.targetGroup === 'all') && (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Both Junior Devs & Interns
+                    </span>
+                  )}
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200 flex items-center gap-1 font-semibold">
+                    <ShieldCheck className="w-3 h-3 text-amber-700" />
+                    <span>Admin Review Only</span>
+                  </span>
+                </div>
+                <h3 className="font-bold tracking-tight text-xl text-[#1C1B1A]">
+                  Review Submissions: {selectedTaskForReview.title}
+                </h3>
+                <p className="text-xs text-[#66645E]">
+                  Inspect student deliverables (proof links & documentation) and approve or request revisions.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setSelectedTaskForReview(null)}
+                className="p-1.5 rounded-full hover:bg-black/5 text-[#66645E] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Filter Tabs */}
+            {(() => {
+              const allAssignments = selectedTaskForReview.assignments || [];
+              const submittedList = allAssignments.filter((a) => a.status === 'submitted');
+              const completedList = allAssignments.filter((a) => a.status === 'completed');
+              const revisionList = allAssignments.filter((a) => a.status === 'revision_requested');
+              const pendingList = allAssignments.filter((a) => a.status === 'pending' || a.status === 'in_progress');
+
+              let displayedAssignments = allAssignments;
+              if (reviewFilter === 'submitted') displayedAssignments = submittedList;
+              else if (reviewFilter === 'completed') displayedAssignments = completedList;
+              else if (reviewFilter === 'revision_requested') displayedAssignments = revisionList;
+              else if (reviewFilter === 'pending') displayedAssignments = pendingList;
+
+              return (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { id: 'all', label: `All (${allAssignments.length})` },
+                      { id: 'submitted', label: `Pending Review (${submittedList.length})`, highlight: submittedList.length > 0 },
+                      { id: 'completed', label: `Approved (${completedList.length})` },
+                      { id: 'revision_requested', label: `Revision Requested (${revisionList.length})` },
+                      { id: 'pending', label: `Not Submitted (${pendingList.length})` },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setReviewFilter(tab.id)}
+                        className={`px-3 py-1.5 text-xs font-mono rounded-full transition-all cursor-pointer ${
+                          reviewFilter === tab.id
+                            ? 'bg-[#1C1B1A] text-white shadow-2xs font-bold'
+                            : tab.highlight
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold hover:bg-amber-200'
+                            : 'bg-[#EEECDF] text-[#66645E] hover:text-[#1C1B1A]'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Submissions List Container */}
+                  <div className="overflow-y-auto flex-1 pr-1 space-y-4 max-h-[55vh]">
+                    {displayedAssignments.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[#8C8A84] bg-[#F9F8F3] rounded-xl border border-[#E0DDD0]">
+                        No students found in this category.
+                      </div>
+                    ) : (
+                      displayedAssignments.map((a) => {
+                        const student = a.studentId || {};
+                        const sId = student._id || a.studentId;
+                        const isReviewing = reviewLoadingStudentId === sId;
+                        const hasSubmissions = Array.isArray(a.submissions) && a.submissions.length > 0;
+                        const notesVal = reviewNotesMap[sId] !== undefined ? reviewNotesMap[sId] : (a.reviewNotes || '');
+
+                        return (
+                          <div
+                            key={a._id || sId}
+                            className={`p-4 rounded-xl border transition-all space-y-3 ${
+                              a.status === 'submitted'
+                                ? 'bg-amber-50/40 border-amber-300 shadow-2xs'
+                                : a.status === 'completed'
+                                ? 'bg-emerald-50/30 border-emerald-200'
+                                : 'bg-white border-[#E0DDD0]'
+                            }`}
+                          >
+                            {/* Student Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs uppercase">
+                                  {(student.name || 'S').slice(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-[#1C1B1A]">
+                                      {student.name || 'Unknown Student'}
+                                    </span>
+                                    {student.rollNumber && (
+                                      <span className="font-mono text-[11px] text-[#66645E]">
+                                        ({student.rollNumber})
+                                      </span>
+                                    )}
+                                    {a.teamNumber && (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#EEECDF] text-[#1C1B1A]">
+                                        Team {a.teamNumber}
+                                      </span>
+                                    )}
+                                    {student.memberType && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-sky-100 text-sky-800">
+                                        {student.memberType.replace('_', ' ')}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-[#8C8A84] font-mono mt-0.5">
+                                    {student.email || 'No email provided'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Status Badge */}
+                              <div>
+                                {a.status === 'submitted' && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                    <Clock className="w-3.5 h-3.5 text-amber-700 animate-spin" />
+                                    <span>Submitted - Needs Review</span>
+                                  </span>
+                                )}
+                                {a.status === 'completed' && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                                    <span>Approved / Completed</span>
+                                  </span>
+                                )}
+                                {a.status === 'revision_requested' && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1">
+                                    <AlertCircle className="w-3.5 h-3.5 text-rose-700" />
+                                    <span>Revision Requested</span>
+                                  </span>
+                                )}
+                                {a.status === 'in_progress' && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-blue-100 text-blue-900 border border-blue-300">
+                                    In Progress
+                                  </span>
+                                )}
+                                {a.status === 'pending' && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-mono bg-[#EEECDF] text-[#66645E]">
+                                    Not Started
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Submitted Deliverables & Proofs */}
+                            {hasSubmissions ? (
+                              <div className="p-3.5 rounded-xl bg-white border border-[#E0DDD0] space-y-2 text-xs">
+                                <div className="font-bold text-[#1C1B1A] flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5">
+                                    <FileText className="w-3.5 h-3.5 text-[#4E7A53]" />
+                                    <span>Submitted Proofs & Deliverables ({a.submissions.length})</span>
+                                  </span>
+                                  {a.submittedAt && (
+                                    <span className="font-mono text-[10px] text-[#8C8A84]">
+                                      Submitted: {new Date(a.submittedAt).toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                  {a.submissions.map((sub, sIdx) => {
+                                    const linkTarget = sub.link || sub.fileUrl || '';
+                                    return (
+                                      <div
+                                        key={sIdx}
+                                        className="p-2 rounded-lg bg-[#F9F8F3] border border-[#E0DDD0] flex items-center justify-between gap-2"
+                                      >
+                                        <div className="min-w-0 pr-1">
+                                          <div className="font-semibold text-[#1C1B1A] truncate text-[11px]">
+                                            {sub.deliverableName}
+                                          </div>
+                                          {linkTarget ? (
+                                            <a
+                                              href={linkTarget}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-[10px] font-mono text-blue-600 hover:underline truncate block"
+                                            >
+                                              {linkTarget}
+                                            </a>
+                                          ) : (
+                                            <span className="text-[10px] text-[#8C8A84] italic">No link provided</span>
+                                          )}
+                                        </div>
+                                        {linkTarget && (
+                                          <a
+                                            href={linkTarget}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2 py-1 rounded bg-white hover:bg-[#EEECDF] border border-[#E0DDD0] text-[10px] font-bold text-[#1C1B1A] flex items-center gap-1 shrink-0"
+                                          >
+                                            <ExternalLink className="w-3 h-3 text-[#4E7A53]" />
+                                            <span>Open Proof</span>
+                                          </a>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                {a.submissionNotes && (
+                                  <div className="pt-2 border-t border-[#E0DDD0]/60">
+                                    <span className="font-semibold text-[11px] text-[#1C1B1A]">Student Notes: </span>
+                                    <span className="text-[11px] text-[#66645E] italic">"{a.submissionNotes}"</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-lg bg-[#F9F8F3] border border-dashed border-[#E0DDD0] text-center text-xs text-[#8C8A84]">
+                                Student has not submitted deliverables yet.
+                              </div>
+                            )}
+
+                            {/* Review History */}
+                            {a.reviewedAt && a.reviewedBy && (
+                              <div className="text-[11px] font-mono text-[#66645E] bg-[#EEECDF]/60 p-2 rounded-lg flex items-center justify-between">
+                                <span>
+                                  Reviewed by Admin ({a.reviewedBy.name || 'Admin'}) on {new Date(a.reviewedAt).toLocaleDateString()}
+                                </span>
+                                {a.reviewNotes && (
+                                  <span className="italic font-sans text-[11px] text-[#1C1B1A]">"{a.reviewNotes}"</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Admin Review Action Controls */}
+                            {a.status === 'completed' ? (
+                              <div className="pt-2 border-t border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                                    <span>Approved & Completed (Finalized)</span>
+                                  </span>
+                                  {a.completedAt && (
+                                    <span className="text-[11px] font-mono text-[#8C8A84]">
+                                      Approved on {new Date(a.completedAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] font-mono text-[#8C8A84] italic">
+                                  Approval is final and cannot be undone.
+                                </span>
+                              </div>
+                            ) : (hasSubmissions || a.status === 'submitted' || a.status === 'revision_requested') ? (
+                              <div className="pt-2 border-t border-[#E0DDD0] space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={notesVal}
+                                    onChange={(e) =>
+                                      setReviewNotesMap((prev) => ({
+                                        ...prev,
+                                        [sId]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="Optional feedback / revision notes for student..."
+                                    className="flex-1 px-3 py-1.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-none focus:border-[#1C1B1A]"
+                                  />
+
+                                  <button
+                                    disabled={isReviewing}
+                                    onClick={() =>
+                                      handleAdminReview(
+                                        selectedTaskForReview._id,
+                                        sId,
+                                        'accept',
+                                        notesVal
+                                      )
+                                    }
+                                    className="px-4 py-1.5 rounded-xl bg-[#4E7A53] hover:bg-[#3D6341] text-white text-xs font-bold cursor-pointer transition-all shadow-2xs flex items-center gap-1 shrink-0 disabled:opacity-50"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>{isReviewing ? 'Saving...' : 'Approve & Mark Done'}</span>
+                                  </button>
+
+                                  <button
+                                    disabled={isReviewing}
+                                    onClick={() =>
+                                      handleAdminReview(
+                                        selectedTaskForReview._id,
+                                        sId,
+                                        'request_revision',
+                                        notesVal
+                                      )
+                                    }
+                                    className="px-3.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 text-xs font-bold cursor-pointer transition-all shrink-0 disabled:opacity-50"
+                                  >
+                                    <span>Request Revision</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-[#E0DDD0] flex items-center justify-between text-xs text-[#66645E]">
+              <span>Changes are dispatched immediately to student dashboards and notifications.</span>
+              <button
+                onClick={() => setSelectedTaskForReview(null)}
+                className="px-6 py-2 rounded-full bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toastMessage && (
         <div
           className={`fixed bottom-6 right-8 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border z-50 animate-in fade-in slide-in-from-bottom duration-300 ${

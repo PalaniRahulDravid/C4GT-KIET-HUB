@@ -54,7 +54,7 @@ const getStudentTasks = async (req, res) => {
     }
 
     const resolvedTeamNumber = studentTeamDoc ? studentTeamDoc.teamNumber : await getStudentTeamNumber(req.user);
-    const leadId = studentTeamDoc ? studentTeamDoc.teamLeadId : null;
+    const leadId = studentTeamDoc ? (studentTeamDoc.teamLeadId ? studentTeamDoc.teamLeadId.toString() : null) : null;
 
     // Fetch explicit assignments for student
     const assignments = await TaskAssignment.find({ studentId }).populate('reviewedBy', 'name email avatar role');
@@ -65,78 +65,90 @@ const getStudentTasks = async (req, res) => {
       fullAssignmentMap[a.taskId.toString()] = a;
     });
 
-    const explicitTaskIds = assignments.map((a) => a.taskId);
-
     // Determine targetGroup filter based on memberType
-    let targetGroups = ['both'];
+    // junior_developer -> only junior_developers, both, all
+    // developer_intern / senior_developer -> only developer_interns, both, all
+    let allowedTargetGroups = ['both', 'all', 'individual'];
     if (req.user.memberType === 'junior_developer') {
-      targetGroups.push('junior_developers');
+      allowedTargetGroups.push('junior_developers');
     } else if (
       req.user.memberType === 'senior_developer' ||
       req.user.memberType === 'developer_intern'
     ) {
-      targetGroups.push('developer_interns');
+      allowedTargetGroups.push('developer_interns');
     } else {
-      targetGroups.push('junior_developers', 'developer_interns');
+      // If memberType is not set, allow both / all
+      allowedTargetGroups.push('junior_developers', 'developer_interns');
     }
 
-    // Build comprehensive query matching:
-    // 1. Explicit task assignments for this student
-    // 2. Direct assignment in task.assignedTo
-    // 3. Tasks created by their Team Lead
-    // 4. Tasks assigned to their team
-    const queryConditions = [
-      { _id: { $in: explicitTaskIds } },
-      { assignedTo: studentId },
-    ];
-
-    if (leadId) {
-      queryConditions.push({ createdBy: leadId });
-    }
-
-    const teamQueries = [];
+    // 1. Admin Tasks Query:
+    // Assigned to student's team AND matches student's targetGroup
+    const adminQueryConditions = [];
     if (resolvedTeamNumber !== null && resolvedTeamNumber !== undefined) {
-      teamQueries.push(
+      adminQueryConditions.push(
         { assignedTeams: resolvedTeamNumber },
         { assignedTeams: Number(resolvedTeamNumber) },
         { assignedTeams: String(resolvedTeamNumber) }
       );
     }
 
-    if (teamQueries.length > 0) {
-      queryConditions.push({
-        $and: [
-          { $or: teamQueries },
+    // 2. Team Lead Tasks Query:
+    // If created by student's team lead:
+    // - If assignedTo is set or taskScope is 'individual', studentId MUST be in assignedTo!
+    // - If assigned to all students (taskScope: 'students' and assignedTo empty or includes studentId)
+    const teamLeadConditions = [];
+    if (leadId) {
+      teamLeadConditions.push({
+        createdBy: leadId,
+        $or: [
+          { assignedTo: studentId },
           {
-            $or: [
-              { targetGroup: { $in: [...targetGroups, 'both', 'individual', 'all'] } },
-              { targetGroup: { $exists: false } },
-              { targetGroup: null },
+            $and: [
+              { taskScope: { $in: ['students', 'entire_team'] } },
+              { $or: [{ assignedTo: { $exists: false } }, { assignedTo: { $size: 0 } }] },
             ],
           },
         ],
       });
-    } else {
-      queryConditions.push({
-        assignedTeams: { $exists: true },
-        targetGroup: { $in: [...targetGroups, 'both', 'individual', 'all'] },
+    }
+
+    // Direct individual assignment
+    const directIndividualCondition = { assignedTo: studentId };
+
+    const queryParts = [
+      directIndividualCondition,
+      ...teamLeadConditions,
+    ];
+
+    if (adminQueryConditions.length > 0) {
+      queryParts.push({
+        $and: [
+          { $or: adminQueryConditions },
+          {
+            $or: [
+              { targetGroup: { $in: allowedTargetGroups } },
+              { targetGroup: { $exists: false } },
+              { targetGroup: null },
+            ],
+          },
+          // If task has assignedTo with members, studentId must be in it
+          {
+            $or: [
+              { assignedTo: { $exists: false } },
+              { assignedTo: { $size: 0 } },
+              { assignedTo: studentId },
+            ],
+          },
+        ],
       });
     }
 
-    const query = { $or: queryConditions };
+    const query = { $or: queryParts };
 
-    let tasks = await Task.find(query)
+    const tasks = await Task.find(query)
       .sort({ deadline: 1 })
       .populate('createdBy', 'name email avatar role')
       .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
-
-    // Fallback: if query returned none, return published tasks for cohort
-    if (tasks.length === 0) {
-      tasks = await Task.find()
-        .sort({ deadline: 1 })
-        .populate('createdBy', 'name email avatar role')
-        .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
-    }
 
     // Attach student specific status and assignment details to each task
     const tasksWithStatus = tasks.map((t) => {
@@ -146,25 +158,18 @@ const getStudentTasks = async (req, res) => {
       taskObj.assignment = assignment;
 
       const creatorRole = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
-      const isLeadCreator = leadId && t.createdBy?._id && t.createdBy._id.toString() === leadId.toString();
+      const isLeadCreator = leadId && t.createdBy?._id && t.createdBy._id.toString() === leadId;
 
-      if (creatorRole === 'admin' || (Array.isArray(t.assignedTeams) && t.assignedTeams.length > 1)) {
+      if (creatorRole === 'admin') {
         taskObj.source = 'admin';
-      } else if (
-        creatorRole === 'teamlead' ||
-        creatorRole === 'team_lead' ||
-        isLeadCreator ||
-        t.taskScope === 'students' ||
-        t.taskScope === 'individual'
-      ) {
+      } else if (creatorRole === 'teamlead' || creatorRole === 'team_lead' || isLeadCreator) {
         taskObj.source = 'teamlead';
       } else {
-        taskObj.source = 'teamlead';
+        taskObj.source = 'admin';
       }
 
       return taskObj;
     });
-
 
     res.status(200).json({
       success: true,
@@ -197,7 +202,7 @@ const submitTaskDeliverables = async (req, res) => {
       });
     }
 
-    const task = await Task.findById(taskId);
+    const task = await Task.findById(taskId).populate('createdBy', 'name email role');
     if (!task) {
       return res.status(404).json({
         success: false,
@@ -250,7 +255,6 @@ const submitTaskDeliverables = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Find student's team and team lead to dispatch notification
     const studentUser = await User.findById(studentId);
     let team = null;
     if (studentUser && studentUser.teamId) {
@@ -260,19 +264,41 @@ const submitTaskDeliverables = async (req, res) => {
       team = await Team.findOne({ members: studentId });
     }
 
-    if (team && team.teamLeadId) {
+    const creatorRole = task.createdBy?.role ? String(task.createdBy.role).toLowerCase().trim() : '';
+    const isAdminTask = creatorRole === 'admin';
+
+    // Route notification & response message based on who created the task
+    if (isAdminTask) {
+      // Notify Admin
       try {
         await Notification.create({
-          studentId: team.teamLeadId,
+          studentId: task.createdBy._id,
           taskId: task._id,
-          teamId: team._id,
           title: `Deliverables Submitted: ${task.title}`,
-          message: `${studentUser.name || 'A team member'} submitted task deliverables (Doc/Presentation links) for review.`,
+          message: `${studentUser?.name || 'A student'} submitted task deliverables for Admin review.`,
           type: 'submission_received',
-          assignedBy: studentUser.name || 'Student',
+          assignedBy: studentUser?.name || 'Student',
         });
       } catch (notifErr) {
-        // Continue
+        console.warn('Admin notification error:', notifErr.message);
+      }
+    } else {
+      // Notify Team Lead who created the task
+      const targetLeadId = task.createdBy?._id || (team && team.teamLeadId);
+      if (targetLeadId) {
+        try {
+          await Notification.create({
+            studentId: targetLeadId,
+            taskId: task._id,
+            teamId: team?._id || null,
+            title: `Deliverables Submitted: ${task.title}`,
+            message: `${studentUser?.name || 'A team member'} submitted task deliverables for review.`,
+            type: 'submission_received',
+            assignedBy: studentUser?.name || 'Student',
+          });
+        } catch (notifErr) {
+          console.warn('Team Lead notification error:', notifErr.message);
+        }
       }
     }
 
@@ -282,7 +308,10 @@ const submitTaskDeliverables = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Deliverables submitted successfully. Awaiting Team Lead review.',
+      message: isAdminTask
+        ? 'Deliverables submitted successfully. Awaiting Admin review.'
+        : 'Deliverables submitted successfully. Awaiting Team Lead review.',
+      reviewBy: isAdminTask ? 'admin' : 'teamlead',
       assignment: populatedAssignment,
     });
   } catch (error) {

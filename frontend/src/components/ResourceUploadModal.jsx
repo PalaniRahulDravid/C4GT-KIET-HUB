@@ -19,6 +19,7 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
   const [topic, setTopic] = useState('Full-Stack Web Dev');
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState('General');
+  const [targetGroup, setTargetGroup] = useState('all'); // 'all' | 'junior_developers' | 'developer_interns' | 'both'
   const [linkUrl, setLinkUrl] = useState('');
   const [linkType, setLinkType] = useState('dsa_problem'); // 'dsa_problem' | 'git_repo' | 'link'
   const [selectedFile, setSelectedFile] = useState(null);
@@ -89,6 +90,7 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
         formData.append('topic', topic.trim());
         formData.append('description', description.trim());
         formData.append('difficulty', difficulty);
+        formData.append('targetGroup', targetGroup);
 
         const res = await fetch(`${baseUrl}/resources/upload`, {
           method: 'POST',
@@ -130,6 +132,7 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
             topic: topic.trim(),
             description: description.trim(),
             difficulty,
+            targetGroup,
           }),
         });
 
@@ -157,6 +160,7 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
     setDescription('');
     setSelectedFile(null);
     setLinkUrl('');
+    setTargetGroup('all');
     setError(null);
     setSuccessMsg(null);
     onClose();
@@ -357,7 +361,7 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[#1C1B1A] mb-1">
                 Domain / Topic
@@ -372,6 +376,22 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
                     {t}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#1C1B1A] mb-1">
+                Target Audience
+              </label>
+              <select
+                value={targetGroup}
+                onChange={(e) => setTargetGroup(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#E0DDD0] text-xs focus:ring-2 focus:ring-[#1C1B1A] outline-none font-medium"
+              >
+                <option value="all">All Cohorts / Everyone</option>
+                <option value="junior_developers">Junior Developers Only</option>
+                <option value="developer_interns">Developer Interns Only</option>
+                <option value="both">Both (Junior Devs & Interns)</option>
               </select>
             </div>
 

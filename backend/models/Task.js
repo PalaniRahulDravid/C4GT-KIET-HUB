@@ -20,8 +20,8 @@ const taskSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Target group is required'],
     enum: {
-      values: ['junior_developers', 'developer_interns', 'both', 'individual'],
-      message: 'Target group must be junior_developers, developer_interns, both, or individual',
+      values: ['junior_developers', 'developer_interns', 'both', 'individual', 'all'],
+      message: 'Target group must be junior_developers, developer_interns, both, individual, or all',
     },
     default: 'both',
   },

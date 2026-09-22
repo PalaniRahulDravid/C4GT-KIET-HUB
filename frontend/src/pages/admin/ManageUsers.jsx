@@ -5,7 +5,7 @@ import UserAvatar from '../../components/UserAvatar';
 import { Skeleton, SkeletonTable } from '../../components/skeleton';
 
 export default function ManageUsers() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, token, apiBaseUrl } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -14,7 +14,7 @@ export default function ManageUsers() {
   const [toastMessage, setToastMessage] = useState(null);
   const [pendingRoleChange, setPendingRoleChange] = useState(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   const getDefaultUsers = () => [
     {
@@ -71,8 +71,10 @@ export default function ManageUsers() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/users`, {
         credentials: 'include',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -94,7 +96,7 @@ export default function ManageUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [API_BASE_URL, token]);
 
   const showToast = (message) => {
     setToastMessage(message);
@@ -106,12 +108,14 @@ export default function ManageUsers() {
   const handleRoleChange = async (userId, newRole) => {
     try {
       setUpdatingId(userId);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
 
       const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/role`, {
         method: 'PATCH',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
         body: JSON.stringify({ role: newRole }),
       });

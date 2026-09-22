@@ -360,11 +360,13 @@ export default function Batches() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
       // 1. Fetch Batches from Atlas
       const batchesRes = await fetch(`${API_BASE_URL}/admin/batches`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders,
       });
       if (batchesRes.ok) {
         const batchesData = await batchesRes.json();
@@ -377,7 +379,7 @@ export default function Batches() {
       const currentBatchId = batchId || '2026-2027';
       const teamsRes = await fetch(`${API_BASE_URL}/admin/teams?batch=${currentBatchId}`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders,
       });
       let fetchedTeams = [];
       if (teamsRes.ok) {
@@ -405,7 +407,7 @@ export default function Batches() {
       // 3. Fetch Users
       const usersRes = await fetch(`${API_BASE_URL}/admin/users?batch=${currentBatchId}`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders,
       });
       let fetchedUsers = [];
       if (usersRes.ok) {
@@ -419,7 +421,7 @@ export default function Batches() {
       // 4. Fetch Tasks from Atlas
       const tasksRes = await fetch(`${API_BASE_URL}/admin/tasks`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders,
       });
       if (tasksRes.ok) {
         const tasksData = await tasksRes.json();
@@ -438,12 +440,14 @@ export default function Batches() {
   const fetchAnalytics = async (tf) => {
     try {
       setAnalyticsLoading(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
       const currentBatchId = batchId || '2026-2027';
       const res = await fetch(
         `${API_BASE_URL}/admin/teams/analytics?batch=${currentBatchId}&timeframe=${tf}`,
         {
           credentials: 'include',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: authHeaders,
         }
       );
       if (res.ok) {

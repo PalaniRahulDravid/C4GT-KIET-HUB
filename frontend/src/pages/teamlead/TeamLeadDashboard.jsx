@@ -1384,9 +1384,14 @@ export default function TeamLeadDashboard() {
                               <div className="space-y-1.5 flex-1 min-w-0">
                                 {/* Scope & Target Tags */}
                                 <div className="flex flex-wrap items-center gap-2">
-                                  {isLeadTask ? (
+                                  {task.isCreatedByAdmin ? (
                                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-800 text-[11px] font-bold border border-purple-200 font-mono">
-                                      <Crown className="w-3 h-3" />
+                                      <ShieldCheck className="w-3 h-3 text-purple-600" />
+                                      <span>Admin Task (Review by Admin)</span>
+                                    </span>
+                                  ) : task.isCreatedByLead ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[11px] font-bold border border-blue-200 font-mono">
+                                      <Crown className="w-3 h-3 text-blue-600" />
                                       <span>Team Lead Task</span>
                                     </span>
                                   ) : task.audience === 'individual' ? (
@@ -1395,9 +1400,9 @@ export default function TeamLeadDashboard() {
                                       <span>Specific Student(s)</span>
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[11px] font-bold border border-blue-200 font-mono">
-                                      <GraduationCap className="w-3 h-3" />
-                                      <span>Student Task</span>
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-bold border border-slate-200 font-mono">
+                                      <Users className="w-3 h-3" />
+                                      <span>Team Task</span>
                                     </span>
                                   )}
 
@@ -1647,29 +1652,38 @@ export default function TeamLeadDashboard() {
                                                 <Badge variant="warning" className="bg-amber-100 text-amber-800 border-amber-200 animate-pulse">
                                                   ⏳ Awaiting Review
                                                 </Badge>
-                                                <Button
-                                                  size="sm"
-                                                  disabled={isReviewing}
-                                                  onClick={() =>
-                                                    handleReviewSubmission(task._id, studentId, 'accept')
-                                                  }
-                                                  className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
-                                                >
-                                                  <Check className="w-3.5 h-3.5" />
-                                                  <span>Accept & Complete</span>
-                                                </Button>
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  disabled={isReviewing}
-                                                  onClick={() => {
-                                                    setRevisionModalTask(task);
-                                                    setRevisionModalStudent(member);
-                                                  }}
-                                                  className="h-8 text-xs text-rose-700 hover:bg-rose-50 border-rose-200"
-                                                >
-                                                  Request Revision
-                                                </Button>
+                                                {task.isCreatedByLead ? (
+                                                  <>
+                                                    <Button
+                                                      size="sm"
+                                                      disabled={isReviewing}
+                                                      onClick={() =>
+                                                        handleReviewSubmission(task._id, studentId, 'accept')
+                                                      }
+                                                      className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
+                                                    >
+                                                      <Check className="w-3.5 h-3.5" />
+                                                      <span>Accept & Complete</span>
+                                                    </Button>
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      disabled={isReviewing}
+                                                      onClick={() => {
+                                                        setRevisionModalTask(task);
+                                                        setRevisionModalStudent(member);
+                                                      }}
+                                                      className="h-8 text-xs text-rose-700 hover:bg-rose-50 border-rose-200"
+                                                    >
+                                                      Request Revision
+                                                    </Button>
+                                                  </>
+                                                ) : (
+                                                  <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2.5 py-1 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
+                                                    <ShieldCheck className="w-3 h-3 text-purple-600" />
+                                                    <span>Admin Reviews This Task</span>
+                                                  </span>
+                                                )}
                                               </div>
                                             ) : status === 'revision_requested' ? (
                                               <Badge variant="destructive">⚠️ Revision In Progress</Badge>
