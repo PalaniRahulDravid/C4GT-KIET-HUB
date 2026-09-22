@@ -58,9 +58,10 @@ export default function Batches() {
     type: 'success',
   });
 
-  // Active Tab for Team Details
-  const [activeTab, setActiveTab] = useState('members'); // 'members' | 'performance' | 'tasks'
+  // Active Tab for Team Details (Side-by-Side Overview by default)
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'tasks' | 'trend'
   const [taskFilter, setTaskFilter] = useState('all'); // 'all' | 'pending' | 'completed' | 'overdue'
+  const [memberFilter, setMemberFilter] = useState('all'); // 'all' | 'junior' | 'senior'
   const [memberRoleFilter, setMemberRoleFilter] = useState('all'); // 'all' | 'junior_developer' | 'senior_developer'
 
   // Team Performance Analytics state (Recharts)
@@ -598,22 +599,66 @@ export default function Batches() {
     );
   }, [teamId, selectedBatch, teams]);
 
-  // Helper to fetch members of a team safely (4 Junior Devs, 4 Senior Devs, 1 Team Lead)
+  // Helper to fetch members of a team safely with real individual performance stats
   const getTeamMembers = (teamObj) => {
     if (!teamObj) return [];
 
     const membersList = [];
-    const teamScore = parseInt(teamObj.performancePct || teamObj.score || '0', 10) || 0;
+    const teamAnalytics =
+      analyticsData?.teams?.find(
+        (t) => t.teamNumber === teamObj.teamNumber || String(t._id) === String(teamObj._id)
+      ) || teamObj;
+
+    const membersAnalyticsMap = new Map();
+    if (Array.isArray(teamAnalytics.membersAnalytics)) {
+      teamAnalytics.membersAnalytics.forEach((ma) => {
+        membersAnalyticsMap.set(String(ma.userId), ma);
+      });
+    }
+
+    const getMemberStat = (userId) => {
+      const stat = membersAnalyticsMap.get(String(userId));
+      if (!stat) {
+        return {
+          score: 0,
+          pct: '0%',
+          completed: 0,
+          submitted: 0,
+          inProgress: 0,
+          pending: 0,
+          total: 0,
+        };
+      }
+      return {
+        score: stat.score || 0,
+        pct: `${stat.score || 0}%`,
+        completed: stat.completed || 0,
+        submitted: stat.submitted || 0,
+        inProgress: stat.inProgress || 0,
+        pending: stat.pending || 0,
+        total: stat.totalAssignments || 0,
+      };
+    };
 
     // 1. Team Lead from database
     if (teamObj.teamLeadId && typeof teamObj.teamLeadId === 'object' && teamObj.teamLeadId.name) {
+      const leadId = teamObj.teamLeadId._id || 'm-lead';
+      const mStats = getMemberStat(leadId);
       membersList.push({
-        id: teamObj.teamLeadId._id || 'm-lead',
+        id: leadId,
+        _id: leadId,
         name: teamObj.teamLeadId.name,
         email: teamObj.teamLeadId.email || '',
+        rollNumber: teamObj.teamLeadId.rollNumber || '',
         role: 'team_lead',
         roleTitle: 'Team Lead',
-        pct: `${teamScore}%`,
+        score: mStats.score,
+        pct: mStats.pct,
+        completedCount: mStats.completed,
+        submittedCount: mStats.submitted,
+        inProgressCount: mStats.inProgress,
+        pendingCount: mStats.pending,
+        totalAssignments: mStats.total,
         avatar: teamObj.teamLeadId.avatar || '',
       });
     }
@@ -622,14 +667,24 @@ export default function Batches() {
     if (Array.isArray(teamObj.members) && teamObj.members.length > 0) {
       teamObj.members.forEach((m, idx) => {
         if (typeof m === 'object' && m && m.name) {
+          const memId = m._id || `db-mem-${idx}`;
           const isSenior = m.year === 4 || m.memberType === 'senior_developer';
+          const mStats = getMemberStat(memId);
           membersList.push({
-            id: m._id || `db-mem-${idx}`,
+            id: memId,
+            _id: memId,
             name: m.name,
             email: m.email || '',
+            rollNumber: m.rollNumber || '',
             role: isSenior ? 'senior_developer' : 'junior_developer',
             roleTitle: isSenior ? 'Senior Developer' : 'Junior Developer',
-            pct: `${teamScore}%`,
+            score: mStats.score,
+            pct: mStats.pct,
+            completedCount: mStats.completed,
+            submittedCount: mStats.submitted,
+            inProgressCount: mStats.inProgress,
+            pendingCount: mStats.pending,
+            totalAssignments: mStats.total,
             avatar: m.avatar || '',
           });
         }
@@ -689,6 +744,20 @@ export default function Batches() {
     );
   }, [analyticsData, selectedTeam]);
 
+  // Rank among all 9 teams
+  const teamRank = useMemo(() => {
+    if (!analyticsData?.teams || !selectedTeam) return null;
+    const sorted = [...analyticsData.teams].sort(
+      (a, b) =>
+        (typeof b.score === 'number' ? b.score : parseInt(b.performancePct || '0', 10) || 0) -
+        (typeof a.score === 'number' ? a.score : parseInt(a.performancePct || '0', 10) || 0)
+    );
+    const idx = sorted.findIndex(
+      (t) => t.teamNumber === selectedTeam.teamNumber || String(t._id) === String(selectedTeam._id)
+    );
+    return idx !== -1 ? idx + 1 : null;
+  }, [analyticsData, selectedTeam]);
+
   // Recharts Data for Performance Tab (Dynamic from live Atlas DB)
   const performanceTimeData = useMemo(() => {
     if (analyticsData?.trendData && Array.isArray(analyticsData.trendData) && analyticsData.trendData.length > 0) {
@@ -731,7 +800,7 @@ export default function Batches() {
 
   const individualMemberPerformance = (currentTeamMembers || []).map((m) => ({
     name: m.name ? m.name.split(' ')[0] : 'Member',
-    completion: parseInt(m.pct, 10) || 80,
+    completion: typeof m.score === 'number' ? m.score : parseInt(m.pct, 10) || 0,
   }));
 
   // Tasks Tab Data dynamically resolved from live Atlas database
@@ -964,8 +1033,8 @@ export default function Batches() {
                       key={tf}
                       onClick={() => setAnalyticsTimeframe(tf)}
                       className={`px-4 py-1.5 text-xs font-mono font-bold rounded-lg capitalize transition-all cursor-pointer ${analyticsTimeframe === tf
-                          ? 'bg-[#1C1B1A] text-white shadow-xs'
-                          : 'text-[#66645E] hover:text-[#1C1B1A]'
+                        ? 'bg-[#1C1B1A] text-white shadow-xs'
+                        : 'text-[#66645E] hover:text-[#1C1B1A]'
                         }`}
                     >
                       {tf === 'weekly' ? 'Weekly' : tf === 'monthly' ? 'Monthly' : 'Overall'}
@@ -1103,16 +1172,24 @@ export default function Batches() {
                 const awaitingCount = awaitingTeamsList.length;
                 const totalTeamsCount = currentTeamsList.length || 9;
 
+                const topActiveScore =
+                  activeCount > 0
+                    ? analyticsData?.summary?.topTeam?.score ??
+                    Math.max(...activeTeamsList.map((t) => (typeof t.score === 'number' ? t.score : parseInt(t.performancePct || '0', 10) || 0)))
+                    : 0;
+
                 const activeTeamNames =
                   activeTeamsList.length > 0
                     ? activeTeamsList.map((t) => `Team ${t.teamNumber}`).join(', ')
                     : 'None Active';
                 const awaitingTeamNames =
-                  awaitingTeamsList.length > 0
-                    ? awaitingTeamsList.length <= 3
-                      ? awaitingTeamsList.map((t) => `Team ${t.teamNumber}`).join(', ')
-                      : 'Teams 1–5, 7–9'
-                    : 'None';
+                  awaitingTeamsList.length === totalTeamsCount
+                    ? 'All 9 Teams'
+                    : awaitingTeamsList.length > 0
+                      ? awaitingTeamsList.length <= 4
+                        ? awaitingTeamsList.map((t) => `Team ${t.teamNumber}`).join(', ')
+                        : `${awaitingTeamsList.length} Teams`
+                      : 'None';
 
                 const teamHealthData = [
                   {
@@ -1122,14 +1199,17 @@ export default function Batches() {
                     count: activeCount,
                     color: '#10B981', // Emerald green
                     pct: Math.round((activeCount / totalTeamsCount) * 100),
-                    desc: `${activeTeamNames} has submitted tasks (${analyticsData?.summary?.topTeam?.score ?? 77}% Score)`,
+                    desc:
+                      activeCount > 0
+                        ? `${activeTeamNames} has active submissions (${topActiveScore}% Top Score)`
+                        : 'No teams currently active',
                   },
                   {
-                    name: 'Not Started Yet (0%)',
-                    shortLabel: 'Other 8 Teams',
+                    name: `Not Started Yet (${awaitingCount})`,
+                    shortLabel: awaitingTeamNames,
                     value: awaitingCount,
                     count: awaitingCount,
-                    color: '#CBD5E1', // Soft Slate Gray (friendly, NOT harsh red)
+                    color: '#CBD5E1', // Soft Slate Gray
                     pct: Math.round((awaitingCount / totalTeamsCount) * 100),
                     desc: `${awaitingCount} teams have not submitted tasks yet`,
                   },
@@ -1266,8 +1346,8 @@ export default function Batches() {
                               type="button"
                               onClick={() => setDonutViewMode('deliverables')}
                               className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${isDeliverablesMode
-                                  ? 'bg-[#1C1B1A] text-white shadow-xs'
-                                  : 'text-[#66645E] hover:text-[#1C1B1A]'
+                                ? 'bg-[#1C1B1A] text-white shadow-xs'
+                                : 'text-[#66645E] hover:text-[#1C1B1A]'
                                 }`}
                             >
                               Deliverables
@@ -1276,8 +1356,8 @@ export default function Batches() {
                               type="button"
                               onClick={() => setDonutViewMode('teams')}
                               className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-md transition-all cursor-pointer ${!isDeliverablesMode
-                                  ? 'bg-[#1C1B1A] text-white shadow-xs'
-                                  : 'text-[#66645E] hover:text-[#1C1B1A]'
+                                ? 'bg-[#1C1B1A] text-white shadow-xs'
+                                : 'text-[#66645E] hover:text-[#1C1B1A]'
                                 }`}
                             >
                               Teams
@@ -1379,7 +1459,7 @@ export default function Batches() {
                                   </span>
                                 </div>
                                 <span className="font-mono text-xs font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs">
-                                  {analyticsData?.summary?.topTeam?.score ?? 77}% Score ({activeCount} Team)
+                                  {topActiveScore}% Score ({activeCount} {activeCount === 1 ? 'Team' : 'Teams'})
                                 </span>
                               </div>
 
@@ -1391,7 +1471,7 @@ export default function Batches() {
                                   </span>
                                 </div>
                                 <span className="font-mono text-xs text-[#66645E] bg-white px-2 py-0.5 rounded-md border border-[#E0DDD0] shadow-2xs">
-                                  0% Tasks ({awaitingCount} Teams)
+                                  0% Tasks ({awaitingCount} {awaitingCount === 1 ? 'Team' : 'Teams'})
                                 </span>
                               </div>
                             </div>
@@ -1405,9 +1485,17 @@ export default function Batches() {
                                 <>
                                   <strong>{centerCount} deliverables</strong> have been submitted & approved across all teams.
                                 </>
+                              ) : activeCount === 0 ? (
+                                <>
+                                  All <strong>{totalTeamsCount} teams</strong> have not started tasks yet (0 deliverables submitted).
+                                </>
                               ) : (
                                 <>
-                                  <strong>{activeTeamNames}</strong> is currently active with <strong>22 deliverables ({analyticsData?.summary?.topTeam?.score ?? 77}% score)</strong>. The other <strong>{awaitingCount} teams</strong> have not started tasks yet.
+                                  <strong>{activeTeamNames}</strong> is currently active with{' '}
+                                  <strong>
+                                    {deliverablesTotal} deliverables ({topActiveScore}% top score)
+                                  </strong>
+                                  . The other <strong>{awaitingCount} teams</strong> have not started tasks yet.
                                 </>
                               )}
                             </p>
@@ -1510,22 +1598,13 @@ export default function Batches() {
             {/* TAB NAVIGATION PILLS */}
             <div className="inline-flex p-1 bg-[#EEECDF] rounded-full border border-[#E0DDD0]">
               <button
-                onClick={() => setActiveTab('members')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'members'
+                onClick={() => setActiveTab('overview')}
+                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'overview'
                     ? 'bg-[#1C1B1A] text-white shadow-xs'
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
                   }`}
               >
-                Members ({currentTeamMembers.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('performance')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'performance'
-                    ? 'bg-[#1C1B1A] text-white shadow-xs'
-                    : 'text-[#66645E] hover:text-[#1C1B1A]'
-                  }`}
-              >
-                Performance Metrics
+                Overview & Members (Side-by-Side)
               </button>
               <button
                 onClick={() => setActiveTab('tasks')}
@@ -1536,204 +1615,121 @@ export default function Batches() {
               >
                 Assigned Tasks ({filteredTeamTasks.length})
               </button>
+              <button
+                onClick={() => setActiveTab('trend')}
+                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'trend'
+                    ? 'bg-[#1C1B1A] text-white shadow-xs'
+                    : 'text-[#66645E] hover:text-[#1C1B1A]'
+                  }`}
+              >
+                Performance Trend
+              </button>
             </div>
 
-            {/* TAB 1: MEMBERS */}
-            {activeTab === 'members' && (
-              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-6">
-                {/* Team Lead Assignment */}
-                <div className="p-4 bg-[#F2EFE6] rounded-xl border border-[#E0DDD0] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-[#66645E]">Assigned Mentor / Lead</span>
-                    <p className="text-base font-bold text-[#1C1B1A]">
-                      {selectedTeam.teamLeadId?.name || 'No Team Lead Assigned'}
-                    </p>
-                  </div>
-
-                  <select
-                    onChange={(e) => handleAssignLead(selectedTeam._id, e.target.value)}
-                    defaultValue={selectedTeam.teamLeadId?._id || ''}
-                    className="py-1.5 px-3 text-xs rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium cursor-pointer"
-                  >
-                    <option value="">+ Select Team Lead...</option>
-                    {users.map((u) => (
-                      <option key={u._id} value={u._id}>
-                        {u.name} ({u.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Team Members Sections (Junior developer 4 & Senior developers 5) */}
-                <div className="space-y-8 pt-2">
-                  <div className="flex items-center justify-between pb-3 border-b border-[#E2DDD0]">
-                    <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">
-                      Team members
-                    </h3>
-                    <span className="text-xs font-mono font-bold text-[#1C1B1A] bg-[#EEECDF] px-3 py-1 rounded-full border border-[#E0DDD0]">
-                      Total: 9 Members
-                    </span>
-                  </div>
-
-                  {/* SECTION 1: JUNIOR DEVELOPER (4) */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold tracking-tight text-2xl font-bold text-[#1C1B1A]">
-                        Junior developer (4)
-                      </h4>
-                      <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                        3rd Year Students
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {team1JuniorDevs.map((m, idx) => (
-                        <div
-                          key={m.id || idx}
-                          className="bg-white rounded-2xl p-4 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs flex items-center justify-between transition-all"
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <span className="w-7 h-7 rounded-lg bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
-                              {idx + 1}.
-                            </span>
-                            <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center shrink-0">
-                              {getInitials(m.name)}
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-[#1C1B1A]">{m.name}</p>
-                              <p className="text-xs text-[#66645E] font-mono">{m.email}</p>
-                            </div>
-                          </div>
-                          <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
-                            {m.pct} Score
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* SECTION 2: SENIOR DEVELOPERS (5) */}
-                  <div className="space-y-4 pt-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold tracking-tight text-2xl font-bold text-[#1C1B1A]">
-                        Senior developers (5)
-                      </h4>
-                      <span className="text-[11px] font-mono font-bold text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
-                        4th Year (4 Devs + 1 Team Lead)
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {team1SeniorDevs.map((m, idx) => (
-                        <div
-                          key={m.id || idx}
-                          className={`bg-white rounded-2xl p-4 border shadow-2xs flex items-center justify-between transition-all ${m.role === 'team_lead'
-                              ? 'border-purple-300 bg-purple-50/20'
-                              : 'border-[#E0DDD0] hover:border-[#1C1B1A]'
-                            }`}
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <span className="w-7 h-7 rounded-lg bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
-                              {idx + 1}.
-                            </span>
-                            <div
-                              className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${m.role === 'team_lead' ? 'bg-[#1C1B1A] text-amber-300' : 'bg-indigo-950 text-white'
-                                }`}
-                            >
-                              {getInitials(m.name)}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-semibold text-[#1C1B1A]">{m.name}</p>
-                                {m.role === 'team_lead' && (
-                                  <span className="text-[10px] font-mono font-extrabold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-300">
-                                    (Team lead)
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-[#66645E] font-mono">{m.email}</p>
-                            </div>
-                          </div>
-                          <span className="text-xs font-mono font-bold text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200 shrink-0">
-                            {m.pct} Score
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: PERFORMANCE */}
-            {activeTab === 'performance' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Weekly Trend Line Chart */}
-                <div className="lg:col-span-7 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-4">
+            {/* TAB 1: SIDE-BY-SIDE OVERVIEW (TOTAL TEAM + INDIVIDUAL MEMBERS) */}
+            {activeTab === 'overview' && (
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                {/* LEFT COLUMN: TOTAL TEAM PERFORMANCE */}
+                <div className="xl:col-span-5 space-y-6">
+                  {/* Team Health Score Card */}
+                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
+                    <div className="flex items-center justify-between gap-2">
                       <div>
-                        <h4 className="text-sm font-bold text-[#1C1B1A]">Weekly Task Completion Trend</h4>
-                        <p className="text-[11px] text-[#66645E]">Weekly score history and submission velocity</p>
+                        <span className="text-[10px] font-mono font-bold uppercase text-[#66645E]">Team Performance</span>
+                        <h4 className="text-lg font-bold text-[#1C1B1A]">{selectedTeam.name} Overview</h4>
                       </div>
-                      <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0]">
-                        {selectedTeam?.name}
+                      <span className="text-xs font-mono font-bold px-3 py-1 rounded-full border bg-white shadow-2xs">
+                        Rank #{teamRank || 1} of 9
                       </span>
                     </div>
 
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={performanceTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD0" vertical={false} />
-                          <XAxis dataKey="week" stroke="#66645E" fontSize={11} tickLine={false} />
-                          <YAxis stroke="#66645E" fontSize={11} domain={[0, 100]} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                          <Tooltip
-                            content={({ active, payload }) => {
-                              if (active && payload && payload.length) {
-                                const d = payload[0].payload;
-                                return (
-                                  <div className="bg-[#1C1B1A] text-white px-3 py-2 rounded-xl shadow-xl text-xs font-mono border border-neutral-700">
-                                    <p className="font-bold text-amber-300">{d.week}</p>
-                                    <p className="text-white mt-1">
-                                      Score: <span className="font-bold text-emerald-400">{d.score}%</span>
-                                    </p>
-                                    <p className="text-neutral-300">
-                                      Submissions: <span className="font-bold">{d.submissions || 0}</span>
-                                    </p>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="score"
-                            stroke="#1C1B1A"
-                            strokeWidth={3}
-                            dot={{ r: 4, fill: '#1C1B1A', stroke: '#FFF', strokeWidth: 2 }}
-                            activeDot={{ r: 6, fill: '#10B981', stroke: '#FFF', strokeWidth: 2 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                    {/* Score Gauge & Status Banner */}
+                    <div className="p-4 rounded-xl bg-white border border-[#E0DDD0] flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-full bg-[#1C1B1A] text-white flex flex-col items-center justify-center shrink-0 shadow-md">
+                          <span className="text-xl font-black font-mono leading-none">
+                            {selectedTeamAnalytics?.performancePct || selectedTeam?.performancePct || '0%'}
+                          </span>
+                          <span className="text-[9px] font-mono text-gray-300 uppercase tracking-widest mt-0.5">Score</span>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-[#1C1B1A]">Overall Performance</p>
+                          <p className="text-[11px] text-[#66645E]">
+                            Status:{' '}
+                            <strong className={
+                              (selectedTeamAnalytics?.score || 0) >= 70
+                                ? 'text-emerald-700'
+                                : (selectedTeamAnalytics?.score || 0) >= 40
+                                  ? 'text-amber-700'
+                                  : (selectedTeamAnalytics?.score || 0) > 0
+                                    ? 'text-rose-700'
+                                    : 'text-stone-600'
+                            }>
+                              {selectedTeamAnalytics?.status || selectedTeam?.status || 'Inactive'}
+                            </strong>
+                          </p>
+                        </div>
+                      </div>
+
+                      <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${(selectedTeamAnalytics?.score || 0) >= 70
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : (selectedTeamAnalytics?.score || 0) >= 40
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : (selectedTeamAnalytics?.score || 0) > 0
+                              ? 'bg-rose-50 text-rose-800 border-rose-200'
+                              : 'bg-stone-100 text-stone-700 border-stone-200'
+                        }`}>
+                        {(selectedTeamAnalytics?.score || 0) >= 70
+                          ? 'Optimal'
+                          : (selectedTeamAnalytics?.score || 0) >= 40
+                            ? 'Moderate'
+                            : (selectedTeamAnalytics?.score || 0) > 0
+                              ? 'Attention'
+                              : 'No Activity'}
+                      </span>
+                    </div>
+
+                    {/* 4 KPI Metric Chips */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-[#FAF9F5] rounded-xl border border-[#E8E5DA]">
+                        <span className="text-[10px] font-mono uppercase text-[#66645E] block">Approved Tasks</span>
+                        <p className="text-base font-bold text-[#1C1B1A]">
+                          {selectedTeamAnalytics?.completedAssignments || 0}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-[#FAF9F5] rounded-xl border border-[#E8E5DA]">
+                        <span className="text-[10px] font-mono uppercase text-[#66645E] block">Under Review</span>
+                        <p className="text-base font-bold text-[#1C1B1A]">
+                          {selectedTeamAnalytics?.submittedAssignments || 0}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-[#FAF9F5] rounded-xl border border-[#E8E5DA]">
+                        <span className="text-[10px] font-mono uppercase text-[#66645E] block">In Progress</span>
+                        <p className="text-base font-bold text-[#1C1B1A]">
+                          {selectedTeamAnalytics?.inProgressAssignments || 0}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-[#FAF9F5] rounded-xl border border-[#E8E5DA]">
+                        <span className="text-[10px] font-mono uppercase text-[#66645E] block">Total Expected</span>
+                        <p className="text-base font-bold text-[#1C1B1A]">
+                          {selectedTeamAnalytics?.totalExpectedAssignments || 0}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Team Task Completion Donut Chart */}
-                <div className="lg:col-span-5 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs flex flex-col justify-between">
-                  <div>
+                  {/* Deliverables Status Donut Chart */}
+                  <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs">
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <div>
-                        <h4 className="text-sm font-bold text-[#1C1B1A]">Completion Status</h4>
-                        <p className="text-[11px] text-[#66645E]">Deliverable breakdown for {selectedTeam?.name}</p>
+                        <h4 className="text-sm font-bold text-[#1C1B1A]">Task Deliverables Breakdown</h4>
+                        <p className="text-[11px] text-[#66645E]">Live submission status across team tasks</p>
                       </div>
                       <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                        {selectedTeam?.performancePct || '0%'}
+                        {selectedTeamAnalytics?.completionPct ?? 0}% Done
                       </span>
                     </div>
 
-                    {/* Donut Chart with Center Stat */}
                     <div className="h-52 w-full relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -1779,18 +1775,16 @@ export default function Batches() {
                         </PieChart>
                       </ResponsiveContainer>
 
-                      {/* Donut Center Ring Label */}
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                         <span className="text-2xl font-black text-[#1C1B1A]">
-                          {selectedTeam?.performancePct || '0%'}
+                          {selectedTeamAnalytics?.performancePct || selectedTeam?.performancePct || '0%'}
                         </span>
                         <span className="text-[10px] font-mono uppercase tracking-wider text-[#66645E]">
-                          Performance
+                          Team Score
                         </span>
                       </div>
                     </div>
 
-                    {/* Legend Pills Grid */}
                     <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[#EBE8DC]">
                       {taskCompletionPieData.map((item, idx) => (
                         <div
@@ -1811,6 +1805,331 @@ export default function Batches() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Team Lead Assignment Card */}
+                  <div className="p-4 bg-[#F2EFE6] rounded-2xl border border-[#E0DDD0] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase text-[#66645E]">Assigned Mentor / Lead</span>
+                        <p className="text-sm font-bold text-[#1C1B1A]">
+                          {selectedTeam.teamLeadId?.name || 'No Team Lead Assigned'}
+                        </p>
+                        <p className="text-xs text-[#66645E] font-mono">{selectedTeam.teamLeadId?.email || 'unassigned@kiet.edu'}</p>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-purple-900 bg-purple-100 px-2.5 py-1 rounded-full border border-purple-200">
+                        Team Lead
+                      </span>
+                    </div>
+
+                    <select
+                      onChange={(e) => handleAssignLead(selectedTeam._id, e.target.value)}
+                      defaultValue={selectedTeam.teamLeadId?._id || ''}
+                      className="w-full py-2 px-3 text-xs rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] font-medium cursor-pointer"
+                    >
+                      <option value="">+ Reassign Team Lead...</option>
+                      {users.map((u) => (
+                        <option key={u._id} value={u._id}>
+                          {u.name} ({u.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: INDIVIDUAL MEMBERS PERFORMANCE */}
+                <div className="xl:col-span-7 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2DDD0]">
+                    <div>
+                      <h3 className="text-2xl font-bold tracking-tight text-[#1C1B1A]">Individual Member Performance</h3>
+                      <p className="text-xs text-[#66645E] mt-0.5">
+                        Granular student performance evaluated directly from task assignments & submissions
+                      </p>
+                    </div>
+                    <div className="inline-flex p-1 bg-[#EEECDF] rounded-xl border border-[#E0DDD0] shrink-0">
+                      {['all', 'junior', 'senior'].map((mf) => (
+                        <button
+                          key={mf}
+                          type="button"
+                          onClick={() => setMemberFilter(mf)}
+                          className={`px-3 py-1 text-[11px] font-mono font-bold rounded-lg capitalize transition-all cursor-pointer ${memberFilter === mf
+                              ? 'bg-[#1C1B1A] text-white shadow-xs'
+                              : 'text-[#66645E] hover:text-[#1C1B1A]'
+                            }`}
+                        >
+                          {mf === 'all' ? 'All (9)' : mf === 'junior' ? 'Junior (4)' : 'Senior (5)'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SECTION 1: JUNIOR DEVELOPERS */}
+                  {(memberFilter === 'all' || memberFilter === 'junior') && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-bold text-[#1C1B1A]">Junior Developers (4)</h4>
+                          <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            3rd Year Students
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono text-[#66645E]">
+                          {team1JuniorDevs.length} members
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {team1JuniorDevs.map((m, idx) => {
+                          const scoreNum = m.score ?? (parseInt(m.pct, 10) || 0);
+                          const statusCls =
+                            scoreNum >= 70
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : scoreNum >= 40
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : m.submittedCount > 0 || m.inProgressCount > 0
+                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                  : 'bg-stone-100 text-stone-600 border-stone-200';
+                          const statusLabel =
+                            scoreNum >= 70
+                              ? 'Optimal'
+                              : scoreNum >= 40
+                                ? 'Moderate'
+                                : m.submittedCount > 0
+                                  ? 'Under Review'
+                                  : m.inProgressCount > 0
+                                    ? 'In Progress'
+                                    : 'Not Started';
+
+                          return (
+                            <div
+                              key={m.id || idx}
+                              className="bg-white rounded-2xl p-4 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs transition-all space-y-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="w-6 h-6 rounded-md bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                                    {getInitials(m.name)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-semibold text-[#1C1B1A] truncate">{m.name}</p>
+                                      {m.rollNumber && (
+                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-700 px-1.5 py-0.5 rounded border border-stone-200">
+                                          {m.rollNumber}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-[#66645E] font-mono truncate">{m.email}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${statusCls}`}>
+                                    {statusLabel}
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-0.5 rounded-md border border-[#E0DDD0]">
+                                    {scoreNum}% Score
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Progress Bar & Deliverables Metrics */}
+                              <div>
+                                <div className="flex items-center justify-between text-[11px] font-mono text-[#66645E] mb-1">
+                                  <span>
+                                    Tasks: <strong>{m.completedCount || 0} completed</strong>{' '}
+                                    {m.submittedCount > 0 ? `• ${m.submittedCount} under review` : ''}
+                                  </span>
+                                  <span>{scoreNum}%</span>
+                                </div>
+                                <div className="w-full h-2 rounded-full bg-[#EEECDF] overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all duration-500 rounded-full ${scoreNum >= 70
+                                        ? 'bg-emerald-500'
+                                        : scoreNum >= 40
+                                          ? 'bg-amber-500'
+                                          : scoreNum > 0
+                                            ? 'bg-blue-500'
+                                            : 'bg-stone-300'
+                                      }`}
+                                    style={{ width: `${Math.max(scoreNum, 0)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 2: SENIOR DEVELOPERS */}
+                  {(memberFilter === 'all' || memberFilter === 'senior') && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-bold text-[#1C1B1A]">Senior Developers & Lead (5)</h4>
+                          <span className="text-[10px] font-mono font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                            4th Year Students
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono text-[#66645E]">
+                          {team1SeniorDevs.length} members
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {team1SeniorDevs.map((m, idx) => {
+                          const scoreNum = m.score ?? (parseInt(m.pct, 10) || 0);
+                          const isLead = m.role === 'team_lead';
+                          const statusCls =
+                            scoreNum >= 70
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : scoreNum >= 40
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : m.submittedCount > 0 || m.inProgressCount > 0
+                                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                  : 'bg-stone-100 text-stone-600 border-stone-200';
+                          const statusLabel =
+                            scoreNum >= 70
+                              ? 'Optimal'
+                              : scoreNum >= 40
+                                ? 'Moderate'
+                                : m.submittedCount > 0
+                                  ? 'Under Review'
+                                  : m.inProgressCount > 0
+                                    ? 'In Progress'
+                                    : 'Not Started';
+
+                          return (
+                            <div
+                              key={m.id || idx}
+                              className={`rounded-2xl p-4 border shadow-2xs transition-all space-y-3 ${isLead
+                                  ? 'bg-purple-50/30 border-purple-200 hover:border-purple-400'
+                                  : 'bg-white border-[#E0DDD0] hover:border-[#1C1B1A]'
+                                }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="w-6 h-6 rounded-md bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <div
+                                    className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${isLead ? 'bg-[#1C1B1A] text-amber-300' : 'bg-indigo-950 text-white'
+                                      }`}
+                                  >
+                                    {getInitials(m.name)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-semibold text-[#1C1B1A] truncate">{m.name}</p>
+                                      {isLead ? (
+                                        <span className="text-[10px] font-mono font-extrabold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-300">
+                                          Team Lead
+                                        </span>
+                                      ) : m.rollNumber ? (
+                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-700 px-1.5 py-0.5 rounded border border-stone-200">
+                                          {m.rollNumber}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <p className="text-xs text-[#66645E] font-mono truncate">{m.email}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${statusCls}`}>
+                                    {statusLabel}
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-[#1C1B1A] bg-[#EEECDF] px-2.5 py-0.5 rounded-md border border-[#E0DDD0]">
+                                    {scoreNum}% Score
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Progress Bar & Deliverables Metrics */}
+                              <div>
+                                <div className="flex items-center justify-between text-[11px] font-mono text-[#66645E] mb-1">
+                                  <span>
+                                    Tasks: <strong>{m.completedCount || 0} completed</strong>{' '}
+                                    {m.submittedCount > 0 ? `• ${m.submittedCount} under review` : ''}
+                                  </span>
+                                  <span>{scoreNum}%</span>
+                                </div>
+                                <div className="w-full h-2 rounded-full bg-[#EEECDF] overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all duration-500 rounded-full ${scoreNum >= 70
+                                        ? 'bg-emerald-500'
+                                        : scoreNum >= 40
+                                          ? 'bg-amber-500'
+                                          : scoreNum > 0
+                                            ? 'bg-blue-500'
+                                            : 'bg-stone-300'
+                                      }`}
+                                    style={{ width: `${Math.max(scoreNum, 0)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: PERFORMANCE TREND */}
+            {activeTab === 'trend' && (
+              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div>
+                    <h4 className="text-lg font-bold text-[#1C1B1A]">Weekly Performance & Submission Trend</h4>
+                    <p className="text-xs text-[#66645E]">History of velocity and completion scores for {selectedTeam?.name}</p>
+                  </div>
+                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0]">
+                    {selectedTeam?.name}
+                  </span>
+                </div>
+
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={performanceTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD0" vertical={false} />
+                      <XAxis dataKey="week" stroke="#66645E" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#66645E" fontSize={11} domain={[0, 100]} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const d = payload[0].payload;
+                            return (
+                              <div className="bg-[#1C1B1A] text-white px-3 py-2 rounded-xl shadow-xl text-xs font-mono border border-neutral-700">
+                                <p className="font-bold text-amber-300">{d.week}</p>
+                                <p className="text-white mt-1">
+                                  Score: <span className="font-bold text-emerald-400">{d.score}%</span>
+                                </p>
+                                <p className="text-neutral-300">
+                                  Submissions: <span className="font-bold">{d.submissions || 0}</span>
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        stroke="#1C1B1A"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#1C1B1A', stroke: '#FFF', strokeWidth: 2 }}
+                        activeDot={{ r: 6, fill: '#10B981', stroke: '#FFF', strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             )}
@@ -1843,8 +2162,8 @@ export default function Batches() {
                           <p className="text-xs text-[#66645E]">{t.topic} • Deadline: {t.deadline}</p>
                         </div>
                         <span className={`text-xs font-mono font-medium px-2.5 py-0.5 rounded-full ${t.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                            t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
-                              'bg-amber-50 text-amber-800 border border-amber-200'
+                          t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
+                            'bg-amber-50 text-amber-800 border border-amber-200'
                           }`}>
                           {t.status} ({t.completion})
                         </span>
@@ -2034,8 +2353,8 @@ export default function Batches() {
                   {/* Status Banner */}
                   <div
                     className={`rounded-2xl p-4 border flex items-start gap-3 ${validationResult.valid
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
-                        : 'bg-amber-50/80 border-amber-300 text-amber-950'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                      : 'bg-amber-50/80 border-amber-300 text-amber-950'
                       }`}
                   >
                     {validationResult.valid ? (
@@ -2059,8 +2378,8 @@ export default function Batches() {
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2">
                         <div
                           className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.teamsDetected === 9
-                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
-                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                            ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                            : 'bg-rose-100/70 border-rose-300 text-rose-800'
                             }`}
                         >
                           <div>Teams</div>
@@ -2071,8 +2390,8 @@ export default function Batches() {
 
                         <div
                           className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalLeads === 9
-                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
-                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                            ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                            : 'bg-rose-100/70 border-rose-300 text-rose-800'
                             }`}
                         >
                           <div>Team Leads</div>
@@ -2083,8 +2402,8 @@ export default function Batches() {
 
                         <div
                           className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalSds === 36
-                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
-                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                            ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                            : 'bg-rose-100/70 border-rose-300 text-rose-800'
                             }`}
                         >
                           <div>Senior Devs</div>
@@ -2095,8 +2414,8 @@ export default function Batches() {
 
                         <div
                           className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalJds === 36
-                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
-                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                            ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                            : 'bg-rose-100/70 border-rose-300 text-rose-800'
                             }`}
                         >
                           <div>Junior Devs</div>
@@ -2107,8 +2426,8 @@ export default function Batches() {
 
                         <div
                           className={`rounded-xl p-2 text-center border font-mono text-xs font-semibold ${validationResult.stats?.totalRows === 81
-                              ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
-                              : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                            ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                            : 'bg-rose-100/70 border-rose-300 text-rose-800'
                             }`}
                         >
                           <div>Total Students</div>
@@ -2186,8 +2505,8 @@ export default function Batches() {
                     type="submit"
                     disabled={!validationResult.valid || isSubmitting}
                     className={`px-6 py-2.5 rounded-full font-medium transition-all cursor-pointer flex items-center gap-2 ${validationResult.valid && !isSubmitting
-                        ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md'
-                        : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
+                      ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md'
+                      : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
                       }`}
                   >
                     {isSubmitting ? (

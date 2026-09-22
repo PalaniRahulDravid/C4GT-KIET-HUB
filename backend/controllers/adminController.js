@@ -241,16 +241,38 @@ const computeTeamMetrics = (teamDoc, allTasks, allAssignments, timeframe = 'over
     score = Math.max(0, Math.min(100, Math.round(basePct - penalty)));
   }
 
-  // Count how many tasks have at least some progress or are completed by team
-  const tasksCompletedCount = relevantTasks.filter((t) => {
-    const tAssigns = relevantAssignments.filter((a) => (a.taskId?._id || a.taskId).toString() === t._id.toString());
-    return tAssigns.some((a) => a.status === 'completed');
-  }).length;
+  // Compute granular individual member performance metrics
+  const membersAnalytics = allTeamUserIds.map((uid) => {
+    const userAssignments = relevantAssignments.filter(
+      (a) => (a.studentId?._id || a.studentId || '').toString() === uid.toString()
+    );
+    const mCompleted = userAssignments.filter((a) => a.status === 'completed').length;
+    const mSubmitted = userAssignments.filter((a) => a.status === 'submitted').length;
+    const mInProgress = userAssignments.filter((a) => a.status === 'in_progress').length;
+    const mPending = userAssignments.filter((a) => a.status === 'pending').length;
+    const mTotal = userAssignments.length;
+    const mScore =
+      mTotal > 0
+        ? Math.min(100, Math.round(((mCompleted * 1.0 + mSubmitted * 0.7 + mInProgress * 0.2) / mTotal) * 100))
+        : 0;
+
+    return {
+      userId: uid,
+      completed: mCompleted,
+      submitted: mSubmitted,
+      inProgress: mInProgress,
+      pending: mPending,
+      totalAssignments: mTotal,
+      score: mScore,
+      pct: `${mScore}%`,
+    };
+  });
 
   return {
     ...team,
     teamLeadName: team.teamLeadId?.name || 'Unassigned',
     membersCount: (team.members || []).length + (teamLeadId ? 1 : 0),
+    membersAnalytics,
     score,
     performancePct: `${score}%`,
     progressPercentage: score,
@@ -1415,10 +1437,11 @@ const getTeamPerformanceAnalytics = async (req, res) => {
       summary: {
         averageScore: avgScore,
         totalSubmissions,
+        activeTeamsCount: teamsAnalytics.filter((t) => t.score > 0).length,
+        inactiveTeamsCount: teamsAnalytics.filter((t) => t.score === 0).length,
         topTeam: topTeam
           ? { teamNumber: topTeam.teamNumber, name: topTeam.name, score: topTeam.score, track: topTeam.track }
           : null,
-        activeTeamsCount: teamsAnalytics.filter((t) => t.score > 0).length,
         totalTeams: teamsAnalytics.length,
       },
     });

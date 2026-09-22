@@ -439,12 +439,13 @@ const getTeamTasks = async (req, res) => {
     const tasksWithMembersProgress = tasks.map((t) => {
       const tObj = t.toObject();
       const taskAssignments = assignments.filter(
-        (a) => a.taskId.toString() === t._id.toString()
+        (a) => a.taskId && (a.taskId._id || a.taskId).toString() === t._id.toString()
       );
       tObj.assignments = taskAssignments;
 
-      const isCreatedByLead = t.createdBy && t.createdBy._id.toString() === req.user._id.toString();
-      const isCreatedByAdmin = t.createdBy && t.createdBy.role === 'admin';
+      const createdById = t.createdBy ? (t.createdBy._id || t.createdBy).toString() : '';
+      const isCreatedByLead = createdById === req.user._id.toString();
+      const isCreatedByAdmin = Boolean(t.createdBy && t.createdBy.role === 'admin');
 
       // Determine task audience / scope
       let audience = tObj.taskScope || 'students';
@@ -468,17 +469,22 @@ const getTeamTasks = async (req, res) => {
       );
       tObj.leadAssignment = leadAssignment || null;
 
+      // Filter out any assignments with missing/deleted studentId to avoid crashes
+      const validAssignments = taskAssignments.filter((a) => a.studentId && (a.studentId._id || a.studentId));
+
       // Determine targeted assignees
       const hasSpecificAssignees = Array.isArray(tObj.assignedTo) && tObj.assignedTo.length > 0;
       const relevantAssignments = hasSpecificAssignees
-        ? taskAssignments.filter((a) =>
-            tObj.assignedTo.some(
-              (u) => (u._id || u).toString() === (a.studentId?._id || a.studentId).toString()
-            )
-          )
-        : taskAssignments.filter(
-            (a) => (a.studentId?._id || a.studentId).toString() !== teamLeadId || audience === 'team_lead'
-          );
+        ? validAssignments.filter((a) => {
+            const sid = (a.studentId._id || a.studentId).toString();
+            return tObj.assignedTo.some(
+              (u) => (u._id || u).toString() === sid
+            );
+          })
+        : validAssignments.filter((a) => {
+            const sid = (a.studentId._id || a.studentId).toString();
+            return sid !== teamLeadId || audience === 'team_lead';
+          });
 
       tObj.totalAssigned = hasSpecificAssignees
         ? tObj.assignedTo.length
