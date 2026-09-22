@@ -8,7 +8,7 @@ const {
   deleteResource,
   streamResourceFile,
 } = require('../controllers/resourceController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 const router = express.Router();
@@ -17,15 +17,17 @@ const router = express.Router();
 router.get('/:id/file', streamResourceFile);
 router.get('/:id/download', streamResourceFile);
 
+// View and filter resources (available to all students/admins; personalized if token/cookie present)
+router.get('/', optionalAuth, getResources);
+
+// Download counter
+router.post('/:id/download', optionalAuth, recordResourceDownload);
+
 // Require authentication for all protected management endpoints
 router.use(protect);
 
-// View and filter resources
-router.get('/', getResources);
-
-// Student completion toggle & download counter
+// Student completion toggle
 router.post('/:id/complete', toggleResourceCompletion);
-router.post('/:id/download', recordResourceDownload);
 
 // Admin & Team Lead upload / creation endpoints
 router.post(

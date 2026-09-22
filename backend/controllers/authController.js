@@ -214,8 +214,11 @@ const getMe = async (req, res) => {
     });
   }
 
+  const token = generateToken(req.user);
+
   res.status(200).json({
     success: true,
+    token,
     user: formatUserResponse(req.user),
   });
 };

@@ -26,7 +26,7 @@ import {
 import { Skeleton, SkeletonResourceCard } from '../../components/skeleton';
 
 export default function AdminResources() {
-  const { token, apiBaseUrl } = useAuth();
+  const { token, apiBaseUrl, loading: authLoading } = useAuth();
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -46,8 +46,10 @@ export default function AdminResources() {
 
   const fetchResources = async () => {
     try {
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/resources`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -64,8 +66,10 @@ export default function AdminResources() {
   };
 
   useEffect(() => {
-    fetchResources();
-  }, [token]);
+    if (!authLoading) {
+      fetchResources();
+    }
+  }, [token, authLoading]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -80,9 +84,11 @@ export default function AdminResources() {
 
     try {
       setDeletingId(id);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/resources/${id}`, {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       const data = await res.json();
       if (res.ok && data.success) {

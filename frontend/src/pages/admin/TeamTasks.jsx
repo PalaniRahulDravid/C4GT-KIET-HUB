@@ -101,9 +101,10 @@ export default function TeamTasks() {
   const fetchResources = async () => {
     try {
       setLoadingResources(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/resources`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -183,12 +184,13 @@ export default function TeamTasks() {
     }
 
     try {
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/resources`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
         body: JSON.stringify({
           title: newResourceTitle,

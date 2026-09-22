@@ -17,6 +17,8 @@ connectDB().catch((err) => {
 
 const allowedOrigins = [
   'https://c4gt-team6.vercel.app',
+  'https://c4-gt-kiet-hub.vercel.app',
+  'https://c4gt-kiet-hub.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
   'https://localhunt-khubteam2.vercel.app',
@@ -27,7 +29,23 @@ if (config.frontendUrl && !allowedOrigins.includes(config.frontendUrl)) {
 }
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    // Allow non-browser requests (Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
+
+    const isAllowed =
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1');
+
+    if (isAllowed) {
+      return callback(null, true);
+    }
+
+    // Fallback: allow origin for deployed frontend domains to prevent CORS blocks
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

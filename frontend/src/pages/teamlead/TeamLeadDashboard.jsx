@@ -281,9 +281,10 @@ export default function TeamLeadDashboard() {
   const fetchHubResources = async () => {
     try {
       setLoadingResources(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/resources`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -397,11 +398,12 @@ export default function TeamLeadDashboard() {
 
     try {
       setCreatingCustomLink(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/resources/link`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -809,11 +811,10 @@ export default function TeamLeadDashboard() {
       {/* Toast Alert */}
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold animate-in fade-in ${
-            toast.type === 'error'
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold animate-in fade-in ${toast.type === 'error'
               ? 'bg-rose-900 text-white border-rose-700'
               : 'bg-slate-900 text-white border-slate-800'
-          }`}
+            }`}
         >
           {toast.type === 'error' ? (
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -1084,11 +1085,10 @@ export default function TeamLeadDashboard() {
                           setTaskAudienceFilter('all');
                           if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          taskAudienceFilter === 'all'
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${taskAudienceFilter === 'all'
                             ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                          }`}
                       >
                         <Layers className="w-3.5 h-3.5 text-slate-500" />
                         <span>All Tasks</span>
@@ -1102,11 +1102,10 @@ export default function TeamLeadDashboard() {
                           setTaskAudienceFilter('students');
                           if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          taskAudienceFilter === 'students'
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${taskAudienceFilter === 'students'
                             ? 'bg-white text-blue-700 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                          }`}
                       >
                         <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
                         <span>Student Tasks</span>
@@ -1120,11 +1119,10 @@ export default function TeamLeadDashboard() {
                           setTaskAudienceFilter('team_lead');
                           setSelectedPersonFilter('team_lead');
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          taskAudienceFilter === 'team_lead'
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${taskAudienceFilter === 'team_lead'
                             ? 'bg-white text-purple-700 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                          }`}
                       >
                         <Crown className="w-3.5 h-3.5 text-purple-600" />
                         <span>Team Lead (My Tasks)</span>
@@ -1373,13 +1371,12 @@ export default function TeamLeadDashboard() {
                       return (
                         <Card
                           key={task._id}
-                          className={`overflow-hidden border transition-all duration-200 ${
-                            deadlineInfo.status === 'overdue'
+                          className={`overflow-hidden border transition-all duration-200 ${deadlineInfo.status === 'overdue'
                               ? 'border-rose-200 shadow-xs'
                               : isLeadTask
-                              ? 'border-purple-200/80 shadow-2xs'
-                              : 'border-slate-200 shadow-2xs hover:border-slate-300'
-                          }`}
+                                ? 'border-purple-200/80 shadow-2xs'
+                                : 'border-slate-200 shadow-2xs hover:border-slate-300'
+                            }`}
                         >
                           {/* Card Header */}
                           <CardHeader className="p-4 sm:p-5 pb-3 border-b border-slate-100 bg-slate-50/60">
@@ -1412,11 +1409,10 @@ export default function TeamLeadDashboard() {
 
                                   {task.priority && task.priority !== 'Normal' && (
                                     <span
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase font-mono ${
-                                        task.priority === 'Urgent'
+                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase font-mono ${task.priority === 'Urgent'
                                           ? 'bg-rose-100 text-rose-800 border border-rose-200'
                                           : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                      }`}
+                                        }`}
                                     >
                                       {task.priority} Priority
                                     </span>
@@ -1550,9 +1546,8 @@ export default function TeamLeadDashboard() {
                                     {isExpanded ? 'Hide Member Submissions' : `Review Submissions (${targetMembers.length} members)`}
                                   </span>
                                   <ChevronDown
-                                    className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                      isExpanded ? 'rotate-180' : ''
-                                    }`}
+                                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''
+                                      }`}
                                   />
                                 </Button>
                               </div>
@@ -1874,41 +1869,37 @@ export default function TeamLeadDashboard() {
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
                     <button
                       onClick={() => setResourceCategory('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'all'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'all'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       All ({hubResources.length})
                     </button>
                     <button
                       onClick={() => setResourceCategory('docs')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'docs'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'docs'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Docs & PDFs
                     </button>
                     <button
                       onClick={() => setResourceCategory('code')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'code'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'code'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Repositories
                     </button>
                     <button
                       onClick={() => setResourceCategory('dsa')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        resourceCategory === 'dsa'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'dsa'
                           ? 'bg-white text-slate-900 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       DSA Problems
                     </button>
@@ -2018,11 +2009,10 @@ export default function TeamLeadDashboard() {
                   <button
                     type="button"
                     onClick={() => setTaskAssigneeType('all_students')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      taskAssigneeType === 'all_students'
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${taskAssigneeType === 'all_students'
                         ? 'border-blue-600 bg-blue-50/80 text-blue-900'
                         : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-1.5 font-bold text-xs">
                       <Users className="w-3.5 h-3.5 text-blue-600" />
@@ -2036,11 +2026,10 @@ export default function TeamLeadDashboard() {
                   <button
                     type="button"
                     onClick={() => setTaskAssigneeType('specific_students')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      taskAssigneeType === 'specific_students'
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${taskAssigneeType === 'specific_students'
                         ? 'border-blue-600 bg-blue-50/80 text-blue-900'
                         : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-1.5 font-bold text-xs">
                       <UserIcon className="w-3.5 h-3.5 text-blue-600" />
@@ -2078,11 +2067,10 @@ export default function TeamLeadDashboard() {
                         return (
                           <label
                             key={m._id}
-                            className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
-                              isChecked
+                            className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${isChecked
                                 ? 'bg-blue-50/80 border-blue-300 text-blue-900 font-semibold'
                                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                            }`}
+                              }`}
                           >
                             <input
                               type="checkbox"
@@ -2345,11 +2333,10 @@ export default function TeamLeadDashboard() {
                                   isAttached ? prev.filter((id) => id !== r._id) : [...prev, r._id]
                                 );
                               }}
-                              className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-all ${
-                                isAttached
+                              className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-all ${isAttached
                                   ? 'bg-blue-50/90 border-blue-300 text-blue-900 font-semibold'
                                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/80'
-                              }`}
+                                }`}
                             >
                               <div className="flex items-center gap-2 truncate pr-2">
                                 <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 text-[10px] font-mono uppercase font-semibold">
@@ -2530,11 +2517,10 @@ export default function TeamLeadDashboard() {
       {/* MANDATORY / VOLUNTARY PASSWORD CHANGE MODAL */}
       {isPasswordModalOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${
-            isMandatoryPasswordChange
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${isMandatoryPasswordChange
               ? 'bg-black/85 backdrop-blur-md'
               : 'bg-black/60 backdrop-blur-xs'
-          }`}
+            }`}
           onClick={(e) => {
             // Prevent dismissal if mandatory
             if (!isMandatoryPasswordChange && e.target === e.currentTarget) {
@@ -2723,11 +2709,10 @@ export default function TeamLeadDashboard() {
                 <button
                   type="submit"
                   disabled={isChangingPass || !currentPassword || newPassword.length < 6 || newPassword !== confirmPassword}
-                  className={`px-5 py-2.5 rounded-full font-medium transition-all flex items-center gap-2 ${
-                    !isChangingPass && currentPassword && newPassword.length >= 6 && newPassword === confirmPassword
+                  className={`px-5 py-2.5 rounded-full font-medium transition-all flex items-center gap-2 ${!isChangingPass && currentPassword && newPassword.length >= 6 && newPassword === confirmPassword
                       ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md cursor-pointer'
                       : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
-                  }`}
+                    }`}
                 >
                   {isChangingPass ? (
                     <>

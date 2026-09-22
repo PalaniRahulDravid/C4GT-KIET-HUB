@@ -250,9 +250,10 @@ export default function StudentDashboard() {
   const fetchHubResources = async () => {
     try {
       setLoadingHubResources(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/resources`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -390,12 +391,13 @@ export default function StudentDashboard() {
     if (!resource || !resource._id) return;
     try {
       setTogglingResourceId(resource._id);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/resources/${resource._id}/complete`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
       });
       const data = await res.json();
@@ -415,10 +417,11 @@ export default function StudentDashboard() {
 
   const handleDownloadResource = (resource) => {
     if (!resource || !resource.url) return;
+    const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
     fetch(`${API_BASE_URL}/resources/${resource._id}/download`, {
       method: 'POST',
       credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
     }).catch(() => { });
 
     window.open(resource.url, '_blank', 'noopener,noreferrer');

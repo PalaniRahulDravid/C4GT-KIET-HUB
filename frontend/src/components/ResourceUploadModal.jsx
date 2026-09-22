@@ -82,6 +82,7 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
           return;
         }
 
+        const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('title', title.trim());
@@ -91,9 +92,8 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
 
         const res = await fetch(`${baseUrl}/resources/upload`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
           body: formData,
         });
 
@@ -115,11 +115,13 @@ export default function ResourceUploadModal({ isOpen, onClose, onResourceUploade
           return;
         }
 
+        const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
         const res = await fetch(`${baseUrl}/resources/link`, {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify({
             title: title.trim(),

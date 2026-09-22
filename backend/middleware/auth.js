@@ -72,7 +72,43 @@ const authorize = (...roles) => {
   };
 };
 
+/**
+ * Optional Auth middleware:
+ * Attaches user to req.user if a valid token/cookie exists, but never rejects if absent or invalid.
+ */
+const optionalAuth = async (req, res, next) => {
+  let token;
+
+  if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  } else if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer ')
+  ) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.query && req.query.token) {
+    token = req.query.token;
+  }
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, config.jwtSecret);
+    const user = await User.findById(decoded.id);
+    if (user && user.status === 'active') {
+      req.user = user;
+    }
+  } catch (error) {
+    // If token is invalid or expired, continue gracefully without attaching user
+  }
+
+  next();
+};
+
 module.exports = {
   protect,
   authorize,
+  optionalAuth,
 };

@@ -52,41 +52,56 @@ export const isStudentProfileComplete = (user) => {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [token, setToken] = useState(() => {
+    try {
+      return localStorage.getItem('c4gt_token') || null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
-  // Clear any legacy localStorage token on mount to ensure pure cookie-based auth
-  useEffect(() => {
+  const updateToken = (newToken) => {
+    setToken(newToken || null);
     try {
-      localStorage.removeItem('c4gt_token');
+      if (newToken) {
+        localStorage.setItem('c4gt_token', newToken);
+      } else {
+        localStorage.removeItem('c4gt_token');
+      }
     } catch (e) {
       // ignore
     }
-  }, []);
+  };
 
-  // Fetch LIVE user from MongoDB Atlas via HTTP-only session cookie
+  // Fetch LIVE user from MongoDB Atlas via cookie or Bearer token
   useEffect(() => {
     const initAuth = async () => {
       try {
+        const storedToken = (typeof window !== 'undefined' && localStorage.getItem('c4gt_token')) || token;
         const response = await fetch(`${API_BASE_URL}/auth/me`, {
-          credentials: 'include', // Automatically sends HTTP cookie
+          credentials: 'include', // Automatically sends HTTP cookie if allowed
+          headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
         });
 
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.user) {
-            // Live user verified directly from MongoDB Atlas
             setUser(data.user);
+            if (data.token) {
+              updateToken(data.token);
+            }
           } else {
             setUser(null);
+            updateToken(null);
           }
         } else {
-          // Cookie expired, invalid, or database rejected it
+          // Token invalid or expired
           setUser(null);
+          updateToken(null);
         }
       } catch (error) {
-        // Database / Backend is unreachable: DO NOT pretend user is logged in!
-        console.error('Database unreachable during cookie auth verification:', error);
+        console.error('Database unreachable during auth verification:', error);
         setUser(null);
       } finally {
         setLoading(false);
@@ -115,13 +130,13 @@ export function AuthProvider({ children }) {
 
     if (!response.ok || !data.success) {
       setUser(null);
-      setToken(null);
+      updateToken(null);
       throw new Error(data.message || 'Login failed. Please check your Roll Number and Password.');
     }
 
     setUser(data.user);
     if (data.token) {
-      setToken(data.token);
+      updateToken(data.token);
     }
 
     return data.user;
@@ -138,7 +153,7 @@ export function AuthProvider({ children }) {
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include', // Instructs browser to accept and store the HTTP cookie
+      credentials: 'include',
       body: JSON.stringify({ credential }),
     });
 
@@ -146,14 +161,13 @@ export function AuthProvider({ children }) {
 
     if (!response.ok || !data.success) {
       setUser(null);
-      setToken(null);
+      updateToken(null);
       throw new Error(data.message || 'Database error: Failed to authenticate or save user in MongoDB Atlas');
     }
 
-    // Token is stored in HTTP-only Cookie by backend. User object set in React memory only.
     setUser(data.user);
     if (data.token) {
-      setToken(data.token);
+      updateToken(data.token);
     }
 
     return data.user;
@@ -161,28 +175,35 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
+      const storedToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       await fetch(`${API_BASE_URL}/auth/logout`, {
         method: 'POST',
-        credentials: 'include', // Tells backend to clear the cookie
+        credentials: 'include',
+        headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
       });
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
       setUser(null);
-      setToken(null);
+      updateToken(null);
     }
   };
 
-  // Refresh user data directly from MongoDB Atlas via session cookie
+  // Refresh user data directly from MongoDB Atlas via session cookie or Bearer token
   const refreshUser = async () => {
     try {
+      const storedToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         credentials: 'include',
+        headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
       });
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.user) {
           setUser(data.user);
+          if (data.token) {
+            updateToken(data.token);
+          }
         }
       } else {
         setUser(null);
@@ -194,11 +215,12 @@ export function AuthProvider({ children }) {
 
   // Update student profile directly in MongoDB Atlas
   const updateProfile = async (profileData) => {
+    const storedToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
     const response = await fetch(`${API_BASE_URL}/auth/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(storedToken ? { Authorization: `Bearer ${storedToken}` } : {}),
       },
       credentials: 'include',
       body: JSON.stringify(profileData),
@@ -218,11 +240,12 @@ export function AuthProvider({ children }) {
 
   // Change password in MongoDB Atlas (Mandatory on first login for Team Leads)
   const changePassword = async (currentPassword, newPassword) => {
+    const storedToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
     const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(storedToken ? { Authorization: `Bearer ${storedToken}` } : {}),
       },
       credentials: 'include',
       body: JSON.stringify({ currentPassword, newPassword }),
