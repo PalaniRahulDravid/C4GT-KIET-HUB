@@ -24,10 +24,24 @@ export default function App() {
         <Routes>
           {/* Main Website / Public & Common Routes with standard Header */}
           <Route path="/" element={<RootLayout />}>
-            {/* Home - public, accessible to everyone */}
-            <Route index element={<Home />} />
-            {/* /home is an alias for / — same page, accessible to all */}
-            <Route path="home" element={<Home />} />
+            {/* Home - guest-only landing page; authenticated users are blocked and redirected to their dashboard */}
+            <Route
+              index
+              element={
+                <PublicRoute>
+                  <Home />
+                </PublicRoute>
+              }
+            />
+            {/* /home alias - also protected against authenticated users */}
+            <Route
+              path="home"
+              element={
+                <PublicRoute>
+                  <Home />
+                </PublicRoute>
+              }
+            />
 
             {/* Login / Google Auth: blocked for already authenticated users */}
             <Route

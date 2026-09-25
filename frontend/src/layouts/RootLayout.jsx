@@ -50,6 +50,14 @@ export default function RootLayout() {
     return <Navigate to="/complete-profile" replace />;
   }
 
+  // Guard: Authenticated users CANNOT access main site landing page ('/' or '/home')
+  if (!loading && isAuthenticated && user) {
+    if (location.pathname === '/' || location.pathname === '/home') {
+      const dashboardPath = getDashboardPath(user.role);
+      return <Navigate to={dashboardPath} replace />;
+    }
+  }
+
   if (isFullBleedPage) {
     return <Outlet />;
   }
@@ -78,11 +86,17 @@ export default function RootLayout() {
       .toUpperCase();
   };
 
+  const logoTarget = isOnboarding
+    ? '/complete-profile'
+    : isAuthenticated
+    ? getDashboardPath(user?.role)
+    : '/';
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to={isOnboarding ? '/complete-profile' : '/'} className="flex items-center space-x-3">
+          <Link to={logoTarget} className="flex items-center space-x-3">
             <span className="text-xl font-bold text-gray-900 tracking-tight">C4GT KIET HUB</span>
             <span className="text-xs text-gray-500 uppercase tracking-wider border-l border-gray-200 pl-3 hidden sm:inline">
               LMS Platform
@@ -106,18 +120,20 @@ export default function RootLayout() {
             </div>
           ) : (
             <nav className="hidden md:flex items-center space-x-6">
-              {/* Home link */}
-              <NavLink
-                to="/"
-                end
-                className={({ isActive }) =>
-                  `text-sm font-medium transition-colors hover:text-blue-600 ${
-                    isActive ? 'text-blue-600 font-semibold' : 'text-gray-600'
-                  }`
-                }
-              >
-                Home
-              </NavLink>
+              {/* Home link - only for guests */}
+              {!isAuthenticated && (
+                <NavLink
+                  to="/"
+                  end
+                  className={({ isActive }) =>
+                    `text-sm font-medium transition-colors hover:text-blue-600 ${
+                      isActive ? 'text-blue-600 font-semibold' : 'text-gray-600'
+                    }`
+                  }
+                >
+                  Home
+                </NavLink>
+              )}
 
               {/* For Team Leads: Direct Header Links to Roster, Give Tasks to Students, and Student Dashboard */}
               {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
@@ -343,13 +359,15 @@ export default function RootLayout() {
         {/* Mobile Navigation Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white px-4 pt-2 pb-4 space-y-3">
-            <Link
-              to="/"
-              onClick={() => setMobileMenuOpen(false)}
-              className="block text-sm font-medium text-gray-700 py-2 hover:text-blue-600"
-            >
-              Home
-            </Link>
+            {!isAuthenticated && (
+              <Link
+                to="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-sm font-medium text-gray-700 py-2 hover:text-blue-600"
+              >
+                Home
+              </Link>
+            )}
 
             {!isAuthenticated ? (
               <div className="pt-2 border-t border-gray-100">

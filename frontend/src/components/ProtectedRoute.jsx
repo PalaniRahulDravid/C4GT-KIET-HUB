@@ -84,6 +84,7 @@ export function PublicRoute({ children }) {
     if (
       location.state?.from?.pathname &&
       location.state.from.pathname !== '/' &&
+      location.state.from.pathname !== '/home' &&
       location.state.from.pathname !== '/login'
     ) {
       return <Navigate to={location.state.from.pathname} replace />;

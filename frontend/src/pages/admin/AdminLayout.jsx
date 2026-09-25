@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, Home as HomeIcon, ChevronRight, Award, UploadCloud, KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, ChevronRight, Award, UploadCloud, KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -211,18 +211,6 @@ export default function AdminLayout() {
               })}
             </nav>
 
-            {/* Divider */}
-            <div className="mx-2 my-4 border-t border-neutral-800/80" />
-
-            {/* Exit to Main Site */}
-            <SidebarLink
-              link={{
-                href: '/',
-                label: 'Exit to Main Site',
-                icon: <HomeIcon className="w-6 h-6 text-neutral-400" strokeWidth={1.8} />,
-              }}
-              onClick={() => setMobileSidebarOpen(false)}
-            />
           </div>
 
           {/* Bottom: Admin User profile */}
@@ -289,15 +277,6 @@ export default function AdminLayout() {
               <span className="sm:hidden">Password</span>
             </button>
 
-            {/* Main Site Navigation Link */}
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-xs font-medium text-[#1C1B1A] bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] shadow-2xs transition-colors"
-            >
-              <HomeIcon className="w-3.5 h-3.5 text-[#66645E]" />
-              <span>Main Site</span>
-              <ArrowRight className="w-3.5 h-3.5 text-[#66645E]" />
-            </Link>
           </div>
 
         </header>

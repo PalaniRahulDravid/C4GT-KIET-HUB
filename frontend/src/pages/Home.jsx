@@ -1,5 +1,4 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth, getDashboardPath, getRoleName } from '../context/AuthContext';
 import LandingHeader from '../components/LandingHeader';
@@ -25,8 +24,14 @@ import {
 } from 'lucide-react';
 
 export default function Home() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
+
+  // Guard: Authenticated users CANNOT access the landing page; redirect straight to their workspace
+  if (!loading && isAuthenticated && user) {
+    const targetPath = getDashboardPath(user.role);
+    return <Navigate to={targetPath} replace />;
+  }
 
   const handlePrimaryAction = () => {
     if (isAuthenticated) {

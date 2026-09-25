@@ -32,8 +32,14 @@ export default function Login() {
   const resolveRedirectPath = (authUser, fromPath) => {
     const role = authUser?.role ? String(authUser.role).toLowerCase().trim() : 'student';
 
-    // If navigated from a specific protected page, return there
-    if (fromPath && typeof fromPath === 'string' && fromPath !== '/' && fromPath !== '/login') {
+    // If navigated from a specific protected page, return there (excluding public landing pages)
+    if (
+      fromPath &&
+      typeof fromPath === 'string' &&
+      fromPath !== '/' &&
+      fromPath !== '/home' &&
+      fromPath !== '/login'
+    ) {
       return fromPath;
     }
 
