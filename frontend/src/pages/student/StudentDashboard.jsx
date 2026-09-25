@@ -58,6 +58,7 @@ import {
   Eye,
   EyeOff,
   Check,
+  Crown,
 } from 'lucide-react';
 import { Skeleton, SkeletonCard, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
