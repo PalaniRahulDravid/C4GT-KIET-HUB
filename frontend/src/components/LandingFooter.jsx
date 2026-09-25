@@ -18,73 +18,72 @@ export default function LandingFooter() {
 
   return (
     <footer className="bg-[#F2EFE6] border-t border-[#E2DDD0] text-[#1C1B1A]">
-      <div className="w-full max-w-[1560px] mx-auto px-6 sm:px-10 lg:px-16 xl:px-20 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-12 pb-12 border-b border-[#E2DDD0]">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-10 border-b border-[#E2DDD0]">
           
           {/* BRAND COLUMN */}
-          <div className="md:col-span-5 space-y-4">
+          <div className="md:col-span-6 space-y-3">
             <Link to="/" onClick={() => scrollToSection(null)} className="inline-block hover:opacity-90 transition-opacity">
-              <C4GTLogo className="h-10" />
+              <C4GTLogo className="h-9" />
             </Link>
-            <p className="text-sm text-[#66645E] leading-relaxed max-w-sm">
-              A centralized learning and performance management platform for Junior Developers and Interns at KIET Group of Institutions — connecting ML, DSA, tasks, and team tracking in one place.
+            <p className="text-xs text-[#66645E] leading-relaxed max-w-md">
+              C4GT KIET HUB is the dedicated internal workspace for Code 4 GovTech at KIET Group of Institutions. Connecting student developers, cohort teams, project milestones, and resources in one platform.
             </p>
+            <div className="inline-flex items-center gap-2 text-[11px] font-mono font-medium text-[#4A4843] bg-white/70 px-2.5 py-1 rounded-md border border-[#E0DDD0]">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+              <span>Active Cohort: Batch 2026–2027</span>
+            </div>
           </div>
 
-          {/* PLATFORM NAVIGATION */}
-          <div className="md:col-span-3 space-y-3">
-            <p className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Platform</p>
-            <ul className="space-y-2 text-sm font-medium text-[#4A4843]">
+          {/* WORKSPACES */}
+          <div className="md:col-span-3 space-y-2.5">
+            <p className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Workspaces</p>
+            <ul className="space-y-1.5 text-xs font-medium text-[#4A4843]">
               <li>
-                <button onClick={() => scrollToSection(null)} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
-                  About
-                </button>
+                <Link to="/student" className="hover:text-[#1C1B1A] transition-colors">
+                  Student & Intern Workspace
+                </Link>
               </li>
               <li>
-                <button onClick={() => scrollToSection('curriculum')} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
-                  Learning Track
-                </button>
+                <Link to="/teamlead" className="hover:text-[#1C1B1A] transition-colors">
+                  Team Lead Portal
+                </Link>
               </li>
               <li>
-                <button onClick={() => scrollToSection('roles')} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
-                  Teams & Batches
-                </button>
+                <Link to="/admin" className="hover:text-[#1C1B1A] transition-colors">
+                  Administrator Console
+                </Link>
               </li>
               <li>
-                <button onClick={() => scrollToSection('features')} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
-                  Features
-                </button>
-              </li>
-              <li>
-                <button onClick={() => scrollToSection('analytics')} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
-                  Performance Analytics
-                </button>
+                <Link to="/login" className="hover:text-[#1C1B1A] transition-colors">
+                  Roll Number Sign In
+                </Link>
               </li>
             </ul>
           </div>
 
-          {/* ROLES & AUTH */}
-          <div className="md:col-span-4 space-y-3">
-            <p className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Access & Portal</p>
-            <ul className="space-y-2 text-sm font-medium text-[#4A4843]">
+          {/* QUICK SECTIONS */}
+          <div className="md:col-span-3 space-y-2.5">
+            <p className="text-xs font-mono font-semibold uppercase tracking-wider text-[#66645E]">Platform</p>
+            <ul className="space-y-1.5 text-xs font-medium text-[#4A4843]">
               <li>
-                <Link to="/login" className="hover:text-[#1C1B1A] transition-colors">
-                  Sign in / Google OAuth
-                </Link>
+                <button onClick={() => scrollToSection('workspaces')} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
+                  Role Portals
+                </button>
+              </li>
+              <li>
+                <button onClick={() => scrollToSection('workflow')} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
+                  How It Works
+                </button>
+              </li>
+              <li>
+                <button onClick={() => scrollToSection('features')} className="hover:text-[#1C1B1A] transition-colors cursor-pointer">
+                  Key Capabilities
+                </button>
               </li>
               <li>
                 <Link to="/login" className="hover:text-[#1C1B1A] transition-colors">
-                  Student Portal
-                </Link>
-              </li>
-              <li>
-                <Link to="/login" className="hover:text-[#1C1B1A] transition-colors">
-                  Team Lead Dashboard
-                </Link>
-              </li>
-              <li>
-                <Link to="/login" className="hover:text-[#1C1B1A] transition-colors">
-                  Administrator Portal
+                  Account Access
                 </Link>
               </li>
             </ul>
@@ -92,12 +91,12 @@ export default function LandingFooter() {
         </div>
 
         {/* BOTTOM METADATA */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-[#66645E]">
+        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#66645E]">
           <p>© {new Date().getFullYear()} C4GT KIET HUB — KIET Group of Institutions. All rights reserved.</p>
-          <div className="flex items-center gap-6">
-            <span>Built with precision & care</span>
+          <div className="flex items-center gap-4 text-[11px]">
+            <span>KIET Group of Institutions</span>
             <span>•</span>
-            <span>Centralized LMS</span>
+            <span>Internal Portal</span>
           </div>
         </div>
       </div>
