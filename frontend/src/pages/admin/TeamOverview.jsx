@@ -596,11 +596,11 @@ export default function TeamOverview() {
                         key={m._id || idx}
                         className="p-3 bg-white rounded-xl border border-[#E0DDD0] flex items-center justify-between hover:border-[#1C1B1A]/30 transition-colors"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-[#EFECE3] text-[#1C1B1A] flex items-center justify-center font-bold text-xs font-mono">
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                          <div className="w-8 h-8 rounded-full bg-[#EFECE3] text-[#1C1B1A] flex items-center justify-center font-bold text-xs font-mono shrink-0">
                             {idx + 1}
                           </div>
-                          <div className="flex-1 truncate">
+                          <div className="flex-1 min-w-0">
                             <div className="text-xs font-bold text-[#1C1B1A] truncate">{m.name || 'Student Member'}</div>
                             <div className="text-[11px] text-[#66645E] font-mono truncate flex items-center gap-1 mt-0.5">
                               <Mail className="w-3 h-3 text-[#88867E] shrink-0" />
@@ -620,7 +620,7 @@ export default function TeamOverview() {
                               </div>
                             )}
                             {(m.branch || m.year || m.rollNumber) && (
-                              <div className="text-[10px] text-[#88867E] mt-0.5 font-mono">
+                              <div className="text-[10px] text-[#88867E] mt-0.5 font-mono truncate">
                                 {m.branch} • Year {m.year} {m.rollNumber ? `• ${m.rollNumber}` : ''}
                               </div>
                             )}
@@ -630,7 +630,7 @@ export default function TeamOverview() {
                         <button
                           onClick={() => handleRemoveMember(viewingTeam._id, m._id, m.name)}
                           title="Remove member from team"
-                          className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+                          className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer shrink-0"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

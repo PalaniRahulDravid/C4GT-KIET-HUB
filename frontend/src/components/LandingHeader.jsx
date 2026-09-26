@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, getDashboardPath, getRoleName } from '../context/AuthContext';
-import { Menu, X, ChevronDown, LogOut, LayoutDashboard, ArrowRight, GraduationCap, ShieldCheck } from 'lucide-react';
+import { Menu, X, ChevronDown, LogOut, LayoutDashboard, ArrowRight, GraduationCap } from 'lucide-react';
 import C4GTLogo from './C4GTLogo';
 import UserAvatar from './UserAvatar';
 
@@ -214,18 +214,6 @@ export default function LandingHeader() {
                         </button>
                       )}
 
-                      {user?.role === 'admin' && (
-                        <button
-                          onClick={() => {
-                            setProfileDropdownOpen(false);
-                            navigate('/admin');
-                          }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#1C1B1A] hover:bg-black/5 rounded-xl transition-colors text-left cursor-pointer"
-                        >
-                          <ShieldCheck className="w-4 h-4 text-purple-600" />
-                          <span>Admin Console</span>
-                        </button>
-                      )}
 
                       <button
                         onClick={() => {

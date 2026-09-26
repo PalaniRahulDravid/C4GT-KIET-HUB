@@ -27,11 +27,6 @@ export default function Home() {
   const { user, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
-  // Guard: Authenticated users CANNOT access the landing page; redirect straight to their workspace
-  if (!loading && isAuthenticated && user) {
-    const targetPath = getDashboardPath(user.role);
-    return <Navigate to={targetPath} replace />;
-  }
 
   const handlePrimaryAction = () => {
     if (isAuthenticated) {
@@ -85,7 +80,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.05 }}
-              className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[#1C1B1A] max-w-4xl mx-auto leading-[1.15]"
+              className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[#1C1B1A] max-w-4xl mx-auto leading-[1.15]"
             >
               The Central Workspace for <br className="hidden sm:inline" />
               <span className="text-[#1C1B1A]">C4GT KIET Innovation Hub</span>
@@ -96,9 +91,9 @@ export default function Home() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="mt-5 text-base sm:text-lg text-[#66645E] max-w-2xl mx-auto font-normal leading-relaxed"
+              className="mt-5 text-sm sm:text-lg text-[#66645E] max-w-2xl mx-auto font-normal leading-relaxed px-2 sm:px-0"
             >
-              Coordinate cohort teams, deliver project milestones, submit GitHub pull requests, and access curated technical resources — all in one unified portal.
+              Coordinate C4GT HUB teams, deliver project milestones, submit GitHub pull requests, and access curated technical resources — all in one unified portal.
             </motion.p>
 
             {/* CTAs */}
@@ -106,11 +101,11 @@ export default function Home() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.15 }}
-              className="mt-8 flex flex-wrap items-center justify-center gap-3.5"
+              className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full sm:w-auto"
             >
               <button
                 onClick={handlePrimaryAction}
-                className="inline-flex items-center justify-center gap-2 px-7 py-3 text-sm font-semibold text-white rounded-full bg-[#1C1B1A] hover:bg-black shadow-xs transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 sm:px-7 py-3 text-xs sm:text-sm font-semibold text-white rounded-full bg-[#1C1B1A] hover:bg-black shadow-xs transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
               >
                 <span>
                   {isAuthenticated
@@ -122,7 +117,7 @@ export default function Home() {
 
               <button
                 onClick={() => scrollToSection('workspaces')}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-[#1C1B1A] rounded-full bg-white hover:bg-neutral-50 border border-[#D5D0C2] shadow-2xs transition-all cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-3 text-xs sm:text-sm font-semibold text-[#1C1B1A] rounded-full bg-white hover:bg-neutral-50 border border-[#D5D0C2] shadow-2xs transition-all cursor-pointer"
               >
                 <span>Explore Workspaces</span>
               </button>
@@ -140,7 +135,7 @@ export default function Home() {
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#1C1B1A]">9 Cohort Teams</h3>
+                  <h3 className="text-sm font-bold text-[#1C1B1A]">9 C4GT HUB Teams</h3>
                   <p className="text-xs text-[#66645E] mt-1 leading-relaxed">
                     Organized squads of junior developers, senior developers, and interns under dedicated student leads.
                   </p>
@@ -226,7 +221,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-[#4A4843]">
                       <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                      <span>Accept cohort team invitations & view team roster</span>
+                      <span>Accept C4GT HUB team invitations & view team roster</span>
                     </div>
                   </div>
                 </div>
@@ -260,7 +255,7 @@ export default function Home() {
                   <div className="mt-6 space-y-2.5 border-t border-[#E8E4DA] pt-5">
                     <div className="flex items-start gap-2.5 text-xs text-[#4A4843]">
                       <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                      <span>Manage team roster of up to 9 cohort members</span>
+                      <span>Manage team roster of up to 9 C4GT HUB team members</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-[#4A4843]">
                       <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -310,7 +305,7 @@ export default function Home() {
                   <div className="mt-6 space-y-2.5 border-t border-[#E8E4DA] pt-5">
                     <div className="flex items-start gap-2.5 text-xs text-[#4A4843]">
                       <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                      <span>Initialize academic batches & 9-team cohort layouts</span>
+                      <span>Initialize academic batches & 9 C4GT HUB team layouts</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-[#4A4843]">
                       <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -318,7 +313,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-[#4A4843]">
                       <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                      <span>Publish cohort-wide tasks, priorities & deadlines</span>
+                      <span>Publish C4GT HUB team tasks, priorities & deadlines</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-xs text-[#4A4843]">
                       <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />

@@ -59,6 +59,7 @@ import {
   EyeOff,
   Check,
   Crown,
+  Home,
 } from 'lucide-react';
 import { Skeleton, SkeletonCard, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
@@ -602,7 +603,7 @@ export default function StudentDashboard() {
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
             <SidebarLogo
               logo={{
-                href: '/student',
+                href: '/',
                 icon: (
                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 border border-white shadow-md p-1">
                     <C4GTLogo showText={false} imgClassName="h-7" />
@@ -618,6 +619,7 @@ export default function StudentDashboard() {
             <SidebarSectionLabel label="Student Workspace" />
 
             <nav className="mt-2 space-y-1">
+
               <SidebarLink
                 link={{
                   href: '/student/overview',
@@ -722,17 +724,18 @@ export default function StudentDashboard() {
       {/* Main Workspace Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top Header Bar */}
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 sm:px-8 backdrop-blur-xs">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-20 flex min-h-14 sm:min-h-16 py-2 sm:py-0 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 sm:px-6 lg:px-8 backdrop-blur-xs">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100"
+              className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-500 hover:bg-slate-100 shrink-0"
+              aria-label="Open sidebar"
             >
               <LayoutDashboard className="w-5 h-5" />
             </button>
-            <div>
-              <div className="text-xs text-slate-500 font-medium">C4GT HUB 2026 – 2027</div>
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 capitalize">
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] sm:text-xs text-slate-500 font-medium truncate">C4GT HUB 2026 – 2027</div>
+              <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-900 capitalize truncate">
                 {activeNav === 'overview' && 'Student Overview'}
                 {activeNav === 'my-tasks' && 'My Tasks & Deliverables'}
                 {activeNav === 'resources' && 'Learning Resources Hub'}
@@ -741,14 +744,24 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Return to Landing Page */}
+            <Link
+              to="/"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-1.5 shrink-0"
+              title="Return to Landing Page"
+            >
+              <Home className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Landing Page</span>
+            </Link>
+
             {/* Daily Submission Streak Badge */}
             <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold shadow-2xs"
+              className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] sm:text-xs font-semibold shadow-2xs shrink-0"
               title="Daily Task Submission Streak"
             >
-              <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
-              <span>{streakData.currentStreak} {streakData.currentStreak === 1 ? 'Day' : 'Days'} Streak</span>
+              <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+              <span>{streakData.currentStreak} <span className="hidden sm:inline">{streakData.currentStreak === 1 ? 'Day' : 'Days'} </span>Streak</span>
             </div>
 
             {/* Change Password Action Button */}
@@ -760,7 +773,8 @@ export default function StudentDashboard() {
                 setPassSuccess('');
                 setShowPasswordChangeModal(true);
               }}
-              className="gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs p-0 sm:px-3 shrink-0"
+              title="Change Password"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">Change Password</span>
@@ -770,7 +784,7 @@ export default function StudentDashboard() {
             <div className="relative" ref={notificationsRef}>
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="relative p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors"
+                className="relative p-1.5 sm:p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
                 aria-label="Notifications"
               >
                 <Bell className="w-4 h-4" />
@@ -780,7 +794,7 @@ export default function StudentDashboard() {
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg z-50 animate-in fade-in">
+                <div className="absolute right-0 mt-2 w-[calc(100vw-32px)] sm:w-80 max-w-sm rounded-xl border border-slate-200 bg-white p-3 shadow-lg z-50 animate-in fade-in">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                     <span className="text-xs font-bold text-slate-900">Notifications</span>
                     <span className="text-[11px] text-slate-500">{unreadNotificationsCount} unread</span>
@@ -817,7 +831,7 @@ export default function StudentDashboard() {
         </header>
 
         {/* Workspace Body */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8">
           <div className="w-full space-y-6">
             {/* ============================================================= */}
             {/* VIEW 1: OVERVIEW */}

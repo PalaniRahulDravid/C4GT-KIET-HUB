@@ -27,7 +27,7 @@ export default function LandingFooter() {
               <C4GTLogo className="h-9" />
             </Link>
             <p className="text-xs text-[#66645E] leading-relaxed max-w-md">
-              C4GT KIET HUB is the dedicated internal workspace for Code 4 GovTech at KIET Group of Institutions. Connecting student developers, cohort teams, project milestones, and resources in one platform.
+              C4GT KIET HUB is the dedicated internal workspace for Code 4 GovTech at KIET Group of Institutions. Connecting student developers, C4GT HUB teams, project milestones, and resources in one platform.
             </p>
             <div className="inline-flex items-center gap-2 text-[11px] font-mono font-medium text-[#4A4843] bg-white/70 px-2.5 py-1 rounded-md border border-[#E0DDD0]">
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>

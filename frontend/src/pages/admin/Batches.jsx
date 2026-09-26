@@ -846,27 +846,46 @@ export default function Batches() {
     <div className="w-full space-y-6">
       {/* ==================== TOP HEADER & BREADCRUMBS ==================== */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs text-[#66645E] font-medium mb-1">
-              <Link to="/admin" className="hover:underline">Admin Workspace</Link>
-              <span>/</span>
-              <span className="text-[#1C1B1A] font-semibold">Batches</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-xs text-[#66645E] font-medium mb-1 overflow-x-auto custom-scroll whitespace-nowrap py-0.5">
+              <Link to="/admin" className="hover:underline shrink-0">Admin Workspace</Link>
+              <span className="text-[#9E9C94] shrink-0">/</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedBatch(null);
+                  setSelectedTeam(null);
+                  navigate('/admin/batches');
+                }}
+                className="hover:underline text-[#1C1B1A] font-semibold shrink-0 cursor-pointer"
+              >
+                Batches
+              </button>
               {selectedBatch && (
                 <>
-                  <span>/</span>
-                  <span className="text-[#1C1B1A] font-semibold">{selectedBatch.year}</span>
+                  <span className="text-[#9E9C94] shrink-0">/</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTeam(null);
+                      navigate(`/admin/batches/${selectedBatch.id}`);
+                    }}
+                    className="hover:underline text-[#1C1B1A] font-semibold shrink-0 cursor-pointer"
+                  >
+                    {selectedBatch.year}
+                  </button>
                 </>
               )}
               {selectedTeam && (
                 <>
-                  <span>/</span>
-                  <span className="text-[#1C1B1A] font-semibold">{selectedTeam.name}</span>
+                  <span className="text-[#9E9C94] shrink-0">/</span>
+                  <span className="text-[#1C1B1A] font-semibold shrink-0">{selectedTeam.name}</span>
                 </>
               )}
             </div>
 
-            <h2 className="font-bold tracking-tight text-3xl sm:text-4xl font-semibold text-[#1C1B1A]">
+            <h2 className="font-bold tracking-tight text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#1C1B1A] truncate">
               {selectedTeam
                 ? `${selectedTeam.name} Workspace`
                 : selectedBatch
@@ -875,7 +894,7 @@ export default function Batches() {
             </h2>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <button
               onClick={() => setCreateModalOpen(true)}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#1C1B1A] hover:bg-black text-white text-xs font-medium shadow-2xs transition-all cursor-pointer"
@@ -1256,75 +1275,78 @@ export default function Batches() {
                           </div>
                         </div>
 
-                        <div className="h-72 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={currentTeamsList}
-                              margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" stroke="#EAE6DC" vertical={false} />
-                              <XAxis
-                                dataKey="teamNumber"
-                                tickFormatter={(val) => `Team ${val}`}
-                                stroke="#66645E"
-                                fontSize={11}
-                                tickLine={false}
-                              />
-                              <YAxis
-                                domain={[0, 100]}
-                                stroke="#66645E"
-                                fontSize={11}
-                                tickLine={false}
-                                tickFormatter={(v) => `${v}%`}
-                              />
-                              <Tooltip
-                                content={({ active, payload }) => {
-                                  if (active && payload && payload.length) {
-                                    const d = payload[0].payload;
-                                    return (
-                                      <div className="bg-[#1C1B1A] text-white p-3 rounded-xl shadow-lg text-xs space-y-1 border border-[#333]">
-                                        <p className="font-bold text-amber-300">
-                                          {d.name} (Team {d.teamNumber})
-                                        </p>
-                                        <p className="text-[11px] text-gray-300 line-clamp-1">{d.track}</p>
-                                        <div className="pt-1.5 border-t border-gray-700 space-y-0.5 font-mono">
-                                          <p>
-                                            Performance:{' '}
-                                            <span className="font-bold text-white">{d.score}%</span>
+                        <div className="overflow-x-auto custom-scroll w-full pb-2">
+                          <div className="h-72 min-w-[540px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                data={currentTeamsList}
+                                margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" stroke="#EAE6DC" vertical={false} />
+                                <XAxis
+                                  dataKey="teamNumber"
+                                  tickFormatter={(val) => `Team ${val}`}
+                                  stroke="#66645E"
+                                  fontSize={11}
+                                  tickLine={false}
+                                  interval={0}
+                                />
+                                <YAxis
+                                  domain={[0, 100]}
+                                  stroke="#66645E"
+                                  fontSize={11}
+                                  tickLine={false}
+                                  tickFormatter={(v) => `${v}%`}
+                                />
+                                <Tooltip
+                                  content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                      const d = payload[0].payload;
+                                      return (
+                                        <div className="bg-[#1C1B1A] text-white p-3 rounded-xl shadow-lg text-xs space-y-1 border border-[#333]">
+                                          <p className="font-bold text-amber-300">
+                                            {d.name} (Team {d.teamNumber})
                                           </p>
-                                          <p>Tasks in Window: {d.tasksCount || 0}</p>
-                                          <p className="text-emerald-400">
-                                            Completed: {d.completedAssignments || 0}
-                                          </p>
-                                          <p className="text-amber-300">
-                                            Submitted: {d.submittedAssignments || 0}
-                                          </p>
-                                          <p className="text-rose-400">
-                                            Overdue: {d.overdueAssignments || 0}
-                                          </p>
-                                          <p className="text-gray-400">Status: {d.status}</p>
+                                          <p className="text-[11px] text-gray-300 line-clamp-1">{d.track}</p>
+                                          <div className="pt-1.5 border-t border-gray-700 space-y-0.5 font-mono">
+                                            <p>
+                                              Performance:{' '}
+                                              <span className="font-bold text-white">{d.score}%</span>
+                                            </p>
+                                            <p>Tasks in Window: {d.tasksCount || 0}</p>
+                                            <p className="text-emerald-400">
+                                              Completed: {d.completedAssignments || 0}
+                                            </p>
+                                            <p className="text-amber-300">
+                                              Submitted: {d.submittedAssignments || 0}
+                                            </p>
+                                            <p className="text-rose-400">
+                                              Overdue: {d.overdueAssignments || 0}
+                                            </p>
+                                            <p className="text-gray-400">Status: {d.status}</p>
+                                          </div>
                                         </div>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                }}
-                              />
-                              <Bar dataKey="score" radius={[6, 6, 0, 0]}>
-                                {currentTeamsList.map((entry, index) => {
-                                  const fill =
-                                    entry.score >= 70
-                                      ? '#10B981' // emerald
-                                      : entry.score >= 40
-                                        ? '#F59E0B' // amber
-                                        : entry.score > 0
-                                          ? '#EF4444' // red
-                                          : '#D1D5DB'; // light gray for 0%
-                                  return <Cell key={`cell-${index}`} fill={fill} />;
-                                })}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
+                                      );
+                                    }
+                                    return null;
+                                  }}
+                                />
+                                <Bar dataKey="score" radius={[6, 6, 0, 0]}>
+                                  {currentTeamsList.map((entry, index) => {
+                                    const fill =
+                                      entry.score >= 70
+                                        ? '#10B981' // emerald
+                                        : entry.score >= 40
+                                          ? '#F59E0B' // amber
+                                          : entry.score > 0
+                                            ? '#EF4444' // red
+                                            : '#D1D5DB'; // light gray for 0%
+                                    return <Cell key={`cell-${index}`} fill={fill} />;
+                                  })}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1332,8 +1354,8 @@ export default function Batches() {
                     {/* 2. Donut Chart: Deliverables & Team Activity Composition (Right Column) */}
                     <div className="lg:col-span-5 xl:col-span-5 p-5 bg-white rounded-2xl border border-[#E0DDD0] shadow-2xs flex flex-col justify-between">
                       <div>
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                          <div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
+                          <div className="min-w-0">
                             <h4 className="text-sm font-bold text-[#1C1B1A]">
                               {isDeliverablesMode ? 'Deliverables Breakdown' : 'Team Activity Status'}
                             </h4>
@@ -1345,7 +1367,7 @@ export default function Batches() {
                           </div>
 
                           {/* Mode Toggle Switch */}
-                          <div className="inline-flex p-1 bg-[#F4F1E8] rounded-lg border border-[#E0DDD0]">
+                          <div className="inline-flex p-1 bg-[#F4F1E8] rounded-lg border border-[#E0DDD0] self-start sm:self-auto shrink-0">
                             <button
                               type="button"
                               onClick={() => setDonutViewMode('deliverables')}
@@ -1370,15 +1392,15 @@ export default function Batches() {
                         </div>
 
                         {/* Interactive Recharts Donut Chart */}
-                        <div className="h-56 w-full relative flex items-center justify-center">
+                        <div className="h-56 w-full relative flex items-center justify-center min-w-0">
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                               <Pie
                                 data={currentDonutData}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={60}
-                                outerRadius={88}
+                                innerRadius={52}
+                                outerRadius={80}
                                 paddingAngle={currentDonutData.length > 1 ? 4 : 0}
                                 cornerRadius={4}
                                 dataKey="value"
@@ -1434,20 +1456,20 @@ export default function Batches() {
                         {/* Plain Language Legend Breakdown */}
                         <div className="space-y-2 mt-2 pt-3 border-t border-[#EBE8DC]">
                           {isDeliverablesMode ? (
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-col space-y-2">
                               {currentDonutData.map((item, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-[#FAF9F5] border border-black/5"
+                                  className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-[#FAF9F5] border border-[#E0DDD0]/60 hover:bg-[#F2EFE6]/50 transition-colors"
                                 >
-                                  <span className="flex items-center gap-1.5 truncate text-[#1C1B1A]">
+                                  <span className="flex items-center gap-2 text-[#1C1B1A]">
                                     <span
-                                      className="w-2 h-2 rounded-full shrink-0"
+                                      className="w-2.5 h-2.5 rounded-full shrink-0"
                                       style={{ backgroundColor: item.color }}
                                     />
-                                    <span className="truncate font-medium">{item.name}</span>
+                                    <span className="font-medium text-xs">{item.name}</span>
                                   </span>
-                                  <span className="font-mono font-bold text-[#1C1B1A] shrink-0 ml-1">
+                                  <span className="font-mono font-bold text-xs text-[#1C1B1A] bg-white px-2.5 py-0.5 rounded-md border border-[#E0DDD0] shadow-2xs">
                                     {item.count}
                                   </span>
                                 </div>
@@ -1455,26 +1477,26 @@ export default function Batches() {
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
-                                <div className="flex items-center gap-2">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
+                                <div className="flex items-center gap-2 min-w-0">
                                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                                  <span className="text-[#1C1B1A]">
+                                  <span className="text-[#1C1B1A] truncate">
                                     Active: <strong>{activeTeamNames}</strong>
                                   </span>
                                 </div>
-                                <span className="font-mono text-xs font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs">
+                                <span className="font-mono text-xs font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200 shadow-2xs shrink-0 self-start sm:self-auto">
                                   {topActiveScore}% Score ({activeCount} {activeCount === 1 ? 'Team' : 'Teams'})
                                 </span>
                               </div>
 
-                              <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-[#F8F7F3] border border-[#E0DDD0]">
-                                <div className="flex items-center gap-2">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs p-2.5 rounded-xl bg-[#F8F7F3] border border-[#E0DDD0]">
+                                <div className="flex items-center gap-2 min-w-0">
                                   <span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] shrink-0" />
-                                  <span className="text-[#66645E]">
+                                  <span className="text-[#66645E] truncate">
                                     Not Started Yet: <strong>{awaitingTeamNames}</strong>
                                   </span>
                                 </div>
-                                <span className="font-mono text-xs text-[#66645E] bg-white px-2 py-0.5 rounded-md border border-[#E0DDD0] shadow-2xs">
+                                <span className="font-mono text-xs text-[#66645E] bg-white px-2 py-0.5 rounded-md border border-[#E0DDD0] shadow-2xs shrink-0 self-start sm:self-auto">
                                   0% Tasks ({awaitingCount} {awaitingCount === 1 ? 'Team' : 'Teams'})
                                 </span>
                               </div>
@@ -1584,35 +1606,36 @@ export default function Batches() {
         {/* ==================== 3. TEAM DETAILS (MEMBERS / PERFORMANCE / TASKS TABS) ==================== */}
         {selectedTeam && (
           <div className="space-y-6">
-            <div className="bg-[#FDFCF9] rounded-2xl p-6 border border-[#E0DDD0] shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
+            <div className="bg-[#FDFCF9] rounded-2xl p-4 sm:p-6 border border-[#E0DDD0] shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="min-w-0">
                 <span className="text-xs font-mono font-semibold uppercase text-[#66645E]">Batch {selectedBatch?.year}</span>
-                <h3 className="font-bold tracking-tight text-3xl font-semibold text-[#1C1B1A]">{selectedTeam.name} Details</h3>
+                <h3 className="font-bold tracking-tight text-2xl sm:text-3xl text-[#1C1B1A] truncate">{selectedTeam.name} Details</h3>
                 <p className="text-xs text-[#66645E] mt-1">{selectedTeam.track}</p>
               </div>
 
               <button
                 onClick={() => navigate(`/admin/batches/${selectedBatch.id}`)}
-                className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-xs font-medium text-[#1C1B1A] cursor-pointer"
+                className="px-4 py-2 rounded-full border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-xs font-medium text-[#1C1B1A] cursor-pointer shrink-0 self-start sm:self-auto"
               >
                 ← Back to Batch Teams
               </button>
             </div>
 
             {/* TAB NAVIGATION PILLS */}
-            <div className="inline-flex p-1 bg-[#EEECDF] rounded-full border border-[#E0DDD0]">
+            <div className="flex overflow-x-auto custom-scroll max-w-full p-1 bg-[#EEECDF] rounded-2xl sm:rounded-full border border-[#E0DDD0] gap-1">
               <button
                 onClick={() => setActiveTab('overview')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'overview'
+                className={`px-4 sm:px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'overview'
                     ? 'bg-[#1C1B1A] text-white shadow-xs'
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
                   }`}
               >
-                Overview & Members (Side-by-Side)
+                <span className="sm:hidden">Overview & Members</span>
+                <span className="hidden sm:inline">Overview & Members (Side-by-Side)</span>
               </button>
               <button
                 onClick={() => setActiveTab('tasks')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'tasks'
+                className={`px-4 sm:px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'tasks'
                     ? 'bg-[#1C1B1A] text-white shadow-xs'
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
                   }`}
@@ -1621,7 +1644,7 @@ export default function Batches() {
               </button>
               <button
                 onClick={() => setActiveTab('trend')}
-                className={`px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer ${activeTab === 'trend'
+                className={`px-4 sm:px-5 py-2 text-xs font-mono font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'trend'
                     ? 'bg-[#1C1B1A] text-white shadow-xs'
                     : 'text-[#66645E] hover:text-[#1C1B1A]'
                   }`}
@@ -1637,18 +1660,18 @@ export default function Batches() {
                 <div className="xl:col-span-5 space-y-6">
                   {/* Team Health Score Card */}
                   <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <span className="text-[10px] font-mono font-bold uppercase text-[#66645E]">Team Performance</span>
                         <h4 className="text-lg font-bold text-[#1C1B1A]">{selectedTeam.name} Overview</h4>
                       </div>
-                      <span className="text-xs font-mono font-bold px-3 py-1 rounded-full border bg-white shadow-2xs">
+                      <span className="text-xs font-mono font-bold px-3 py-1 rounded-full border bg-white shadow-2xs self-start sm:self-auto">
                         Rank #{teamRank || 1} of 9
                       </span>
                     </div>
 
                     {/* Score Gauge & Status Banner */}
-                    <div className="p-4 rounded-xl bg-white border border-[#E0DDD0] flex items-center justify-between gap-4">
+                    <div className="p-4 rounded-xl bg-white border border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-full bg-[#1C1B1A] text-white flex flex-col items-center justify-center shrink-0 shadow-md">
                           <span className="text-xl font-black font-mono leading-none">
@@ -1675,7 +1698,7 @@ export default function Batches() {
                         </div>
                       </div>
 
-                      <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${(selectedTeamAnalytics?.score || 0) >= 70
+                      <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border self-start sm:self-auto ${(selectedTeamAnalytics?.score || 0) >= 70
                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                           : (selectedTeamAnalytics?.score || 0) >= 40
                             ? 'bg-amber-50 text-amber-800 border-amber-200'
@@ -1724,12 +1747,12 @@ export default function Batches() {
 
                   {/* Deliverables Status Donut Chart */}
                   <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs">
-                    <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                       <div>
                         <h4 className="text-sm font-bold text-[#1C1B1A]">Task Deliverables Breakdown</h4>
                         <p className="text-[11px] text-[#66645E]">Live submission status across team tasks</p>
                       </div>
-                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 self-start sm:self-auto">
                         {selectedTeamAnalytics?.completionPct ?? 0}% Done
                       </span>
                     </div>
@@ -1789,20 +1812,20 @@ export default function Batches() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[#EBE8DC]">
+                    <div className="flex flex-col space-y-2 mt-3 pt-3 border-t border-[#EBE8DC]">
                       {taskCompletionPieData.map((item, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-white border border-black/5"
+                          className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-white border border-[#E0DDD0]/60 hover:bg-[#FAF9F5] transition-colors"
                         >
-                          <span className="flex items-center gap-1.5 truncate text-[#1C1B1A]">
+                          <span className="flex items-center gap-2 text-[#1C1B1A]">
                             <span
-                              className="w-2 h-2 rounded-full shrink-0"
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
                               style={{ backgroundColor: item.color }}
                             />
-                            <span className="truncate font-medium">{item.name}</span>
+                            <span className="font-medium text-xs">{item.name}</span>
                           </span>
-                          <span className="font-mono font-bold text-[#1C1B1A] shrink-0 ml-1">
+                          <span className="font-mono font-bold text-xs text-[#1C1B1A] bg-[#FAF9F5] px-2.5 py-0.5 rounded-md border border-[#E0DDD0]">
                             {item.value}
                           </span>
                         </div>
@@ -1812,15 +1835,15 @@ export default function Batches() {
 
                   {/* Team Lead Assignment Card */}
                   <div className="p-4 bg-[#F2EFE6] rounded-2xl border border-[#E0DDD0] space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                      <div className="min-w-0">
                         <span className="text-[10px] font-mono uppercase text-[#66645E]">Assigned Mentor / Lead</span>
-                        <p className="text-sm font-bold text-[#1C1B1A]">
+                        <p className="text-sm font-bold text-[#1C1B1A] truncate">
                           {selectedTeam.teamLeadId?.name || 'No Team Lead Assigned'}
                         </p>
-                        <p className="text-xs text-[#66645E] font-mono">{selectedTeam.teamLeadId?.email || 'unassigned@kiet.edu'}</p>
+                        <p className="text-xs text-[#66645E] font-mono truncate">{selectedTeam.teamLeadId?.email || 'unassigned@kiet.edu'}</p>
                       </div>
-                      <span className="text-xs font-mono font-bold text-purple-900 bg-purple-100 px-2.5 py-1 rounded-full border border-purple-200">
+                      <span className="text-xs font-mono font-bold text-purple-900 bg-purple-100 px-2.5 py-1 rounded-full border border-purple-200 self-start sm:self-auto shrink-0">
                         Team Lead
                       </span>
                     </div>
@@ -1841,15 +1864,15 @@ export default function Batches() {
                 </div>
 
                 {/* RIGHT COLUMN: INDIVIDUAL MEMBERS PERFORMANCE */}
-                <div className="xl:col-span-7 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-6">
+                <div className="xl:col-span-7 bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-4 sm:p-6 shadow-2xs space-y-6">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2DDD0]">
                     <div>
-                      <h3 className="text-2xl font-bold tracking-tight text-[#1C1B1A]">Individual Member Performance</h3>
+                      <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1C1B1A]">Individual Member Performance</h3>
                       <p className="text-xs text-[#66645E] mt-0.5">
                         Granular student performance evaluated directly from task assignments & submissions
                       </p>
                     </div>
-                    <div className="inline-flex p-1 bg-[#EEECDF] rounded-xl border border-[#E0DDD0] shrink-0">
+                    <div className="inline-flex p-1 bg-[#EEECDF] rounded-xl border border-[#E0DDD0] self-start sm:self-auto shrink-0">
                       {['all', 'junior', 'senior'].map((mf) => (
                         <button
                           key={mf}
@@ -1869,7 +1892,7 @@ export default function Batches() {
                   {/* SECTION 1: JUNIOR DEVELOPERS */}
                   {(memberFilter === 'all' || memberFilter === 'junior') && (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <h4 className="text-base font-bold text-[#1C1B1A]">Junior Developers (4)</h4>
                           <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
@@ -1908,19 +1931,19 @@ export default function Batches() {
                               key={m.id || idx}
                               className="bg-white rounded-2xl p-4 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs transition-all space-y-3"
                             >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
                                   <span className="w-6 h-6 rounded-md bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
                                     {idx + 1}
                                   </span>
-                                  <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                                  <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                                     {getInitials(m.name)}
                                   </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
                                       <p className="text-sm font-semibold text-[#1C1B1A] truncate">{m.name}</p>
                                       {m.rollNumber && (
-                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-700 px-1.5 py-0.5 rounded border border-stone-200">
+                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-700 px-1.5 py-0.5 rounded border border-stone-200 shrink-0">
                                           {m.rollNumber}
                                         </span>
                                       )}
@@ -1929,7 +1952,7 @@ export default function Batches() {
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 pl-9 sm:pl-0">
                                   <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${statusCls}`}>
                                     {statusLabel}
                                   </span>
@@ -1972,7 +1995,7 @@ export default function Batches() {
                   {/* SECTION 2: SENIOR DEVELOPERS */}
                   {(memberFilter === 'all' || memberFilter === 'senior') && (
                     <div className="space-y-3 pt-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <h4 className="text-base font-bold text-[#1C1B1A]">Senior Developers & Lead (5)</h4>
                           <span className="text-[10px] font-mono font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
@@ -2015,26 +2038,26 @@ export default function Batches() {
                                   : 'bg-white border-[#E0DDD0] hover:border-[#1C1B1A]'
                                 }`}
                             >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
                                   <span className="w-6 h-6 rounded-md bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
                                     {idx + 1}
                                   </span>
                                   <div
-                                    className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${isLead ? 'bg-[#1C1B1A] text-amber-300' : 'bg-indigo-950 text-white'
+                                    className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs ${isLead ? 'bg-[#1C1B1A] text-amber-300' : 'bg-indigo-950 text-white'
                                       }`}
                                   >
                                     {getInitials(m.name)}
                                   </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
                                       <p className="text-sm font-semibold text-[#1C1B1A] truncate">{m.name}</p>
                                       {isLead ? (
-                                        <span className="text-[10px] font-mono font-extrabold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-300">
+                                        <span className="text-[10px] font-mono font-extrabold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-300 shrink-0">
                                           Team Lead
                                         </span>
                                       ) : m.rollNumber ? (
-                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-700 px-1.5 py-0.5 rounded border border-stone-200">
+                                        <span className="text-[10px] font-mono bg-stone-100 text-stone-700 px-1.5 py-0.5 rounded border border-stone-200 shrink-0">
                                           {m.rollNumber}
                                         </span>
                                       ) : null}
@@ -2043,7 +2066,7 @@ export default function Batches() {
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 pl-9 sm:pl-0">
                                   <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${statusCls}`}>
                                     {statusLabel}
                                   </span>
@@ -2089,66 +2112,71 @@ export default function Batches() {
             {/* TAB 2: PERFORMANCE TREND */}
             {activeTab === 'trend' && (
               <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                   <div>
                     <h4 className="text-lg font-bold text-[#1C1B1A]">Weekly Performance & Submission Trend</h4>
                     <p className="text-xs text-[#66645E]">History of velocity and completion scores for {selectedTeam?.name}</p>
                   </div>
-                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0]">
+                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0] self-start sm:self-auto">
                     {selectedTeam?.name}
                   </span>
                 </div>
 
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={performanceTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD0" vertical={false} />
-                      <XAxis dataKey="week" stroke="#66645E" fontSize={11} tickLine={false} />
-                      <YAxis stroke="#66645E" fontSize={11} domain={[0, 100]} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const d = payload[0].payload;
-                            return (
-                              <div className="bg-[#1C1B1A] text-white px-3 py-2 rounded-xl shadow-xl text-xs font-mono border border-neutral-700">
-                                <p className="font-bold text-amber-300">{d.week}</p>
-                                <p className="text-white mt-1">
-                                  Score: <span className="font-bold text-emerald-400">{d.score}%</span>
-                                </p>
-                                <p className="text-neutral-300">
-                                  Submissions: <span className="font-bold">{d.submissions || 0}</span>
-                                </p>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="score"
-                        stroke="#1C1B1A"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#1C1B1A', stroke: '#FFF', strokeWidth: 2 }}
-                        activeDot={{ r: 6, fill: '#10B981', stroke: '#FFF', strokeWidth: 2 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                <div className="overflow-x-auto custom-scroll w-full pb-2">
+                  <div className="h-72 min-w-[500px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={performanceTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E2DDD0" vertical={false} />
+                        <XAxis dataKey="week" stroke="#66645E" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#66645E" fontSize={11} domain={[0, 100]} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const d = payload[0].payload;
+                              return (
+                                <div className="bg-[#1C1B1A] text-white px-3 py-2 rounded-xl shadow-xl text-xs font-mono border border-neutral-700">
+                                  <p className="font-bold text-amber-300">{d.week}</p>
+                                  <p className="text-white mt-1">
+                                    Score: <span className="font-bold text-emerald-400">{d.score}%</span>
+                                  </p>
+                                  <p className="text-neutral-300">
+                                    Submissions: <span className="font-bold">{d.submissions || 0}</span>
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="score"
+                          stroke="#1C1B1A"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: '#1C1B1A', stroke: '#FFF', strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: '#10B981', stroke: '#FFF', strokeWidth: 2 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
             )}
 
             {/* TAB 3: TASKS */}
             {activeTab === 'tasks' && (
-              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-6 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">Team Tasks List</h4>
-                  <div className="flex items-center gap-2">
+              <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] p-4 sm:p-6 shadow-2xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="font-bold tracking-tight text-xl sm:text-2xl font-semibold text-[#1C1B1A]">Team Tasks List</h4>
+                    <p className="text-xs text-[#66645E] mt-0.5">Tasks assigned to this team and overall completion</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto custom-scroll max-w-full pb-1 self-start sm:self-auto shrink-0">
                     {['all', 'pending', 'completed', 'overdue'].map((f) => (
                       <button
                         key={f}
                         onClick={() => setTaskFilter(f)}
-                        className={`px-3 py-1 text-xs font-mono rounded-full capitalize cursor-pointer ${taskFilter === f ? 'bg-[#1C1B1A] text-white' : 'bg-[#EEECDF] text-[#66645E]'
+                        className={`px-3 py-1 text-xs font-mono rounded-full capitalize cursor-pointer whitespace-nowrap shrink-0 ${taskFilter === f ? 'bg-[#1C1B1A] text-white' : 'bg-[#EEECDF] text-[#66645E]'
                           }`}
                       >
                         {f}
@@ -2157,28 +2185,30 @@ export default function Batches() {
                   </div>
                 </div>
 
-                <div className="divide-y divide-[#E2DDD0] border border-[#E0DDD0] rounded-xl overflow-hidden bg-white">
-                  {filteredTeamTasks.length > 0 ? (
-                    filteredTeamTasks.map((t) => (
-                      <div key={t.id} className="p-4 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-[#1C1B1A]">{t.task}</p>
-                          <p className="text-xs text-[#66645E]">{t.topic} • Deadline: {t.deadline}</p>
+                <div className="border border-[#E0DDD0] rounded-xl overflow-hidden bg-white">
+                  <div className="divide-y divide-[#E2DDD0]">
+                    {filteredTeamTasks.length > 0 ? (
+                      filteredTeamTasks.map((t) => (
+                        <div key={t.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAF9F5] transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-[#1C1B1A]">{t.task}</p>
+                            <p className="text-xs text-[#66645E] mt-0.5">{t.topic} • Deadline: {t.deadline}</p>
+                          </div>
+                          <span className={`text-xs font-mono font-medium px-2.5 py-0.5 rounded-full self-start sm:self-auto shrink-0 ${t.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                            t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
+                              'bg-amber-50 text-amber-800 border border-amber-200'
+                            }`}>
+                            {t.status} ({t.completion})
+                          </span>
                         </div>
-                        <span className={`text-xs font-mono font-medium px-2.5 py-0.5 rounded-full ${t.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                          t.status === 'Overdue' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
-                            'bg-amber-50 text-amber-800 border border-amber-200'
-                          }`}>
-                          {t.status} ({t.completion})
-                        </span>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-[#66645E]">
+                        <p className="text-sm font-medium">No tasks assigned to this team yet.</p>
+                        <p className="text-xs text-[#8C887B] mt-1">Tasks will appear here once published by the team lead or admin.</p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-8 text-center text-[#66645E]">
-                      <p className="text-sm font-medium">No tasks assigned to this team yet.</p>
-                      <p className="text-xs text-[#8C887B] mt-1">Tasks will appear here once published by the team lead or admin.</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             )}

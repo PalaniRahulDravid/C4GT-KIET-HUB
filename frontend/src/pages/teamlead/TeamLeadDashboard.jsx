@@ -64,6 +64,7 @@ import {
   Link2,
   Lock,
   KeyRound,
+  Home,
 } from 'lucide-react';
 import { Skeleton, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
@@ -834,7 +835,7 @@ export default function TeamLeadDashboard() {
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden py-4 px-2">
             <SidebarLogo
               logo={{
-                href: '/teamlead/tasks',
+                href: '/',
                 icon: (
                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 border border-white shadow-md p-1">
                     <C4GTLogo showText={false} imgClassName="h-7" />
@@ -850,6 +851,7 @@ export default function TeamLeadDashboard() {
             <SidebarSectionLabel label="Team Lead Workspace" />
 
             <nav className="mt-2 space-y-1">
+
               <SidebarLink
                 link={{
                   href: '/teamlead/tasks',
@@ -916,29 +918,54 @@ export default function TeamLeadDashboard() {
       {/* Main Workspace Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Header Bar */}
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 sm:px-8 backdrop-blur-xs">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-20 flex min-h-14 sm:min-h-16 py-2 sm:py-0 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 sm:px-6 lg:px-8 backdrop-blur-xs">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100"
+              className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-500 hover:bg-slate-100 shrink-0"
+              aria-label="Open sidebar"
             >
               <CheckSquare className="w-5 h-5" />
             </button>
-            <div>
-              <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] sm:text-xs text-slate-500 font-medium flex items-center gap-1.5 truncate">
                 <span>{team?.name || 'C4GT HUB Team'}</span>
                 <span>•</span>
                 <span>{team?.track || 'Engineering Track'}</span>
               </div>
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 capitalize">
-                {activeTab === 'tasks' && 'Team Tasks & Milestone Management'}
-                {activeTab === 'roster' && 'Team Roster & Capacity'}
-                {activeTab === 'resources' && 'Learning Resources & Practice Hub'}
+              <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-900 capitalize truncate">
+                {activeTab === 'tasks' && (
+                  <>
+                    <span className="sm:hidden">Team Tasks</span>
+                    <span className="hidden sm:inline">Team Tasks & Milestone Management</span>
+                  </>
+                )}
+                {activeTab === 'roster' && (
+                  <>
+                    <span className="sm:hidden">Team Roster</span>
+                    <span className="hidden sm:inline">Team Roster & Capacity</span>
+                  </>
+                )}
+                {activeTab === 'resources' && (
+                  <>
+                    <span className="sm:hidden">Resources Hub</span>
+                    <span className="hidden sm:inline">Learning Resources & Practice Hub</span>
+                  </>
+                )}
               </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Return to Landing Page */}
+            <Link
+              to="/"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-1.5 shrink-0"
+              title="Return to Landing Page"
+            >
+              <Home className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Landing Page</span>
+            </Link>
             <Button
               variant="outline"
               size="sm"
@@ -947,7 +974,8 @@ export default function TeamLeadDashboard() {
                 setPassSuccess('');
                 setShowPasswordChangeModal(true);
               }}
-              className="gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs p-0 sm:px-3 shrink-0"
+              title="Change Password"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">Change Password</span>
@@ -958,7 +986,8 @@ export default function TeamLeadDashboard() {
               size="sm"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="gap-1.5 text-xs font-semibold"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold p-0 sm:px-3 shrink-0"
+              title="Refresh"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
@@ -967,16 +996,17 @@ export default function TeamLeadDashboard() {
             <Button
               size="sm"
               onClick={() => navigate('/student')}
-              className="gap-1.5 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs p-0 sm:px-3 shrink-0"
+              title="Student Dashboard"
             >
               <GraduationCap className="w-4 h-4 text-blue-600" />
-              <span>Student Dashboard</span>
+              <span className="hidden sm:inline">Student Dashboard</span>
             </Button>
           </div>
         </header>
 
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8">
           <div className="w-full space-y-6">
             {/* ============================================================= */}
             {/* VIEW 1: TASKS & MILESTONE MANAGEMENT */}

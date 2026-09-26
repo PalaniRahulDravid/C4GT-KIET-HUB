@@ -93,7 +93,7 @@ function MobileSidebar({ children, className = '' }) {
           {/* Drawer */}
           <motion.aside
             key="sidebar-drawer"
-            className={`fixed top-0 left-0 z-50 h-screen max-h-screen w-72 flex flex-col lg:hidden shadow-2xl ${className}`}
+            className={`fixed top-0 left-0 z-50 h-screen max-h-screen w-72 max-w-[85vw] flex flex-col lg:hidden shadow-2xl ${className}`}
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}

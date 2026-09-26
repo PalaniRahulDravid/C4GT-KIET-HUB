@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, ChevronRight, Award, UploadCloud, KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, ChevronRight, Award, UploadCloud, KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X, Home } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -132,21 +132,21 @@ export default function AdminLayout() {
 
   const getPageInfo = () => {
     if (location.pathname === '/admin/users') {
-      return { breadcrumb: 'Manage Users', title: 'Manage Users & Permissions' };
+      return { breadcrumb: 'Manage Users', title: 'Manage Users & Permissions', mobileTitle: 'Manage Users' };
     }
     if (location.pathname === '/admin/teams') {
-      return { breadcrumb: 'C4GT HUB Teams', title: '9 C4GT HUB Teams & Roster Management' };
+      return { breadcrumb: 'C4GT HUB Teams', title: '9 C4GT HUB Teams & Roster Management', mobileTitle: 'C4GT HUB Teams' };
     }
     if (location.pathname.startsWith('/admin/batches')) {
-      return { breadcrumb: 'Batches', title: 'Batches Workspace' };
+      return { breadcrumb: 'Batches', title: 'Batches Workspace', mobileTitle: 'Batches' };
     }
     if (location.pathname === '/admin/tasks') {
-      return { breadcrumb: 'Tasks', title: 'Next Tasks for Teams' };
+      return { breadcrumb: 'Tasks', title: 'Next Tasks for Teams', mobileTitle: 'Team Tasks' };
     }
     if (location.pathname === '/admin/resources') {
-      return { breadcrumb: 'Resources', title: 'Cloudinary Resource Management' };
+      return { breadcrumb: 'Resources', title: 'Cloudinary Resource Management', mobileTitle: 'Resources' };
     }
-    return { breadcrumb: 'Overview', title: 'Admin Dashboard Overview' };
+    return { breadcrumb: 'Overview', title: 'Admin Dashboard Overview', mobileTitle: 'Admin Dashboard' };
   };
 
   const getInitials = (name) => {
@@ -170,7 +170,7 @@ export default function AdminLayout() {
             {/* Logo */}
             <SidebarLogo
               logo={{
-                href: '/admin',
+                href: '/',
                 icon: (
                   <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 border border-white shadow-md p-1">
                     <C4GTLogo showText={false} imgClassName="h-7" />
@@ -229,14 +229,14 @@ export default function AdminLayout() {
 
       {/* ==================== MAIN CONTENT AREA ==================== */}
       <div className="flex-1 h-screen flex flex-col overflow-hidden min-w-0">
-        {/* Top Sticky Header (~84px) */}
-        <header className="h-[84px] bg-[#F9F8F3]/95 backdrop-blur-md border-b border-[#E2DDD0] px-6 sm:px-8 flex items-center justify-between flex-shrink-0 shadow-2xs z-20">
-          <div className="flex items-center gap-4">
-            {/* Mobile Hamburger Button */}
+        {/* Top Sticky Header */}
+        <header className="min-h-[64px] sm:min-h-[76px] lg:h-[84px] bg-[#F9F8F3]/95 backdrop-blur-md border-b border-[#E2DDD0] px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center justify-between flex-shrink-0 shadow-2xs z-20">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 mr-2">
+            {/* Mobile / Tablet Hamburger Button */}
             <button
               type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl text-[#1C1B1A] hover:bg-black/5"
+              className="lg:hidden p-1.5 sm:p-2 rounded-xl text-[#1C1B1A] hover:bg-black/5 shrink-0"
               aria-label="Open sidebar"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,20 +245,30 @@ export default function AdminLayout() {
             </button>
 
             {/* Breadcrumb + Editorial Page Title */}
-            <div>
-              <div className="flex items-center gap-2 text-xs text-[#66645E] font-medium mb-1">
-                <span>Admin Workspace</span>
-                <span className="text-[#9E9C94]">/</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-[#66645E] font-medium leading-none mb-1 truncate">
+                <span className="hidden min-[420px]:inline">Admin Workspace</span>
+                <span className="hidden min-[420px]:inline text-[#9E9C94]">/</span>
                 <span className="text-[#1C1B1A] font-semibold">{pageInfo.breadcrumb}</span>
               </div>
-              <h1 className="font-bold tracking-tight text-2xl sm:text-[28px] lg:text-[30px] font-semibold text-[#1C1B1A] tracking-tight leading-none">
-                {pageInfo.title}
+              <h1 className="font-bold tracking-tight text-base sm:text-2xl lg:text-[28px] text-[#1C1B1A] leading-tight truncate">
+                <span className="sm:hidden">{pageInfo.mobileTitle || pageInfo.title}</span>
+                <span className="hidden sm:inline">{pageInfo.title}</span>
               </h1>
             </div>
           </div>
 
           {/* Right Header Actions */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Return to Landing Page */}
+            <Link
+              to="/"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-medium text-[#1C1B1A] bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] shadow-2xs transition-colors cursor-pointer shrink-0"
+              title="Return to Landing Page"
+            >
+              <Home className="w-3.5 h-3.5 text-[#66645E]" />
+              <span className="hidden sm:inline">Landing Page</span>
+            </Link>
             {/* Change Password Button */}
             <button
               type="button"
@@ -270,19 +280,17 @@ export default function AdminLayout() {
                 setNewPassword('');
                 setConfirmPassword('');
               }}
-              className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-full text-xs font-medium text-[#1C1B1A] bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] shadow-2xs transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-2 rounded-full text-xs font-medium text-[#1C1B1A] bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] shadow-2xs transition-colors cursor-pointer shrink-0"
+              title="Change Password"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">Change Password</span>
-              <span className="sm:hidden">Password</span>
             </button>
-
           </div>
-
         </header>
 
         {/* Scrollable Body Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scroll bg-[#F7F5EE]">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8 custom-scroll bg-[#F7F5EE]">
           <Outlet />
         </main>
       </div>

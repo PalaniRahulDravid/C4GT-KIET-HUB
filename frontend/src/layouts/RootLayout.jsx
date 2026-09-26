@@ -50,13 +50,6 @@ export default function RootLayout() {
     return <Navigate to="/complete-profile" replace />;
   }
 
-  // Guard: Authenticated users CANNOT access main site landing page ('/' or '/home')
-  if (!loading && isAuthenticated && user) {
-    if (location.pathname === '/' || location.pathname === '/home') {
-      const dashboardPath = getDashboardPath(user.role);
-      return <Navigate to={dashboardPath} replace />;
-    }
-  }
 
   if (isFullBleedPage) {
     return <Outlet />;
@@ -86,11 +79,7 @@ export default function RootLayout() {
       .toUpperCase();
   };
 
-  const logoTarget = isOnboarding
-    ? '/complete-profile'
-    : isAuthenticated
-    ? getDashboardPath(user?.role)
-    : '/';
+  const logoTarget = isOnboarding ? '/complete-profile' : '/';
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
@@ -120,20 +109,18 @@ export default function RootLayout() {
             </div>
           ) : (
             <nav className="hidden md:flex items-center space-x-6">
-              {/* Home link - only for guests */}
-              {!isAuthenticated && (
-                <NavLink
-                  to="/"
-                  end
-                  className={({ isActive }) =>
-                    `text-sm font-medium transition-colors hover:text-blue-600 ${
-                      isActive ? 'text-blue-600 font-semibold' : 'text-gray-600'
-                    }`
-                  }
-                >
-                  Home
-                </NavLink>
-              )}
+              {/* Home link */}
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) =>
+                  `text-sm font-medium transition-colors hover:text-blue-600 ${
+                    isActive ? 'text-blue-600 font-semibold' : 'text-gray-600'
+                  }`
+                }
+              >
+                Home
+              </NavLink>
 
               {/* For Team Leads: Direct Header Links to Roster, Give Tasks to Students, and Student Dashboard */}
               {(user?.role === 'teamlead' || user?.role === 'team_lead') && (
@@ -359,15 +346,13 @@ export default function RootLayout() {
         {/* Mobile Navigation Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white px-4 pt-2 pb-4 space-y-3">
-            {!isAuthenticated && (
-              <Link
-                to="/"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block text-sm font-medium text-gray-700 py-2 hover:text-blue-600"
-              >
-                Home
-              </Link>
-            )}
+            <Link
+              to="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-medium text-gray-700 py-2 hover:text-blue-600"
+            >
+              Home
+            </Link>
 
             {!isAuthenticated ? (
               <div className="pt-2 border-t border-gray-100">

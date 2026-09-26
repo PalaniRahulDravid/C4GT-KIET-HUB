@@ -155,13 +155,13 @@ export default function AdminOverview() {
   return (
     <div className="w-full space-y-8">
       {/* 1. WELCOME HERO CARD */}
-      <div className="relative rounded-2xl bg-gradient-to-r from-[#EBF3EA]/60 via-[#F8F6F0] to-[#FCEEE9]/50 border border-[#E0DDD0] p-8 text-[#1C1B1A] overflow-hidden shadow-2xs">
+      <div className="relative rounded-2xl bg-gradient-to-r from-[#EBF3EA]/60 via-[#F8F6F0] to-[#FCEEE9]/50 border border-[#E0DDD0] p-5 sm:p-8 text-[#1C1B1A] overflow-hidden shadow-2xs">
         <div className="relative z-10 max-w-[680px] space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-black/10 text-[11px] font-mono font-semibold tracking-wider uppercase shadow-2xs">
             <span className="w-1.5 h-1.5 rounded-full bg-[#1C1B1A]"></span>
             Administration Workspace
           </div>
-          <h2 className="font-bold tracking-tight text-3xl sm:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
+          <h2 className="font-bold tracking-tight text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#1C1B1A]">
             Welcome to C4GT Hub Administration
           </h2>
           <p className="text-[#66645E] text-sm leading-relaxed">
@@ -171,7 +171,7 @@ export default function AdminOverview() {
       </div>
 
       {/* 2. FOUR KEY METRIC CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {loading ? (
           <>
             <SkeletonCard />
@@ -271,7 +271,7 @@ export default function AdminOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           {/* Card 1: Manage Users */}
           <Link
             to="/admin/users"
@@ -364,9 +364,9 @@ export default function AdminOverview() {
 
       {/* 4. RECENT REGISTERED USERS TABLE */}
       <div className="bg-[#FDFCF9] rounded-2xl border border-[#E0DDD0] shadow-2xs overflow-hidden">
-        <div className="p-6 border-b border-[#E0DDD0] flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold tracking-tight text-2xl font-semibold text-[#1C1B1A]">Recent Registered Users</h3>
+            <h3 className="font-bold tracking-tight text-xl sm:text-2xl font-semibold text-[#1C1B1A]">Recent Registered Users</h3>
             <p className="text-xs text-[#66645E]">Latest user accounts synced from Google OAuth.</p>
           </div>
           <Link
@@ -378,43 +378,68 @@ export default function AdminOverview() {
           </Link>
         </div>
 
-        {loading ? (
-          <SkeletonTable rows={4} rowsOnly />
-        ) : (
-          <div className="divide-y divide-[#E2DDD0]">
-            {recentUsers.map((u, idx) => {
-              const isSelf = currentUser && (currentUser._id === u._id || currentUser.email === u.email);
-              return (
-                <div key={u._id || idx} className="p-4 sm:px-6 hover:bg-[#F4F1E8]/50 transition-colors flex items-center justify-between">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
-                      {getInitials(u.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-[#1C1B1A] truncate">{u.name || 'User'}</span>
-                        {isSelf && (
-                          <span className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-1.5 py-0.5 rounded border border-[#E0DDD0]">
-                            You
-                          </span>
-                        )}
+        <div className="overflow-x-auto custom-scroll w-full">
+          <div className="min-w-[520px]">
+            {/* Table Header for strictly aligned columns */}
+            <div className="grid grid-cols-[1fr_120px_100px] gap-4 px-4 sm:px-6 py-2.5 bg-[#F2EFE6]/60 border-b border-[#E2DDD0] text-[10px] sm:text-[11px] font-mono font-semibold text-[#66645E] uppercase tracking-wider">
+              <div>User Profile</div>
+              <div className="text-center">Role</div>
+              <div className="text-right">Registered</div>
+            </div>
+
+            {loading ? (
+              <SkeletonTable rows={4} rowsOnly />
+            ) : (
+              <div className="divide-y divide-[#E2DDD0]">
+                {recentUsers.map((u, idx) => {
+                  const isSelf = currentUser && (currentUser._id === u._id || currentUser.email === u.email);
+                  return (
+                    <div
+                      key={u._id || idx}
+                      className="grid grid-cols-[1fr_120px_100px] gap-4 items-center px-4 sm:px-6 py-3.5 hover:bg-[#F4F1E8]/50 transition-colors"
+                    >
+                      {/* Col 1: Profile */}
+                      <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                        <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                          {getInitials(u.name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-[#1C1B1A] truncate" title={u.name || 'User'}>
+                              {u.name || 'User'}
+                            </span>
+                            {isSelf && (
+                              <span className="text-[10px] font-mono font-semibold text-[#1C1B1A] bg-[#EEECDF] px-1.5 py-0.5 rounded border border-[#E0DDD0] shrink-0">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-[#66645E] font-mono truncate" title={u.email}>
+                            {u.email}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-[#66645E] font-mono truncate">{u.email}</div>
+
+                      {/* Col 2: Role Badge */}
+                      <div className="flex justify-center">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-medium border ${getRoleBadgeStyle(u.role)}`}>
+                          {getRoleLabel(u.role)}
+                        </span>
+                      </div>
+
+                      {/* Col 3: Registration Date */}
+                      <div className="text-right">
+                        <span className="text-xs text-[#66645E] font-mono whitespace-nowrap">
+                          {formatDate(u.createdAt)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4 sm:gap-8 flex-shrink-0">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-medium border ${getRoleBadgeStyle(u.role)}`}>
-                      {getRoleLabel(u.role)}
-                    </span>
-                    <span className="text-xs text-[#66645E] font-mono w-20 sm:w-24 text-right">
-                      {formatDate(u.createdAt)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
