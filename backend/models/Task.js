@@ -69,6 +69,11 @@ const taskSchema = new mongoose.Schema({
     enum: ['students', 'team_lead', 'individual', 'entire_team'],
     default: 'students',
   },
+  batch: {
+    type: String,
+    default: null,
+    index: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -1,12 +1,13 @@
 const mongoose = require('mongoose');
 const config = require('./env');
 
-if (process.env.NODE_ENV !== 'production') {
-  try {
-    const dns = require('dns');
-    dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4', '1.0.0.1']);
-  } catch (err) { }
-}
+try {
+  const dns = require('dns');
+  if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4', '1.0.0.1']);
+} catch (err) { }
 
 // Serverless connection cache
 let cached = global.mongoose;
@@ -39,7 +40,7 @@ const connectDB = async () => {
 
   if (!cached.promise) {
     const opts = {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 15000,
     };
 
     console.log(`Initiating MongoDB Atlas connection to: ${sanitizeMongoUri(config.mongoUri)}`);

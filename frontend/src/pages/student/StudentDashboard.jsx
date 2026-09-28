@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
+import UserAvatar from '../../components/UserAvatar';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -60,6 +61,10 @@ import {
   Check,
   Crown,
   Home,
+  Target,
+  TrendingUp,
+  BarChart3,
+  Filter,
 } from 'lucide-react';
 import { Skeleton, SkeletonCard, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
@@ -154,6 +159,11 @@ export default function StudentDashboard() {
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [streakData, setStreakData] = useState({ currentStreak: 0, todayActiveSeconds: 0 });
   const [studentTeam, setStudentTeam] = useState(null);
+  const [teamProgressData, setTeamProgressData] = useState(null);
+  const [loadingTeamProgress, setLoadingTeamProgress] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [memberFilterStatus, setMemberFilterStatus] = useState('all'); // all, completed, in_progress, pending
+  const [teamActiveViewTab, setTeamActiveViewTab] = useState('members'); // 'members' | 'deliverables'
   const [teamInvitations, setTeamInvitations] = useState([]);
   const [hubResources, setHubResources] = useState([]);
   const [loadingHubResources, setLoadingHubResources] = useState(true);
@@ -232,6 +242,7 @@ export default function StudentDashboard() {
 
   const fetchStudentTeam = async () => {
     try {
+      setLoadingTeamProgress(true);
       const res = await fetch(`${API_BASE_URL}/student/team`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -240,12 +251,16 @@ export default function StudentDashboard() {
         const data = await res.json();
         if (data && data.success && data.hasTeam) {
           setStudentTeam(data.team);
+          setTeamProgressData(data.teamProgress || null);
         } else {
           setStudentTeam(null);
+          setTeamProgressData(null);
         }
       }
     } catch (err) {
       console.error('Failed to load team:', err);
+    } finally {
+      setLoadingTeamProgress(false);
     }
   };
 
@@ -566,6 +581,61 @@ export default function StudentDashboard() {
     });
   }, [hubResources, resourceCategory, resourceSearch]);
 
+  // Team Progress Member Filtering & Counts
+  const memberCounts = useMemo(() => {
+    const list = teamProgressData?.memberStats || [];
+    const all = list.length;
+    const completed = list.filter((m) => m.totalTasks > 0 && m.completionRate === 100).length;
+    const inProgress = list.filter((m) => m.totalTasks > 0 && (m.submitted > 0 || (m.completed > 0 && m.completionRate < 100))).length;
+    const pending = list.filter((m) => m.totalTasks > 0 && m.pending > 0 && m.completed === 0 && m.submitted === 0).length;
+    return { all, completed, inProgress, pending };
+  }, [teamProgressData]);
+
+  const filteredMemberStats = useMemo(() => {
+    if (!teamProgressData?.memberStats) {
+      if (Array.isArray(studentTeam?.members)) {
+        return studentTeam.members.map((m) => ({
+          _id: m._id,
+          name: m.name,
+          email: m.email,
+          rollNumber: m.rollNumber || '',
+          branch: m.branch || '',
+          year: m.year || '',
+          avatar: m.avatar || '',
+          totalTasks: 0,
+          completed: 0,
+          submitted: 0,
+          pending: 0,
+          completionRate: 0,
+        }));
+      }
+      return [];
+    }
+
+    let list = teamProgressData.memberStats;
+
+    if (memberSearchQuery.trim()) {
+      const q = memberSearchQuery.toLowerCase().trim();
+      list = list.filter(
+        (m) =>
+          (m.name && m.name.toLowerCase().includes(q)) ||
+          (m.email && m.email.toLowerCase().includes(q)) ||
+          (m.rollNumber && m.rollNumber.toLowerCase().includes(q)) ||
+          (m.branch && m.branch.toLowerCase().includes(q))
+      );
+    }
+
+    if (memberFilterStatus === 'completed') {
+      list = list.filter((m) => m.totalTasks > 0 && m.completionRate === 100);
+    } else if (memberFilterStatus === 'in_progress') {
+      list = list.filter((m) => m.totalTasks > 0 && (m.submitted > 0 || (m.completed > 0 && m.completionRate < 100)));
+    } else if (memberFilterStatus === 'pending') {
+      list = list.filter((m) => m.totalTasks > 0 && m.pending > 0 && m.completed === 0 && m.submitted === 0);
+    }
+
+    return list;
+  }, [teamProgressData, studentTeam, memberSearchQuery, memberFilterStatus]);
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'completed':
@@ -594,6 +664,21 @@ export default function StudentDashboard() {
         return <BookOpen className="w-5 h-5 text-indigo-600" />;
     }
   };
+
+  const getPageInfo = () => {
+    if (activeNav === 'my-tasks') {
+      return { breadcrumb: 'My Tasks', title: 'My Tasks & Deliverables', mobileTitle: 'My Tasks' };
+    }
+    if (activeNav === 'resources') {
+      return { breadcrumb: 'Resources', title: 'Learning Resources Hub', mobileTitle: 'Resources' };
+    }
+    if (activeNav === 'progress') {
+      return { breadcrumb: 'Team Progress', title: 'Team Progress & Roster', mobileTitle: 'Team & Progress' };
+    }
+    return { breadcrumb: 'Overview', title: 'Student Overview', mobileTitle: 'Overview' };
+  };
+
+  const pageInfo = getPageInfo();
 
   return (
     <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-slate-50/60 font-sans text-slate-900 overflow-hidden">
@@ -722,24 +807,32 @@ export default function StudentDashboard() {
       </Sidebar>
 
       {/* Main Workspace Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {/* Top Header Bar */}
-        <header className="sticky top-0 z-20 flex min-h-14 sm:min-h-16 py-2 sm:py-0 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 sm:px-6 lg:px-8 backdrop-blur-xs">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
+      <div className="flex-1 h-screen flex flex-col overflow-hidden min-w-0">
+        {/* Top Sticky Header */}
+        <header className="min-h-[64px] sm:min-h-[76px] lg:h-[84px] bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center justify-between flex-shrink-0 shadow-2xs z-20">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 mr-2">
+            {/* Mobile / Tablet Hamburger Toggle Button - Same as Admin Dashboard */}
             <button
+              type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-500 hover:bg-slate-100 shrink-0"
+              className="lg:hidden p-1.5 sm:p-2 rounded-xl text-slate-800 hover:bg-black/5 shrink-0 cursor-pointer"
               aria-label="Open sidebar"
             >
-              <LayoutDashboard className="w-5 h-5" />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
+
+            {/* Breadcrumb + Editorial Page Title */}
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] sm:text-xs text-slate-500 font-medium truncate">C4GT HUB 2026 – 2027</div>
-              <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-900 capitalize truncate">
-                {activeNav === 'overview' && 'Student Overview'}
-                {activeNav === 'my-tasks' && 'My Tasks & Deliverables'}
-                {activeNav === 'resources' && 'Learning Resources Hub'}
-                {activeNav === 'progress' && 'Team Progress & Roster'}
+              <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-slate-500 font-medium leading-none mb-1 truncate">
+                <span className="hidden min-[420px]:inline">Student Workspace</span>
+                <span className="hidden min-[420px]:inline text-slate-400">/</span>
+                <span className="text-slate-900 font-semibold">{pageInfo.breadcrumb}</span>
+              </div>
+              <h1 className="font-bold tracking-tight text-base sm:text-2xl lg:text-[28px] text-slate-900 leading-tight truncate">
+                <span className="sm:hidden">{pageInfo.mobileTitle || pageInfo.title}</span>
+                <span className="hidden sm:inline">{pageInfo.title}</span>
               </h1>
             </div>
           </div>
@@ -748,7 +841,7 @@ export default function StudentDashboard() {
             {/* Return to Landing Page */}
             <Link
               to="/"
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-1.5 shrink-0"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Return to Landing Page"
             >
               <Home className="w-3.5 h-3.5 text-slate-500" />
@@ -757,44 +850,46 @@ export default function StudentDashboard() {
 
             {/* Daily Submission Streak Badge */}
             <div
-              className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] sm:text-xs font-semibold shadow-2xs shrink-0"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] sm:text-xs font-semibold shadow-2xs shrink-0"
               title="Daily Task Submission Streak"
             >
               <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
-              <span>{streakData.currentStreak} <span className="hidden sm:inline">{streakData.currentStreak === 1 ? 'Day' : 'Days'} </span>Streak</span>
+              <span>{streakData.currentStreak}</span>
+              <span className="hidden min-[480px]:inline"> {streakData.currentStreak === 1 ? 'Day' : 'Days'} Streak</span>
             </div>
 
-            {/* Change Password Action Button */}
-            <Button
-              variant="outline"
-              size="sm"
+            {/* Change Password Action Button (Hidden on mobile, available on sm+) */}
+            <button
+              type="button"
               onClick={() => {
                 setPassError('');
                 setPassSuccess('');
                 setShowPasswordChangeModal(true);
               }}
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs p-0 sm:px-3 shrink-0"
+              className="hidden sm:flex items-center justify-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Change Password"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Change Password</span>
-            </Button>
+              <span>Change Password</span>
+            </button>
 
             {/* Notifications Bell */}
             <div className="relative" ref={notificationsRef}>
               <button
+                type="button"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="relative p-1.5 sm:p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 transition-colors shrink-0 cursor-pointer"
                 aria-label="Notifications"
+                title="Notifications"
               >
                 <Bell className="w-4 h-4" />
                 {unreadNotificationsCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
                 )}
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-[calc(100vw-32px)] sm:w-80 max-w-sm rounded-xl border border-slate-200 bg-white p-3 shadow-lg z-50 animate-in fade-in">
+                <div className="absolute right-0 mt-2 w-[calc(100vw-32px)] sm:w-80 max-w-sm rounded-2xl border border-slate-200 bg-white p-3 shadow-xl z-50 animate-in fade-in">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                     <span className="text-xs font-bold text-slate-900">Notifications</span>
                     <span className="text-[11px] text-slate-500">{unreadNotificationsCount} unread</span>
@@ -817,21 +912,21 @@ export default function StudentDashboard() {
 
             {/* Team Lead switch button if applicable */}
             {isTeamLead && (
-              <Button
-                variant="outline"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => navigate('/teamlead/tasks')}
-                className="hidden sm:inline-flex text-xs font-semibold text-amber-800 border-amber-200 bg-amber-50/50 hover:bg-amber-100/60"
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-amber-800 border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors shrink-0 cursor-pointer"
+                title="Team Lead Portal"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-600 mr-1.5" />
-                Team Lead Portal
-              </Button>
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                <span>Team Lead Portal</span>
+              </button>
             )}
           </div>
         </header>
 
         {/* Workspace Body */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8 custom-scroll">
           <div className="w-full space-y-6">
             {/* ============================================================= */}
             {/* VIEW 1: OVERVIEW */}
@@ -839,18 +934,18 @@ export default function StudentDashboard() {
             {activeNav === 'overview' && (
               <div className="space-y-6 animate-in fade-in duration-200">
                 {/* Welcome Card */}
-                <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="p-4 sm:p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
                       Welcome back, {user?.name || 'Developer'}! 👋
                     </h2>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
                       {studentTeam
                         ? `${studentTeam.name} • ${studentTeam.track || 'Engineering Track'}`
                         : 'C4GT HUB 2026 – 2027 • Track your progress and submit deliverables.'}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2.5 sm:self-auto self-start">
+                  <div className="flex flex-col min-[420px]:flex-row items-stretch min-[420px]:items-center gap-2.5 sm:self-auto self-stretch">
                     <Button
                       variant="outline"
                       onClick={() => {
@@ -858,14 +953,14 @@ export default function StudentDashboard() {
                         setPassSuccess('');
                         setShowPasswordChangeModal(true);
                       }}
-                      className="gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs"
+                      className="gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs w-full min-[420px]:w-auto justify-center"
                     >
                       <KeyRound className="w-3.5 h-3.5 text-amber-600" />
                       <span>Change Password</span>
                     </Button>
                     <Button
                       onClick={() => navigate('/student/my-tasks')}
-                      className="gap-2"
+                      className="gap-2 w-full min-[420px]:w-auto justify-center"
                     >
                       <span>View All Tasks</span>
                       <ArrowRight className="w-4 h-4" />
@@ -1005,12 +1100,12 @@ export default function StudentDashboard() {
                       )}
                     </CardContent>
 
-                    <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    <CardFooter className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
                         <span className="text-xs text-slate-500">Status:</span>
                         {getStatusBadge(nextPriorityTask.assignment?.status || nextPriorityTask.status)}
                       </div>
-                      <Button onClick={() => setSelectedTask(nextPriorityTask)} size="sm">
+                      <Button onClick={() => setSelectedTask(nextPriorityTask)} size="sm" className="w-full sm:w-auto justify-center">
                         {nextPriorityTask.assignment?.status === 'submitted'
                           ? 'View Submitted Links'
                           : 'Submit Deliverables (Google Drive)'}
@@ -1148,10 +1243,10 @@ export default function StudentDashboard() {
                   </div>
 
                   {/* Status Filters */}
-                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+                  <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60 w-full sm:w-auto">
                     <button
                       onClick={() => setTaskStatusFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'all'
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'all'
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                         }`}
@@ -1160,7 +1255,7 @@ export default function StudentDashboard() {
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('todo')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'todo'
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'todo'
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                         }`}
@@ -1169,7 +1264,7 @@ export default function StudentDashboard() {
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('submitted')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'submitted'
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'submitted'
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                         }`}
@@ -1178,7 +1273,7 @@ export default function StudentDashboard() {
                     </button>
                     <button
                       onClick={() => setTaskStatusFilter('completed')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'completed'
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${taskStatusFilter === 'completed'
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                         }`}
@@ -1201,7 +1296,7 @@ export default function StudentDashboard() {
                 </div>
 
                 {/* Assignment Source Tabs (All vs Team Lead vs Admin) */}
-                <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/80 pb-3">
                   <button
                     type="button"
                     onClick={() => {
@@ -1399,8 +1494,8 @@ export default function StudentDashboard() {
                             )}
                           </CardContent>
 
-                          <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-xs text-slate-500">
+                          <CardFooter className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <span className="text-xs text-slate-500 w-full sm:w-auto">
                               {isCompleted
                                 ? isTaskAdmin(task)
                                   ? '✓ Work reviewed and accepted by Admin'
@@ -1415,6 +1510,7 @@ export default function StudentDashboard() {
                               onClick={() => setSelectedTask(task)}
                               variant={isCompleted ? 'outline' : 'default'}
                               size="sm"
+                              className="w-full sm:w-auto justify-center"
                             >
                               {isCompleted
                                 ? 'View Details'
@@ -1572,102 +1668,618 @@ export default function StudentDashboard() {
               <div className="space-y-6 animate-in fade-in duration-200">
                 {studentTeam ? (
                   <>
-                    {/* Team Summary Hero */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="md:col-span-2">
-                        <CardHeader>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[10px] font-mono font-bold">
-                              TEAM {studentTeam.teamNumber}
+                    {/* Header with Title and Refresh */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200">
+                      <div>
+                        <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-slate-900 shrink-0" />
+                          <span className="break-words">Team Velocity & Deliverables Progress</span>
+                        </h2>
+                        <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                          Monitor live sprint completion, team submissions, and individual member contribution velocity.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={fetchStudentTeam}
+                          disabled={loadingTeamProgress}
+                          className="h-8 gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border-slate-200 shadow-2xs w-full sm:w-auto justify-center"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loadingTeamProgress ? 'animate-spin text-slate-900' : 'text-slate-500'}`} />
+                          <span>Sync Progress</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Team Summary Hero & Lead */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-4">
+                      {/* Team Overview Card */}
+                      <Card className="lg:col-span-2 border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs">
+                        <CardHeader className="p-3.5 sm:p-6 pb-2 sm:pb-3">
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-[#1C1B1A] text-white text-[10px] sm:text-[11px] font-mono font-bold tracking-wider">
+                                TEAM {studentTeam.teamNumber}
+                              </span>
+                              <span className="text-[11px] sm:text-xs text-[#66645E] font-medium">C4GT HUB 2026 – 2027</span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0] text-[10px] sm:text-xs font-semibold">
+                              {studentTeam.members?.length || 0} Members Enrolled
                             </span>
-                            <span className="text-xs text-slate-500 font-medium">C4GT HUB 2026 – 2027</span>
                           </div>
-                          <CardTitle className="text-xl font-bold text-slate-900 mt-1">
+
+                          <CardTitle className="text-lg sm:text-xl font-black text-[#1C1B1A] mt-2 break-words">
                             {studentTeam.name}
                           </CardTitle>
-                          <CardDescription className="text-xs text-slate-500">
-                            {studentTeam.track || 'Engineering Track'} • Total capacity: 9 members
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-xs font-medium text-slate-600">
-                              <span>Sprint Completion Progress</span>
-                              <span>{taskStats.pct}%</span>
+
+                          {/* Assigned Project / Responsibility - Fully responsive wrapping */}
+                          <div className="mt-2 w-full max-w-full">
+                            <div className="flex items-start gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1 rounded-lg bg-[#EEECDF] text-[#1C1B1A] border border-[#E0DDD0] text-xs font-semibold shadow-2xs max-w-full">
+                              <Target className="w-3.5 h-3.5 text-[#1C1B1A] shrink-0 mt-0.5" />
+                              <div className="min-w-0 flex-1 break-words">
+                                <span className="text-[#66645E] font-medium">Project: </span>
+                                <span className="font-bold text-[#1C1B1A]">{studentTeam.project || studentTeam.track || 'C4GT Open Source Project'}</span>
+                              </div>
                             </div>
-                            <Progress value={taskStats.pct} className="h-2" />
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 pt-1 sm:pt-1">
+                          {/* Team Multi-segment Progress Bar */}
+                          <div className="space-y-2 bg-[#F9F8F3] p-2.5 sm:p-3.5 rounded-xl border border-[#E0DDD0]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs font-bold gap-1 sm:gap-2">
+                              <span className="text-[#1C1B1A] flex items-center gap-1.5">
+                                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+                                <span>Overall Team Velocity</span>
+                              </span>
+                              <span className="font-mono text-[11px] sm:text-xs">
+                                <span className="text-emerald-700 font-bold">{teamProgressData?.totalCompleted ?? 0}</span>
+                                <span className="text-[#66645E]"> of {teamProgressData?.totalDeliverables ?? 0} Verified </span>
+                                <span className="text-emerald-700 font-bold">({teamProgressData?.teamCompletionRate ?? 0}%)</span>
+                              </span>
+                            </div>
+
+                            {/* Stacked Progress Bar */}
+                            <div className="w-full h-2.5 sm:h-3 rounded-full bg-stone-200/80 overflow-hidden flex shadow-inner border border-stone-200/50">
+                              <div
+                                style={{
+                                  width: `${
+                                    teamProgressData?.totalDeliverables
+                                      ? Math.min(100, Math.round((teamProgressData.totalCompleted / teamProgressData.totalDeliverables) * 100))
+                                      : 0
+                                  }%`,
+                                }}
+                                className="h-full bg-emerald-500 transition-all duration-500"
+                                title={`Verified: ${teamProgressData?.totalCompleted || 0}`}
+                              />
+                              <div
+                                style={{
+                                  width: `${
+                                    teamProgressData?.totalDeliverables
+                                      ? Math.min(100, Math.round((teamProgressData.totalSubmitted / teamProgressData.totalDeliverables) * 100))
+                                      : 0
+                                  }%`,
+                                }}
+                                className="h-full bg-amber-500 transition-all duration-500"
+                                title={`Under Review: ${teamProgressData?.totalSubmitted || 0}`}
+                              />
+                            </div>
+
+                            {/* Progress Legend */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] font-medium pt-1 text-[#66645E] gap-1.5">
+                              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[10px] sm:text-[11px]">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 shadow-2xs" />
+                                  <span className="text-emerald-800 font-semibold">{teamProgressData?.totalCompleted ?? 0} Verified</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 shadow-2xs" />
+                                  <span className="text-amber-800 font-semibold">{teamProgressData?.totalSubmitted ?? 0} In Review</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-stone-400 shrink-0 shadow-2xs" />
+                                  <span className="text-stone-600 font-medium">{teamProgressData?.totalPending ?? 0} Pending</span>
+                                </div>
+                              </div>
+                              <div className="text-[10px] sm:text-[11px] text-[#66645E] font-mono">
+                                Total Velocity: <span className="font-bold text-[#1C1B1A]">{teamProgressData?.teamSubmissionRate ?? 0}%</span> Submitted
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick Scope Breakdown */}
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-0.5 text-[11px] sm:text-xs">
+                            <span className="text-[#66645E] font-medium">Assignment Sources:</span>
+                            <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-[#EEECDF] text-[#1C1B1A] font-semibold border border-[#E0DDD0]">
+                              🏛️ Admin Milestones: {teamProgressData?.adminTasksCount ?? 0}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-[#EEECDF] text-[#1C1B1A] font-semibold border border-[#E0DDD0]">
+                              ⚡ Team Lead Tasks: {teamProgressData?.teamLeadTasksCount ?? 0}
+                            </span>
                           </div>
                         </CardContent>
                       </Card>
 
                       {/* Team Lead Card */}
-                      <Card>
-                        <CardHeader className="pb-3">
-                          <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            Assigned Team Lead
-                          </CardDescription>
-                          <CardTitle className="text-base font-bold text-slate-900 mt-1">
-                            {studentTeam.teamLeadId?.name || 'Lead Assigned'}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2 text-xs">
-                          <div className="flex items-center gap-2 text-slate-600 truncate">
-                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <a
-                              href={`mailto:${studentTeam.teamLeadId?.email}`}
-                              className="hover:underline truncate"
-                            >
-                              {studentTeam.teamLeadId?.email || 'N/A'}
-                            </a>
+                      <Card className="border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs flex flex-col justify-between">
+                        <CardHeader className="p-3.5 sm:p-6 pb-2 sm:pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardDescription className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#66645E]">
+                              Assigned Team Lead
+                            </CardDescription>
+                            <span className="px-2 py-0.5 rounded-full bg-[#EEECDF] text-[#1C1B1A] text-[10px] font-bold border border-[#E0DDD0] flex items-center gap-1">
+                              <Crown className="w-3 h-3 text-[#1C1B1A]" />
+                              LEAD
+                            </span>
                           </div>
-                          {(studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber) && (
-                            <div className="flex items-center gap-2 text-slate-600 truncate">
-                              <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <div className="flex items-center gap-3 mt-2 min-w-0">
+                            <UserAvatar
+                              user={studentTeam.teamLeadId}
+                              size="w-10 h-10 sm:w-12 sm:h-12"
+                              rounded="rounded-xl"
+                              animate="always"
+                              className="shadow-xs shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <CardTitle className="text-sm sm:text-base font-bold text-[#1C1B1A] truncate">
+                                {studentTeam.teamLeadId?.name || 'Lead Assigned'}
+                              </CardTitle>
+                              <p className="text-[11px] sm:text-xs text-[#66645E] font-mono truncate">
+                                {studentTeam.teamLeadId?.email || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="p-3.5 sm:p-6 space-y-2 text-xs pt-0">
+                          <div className="p-2.5 sm:p-3 bg-[#F9F8F3] rounded-xl border border-[#E0DDD0] space-y-1.5 sm:space-y-2">
+                            <div className="flex items-center gap-2 text-[#4A4843] truncate">
+                              <Mail className="w-3.5 h-3.5 text-[#66645E] shrink-0" />
                               <a
-                                href={`tel:${studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber}`}
-                                className="hover:underline"
+                                href={`mailto:${studentTeam.teamLeadId?.email}`}
+                                className="hover:underline font-mono text-[10px] sm:text-[11px] truncate text-[#1C1B1A] hover:text-black"
                               >
-                                {studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber}
+                                {studentTeam.teamLeadId?.email || 'N/A'}
                               </a>
                             </div>
-                          )}
+                            {(studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber) && (
+                              <div className="flex items-center gap-2 text-[#4A4843] truncate">
+                                <Phone className="w-3.5 h-3.5 text-[#1C1B1A] shrink-0" />
+                                <a
+                                  href={`tel:${studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber}`}
+                                  className="hover:underline text-[10px] sm:text-[11px] font-medium text-[#1C1B1A] hover:text-black"
+                                >
+                                  {studentTeam.teamLeadId?.phone || studentTeam.teamLeadId?.phoneNumber}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-[10px] sm:text-[11px] text-[#66645E] text-center font-medium">
+                            Reach out to your team lead for milestone reviews & guidance.
+                          </p>
                         </CardContent>
                       </Card>
                     </div>
 
-                    {/* Team Members Roster */}
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                        Team Members (
-                        {Array.isArray(studentTeam.members) ? studentTeam.members.length + 1 : 1} / 9)
-                      </h3>
+                    {/* Team Metrics 4-Card Overview */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                      {/* 1. Total Deliverables */}
+                      <Card className="p-3 sm:p-4 border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs hover:border-[#D5D0C2] transition-colors">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] sm:text-xs font-bold text-[#66645E] uppercase tracking-wider truncate">Total Deliverables</span>
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-[#EEECDF] text-[#1C1B1A] flex items-center justify-center shrink-0">
+                            <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          </div>
+                        </div>
+                        <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-black text-[#1C1B1A]">
+                          {teamProgressData?.totalDeliverables ?? 0}
+                        </div>
+                        <p className="text-[10px] sm:text-[11px] text-[#66645E] mt-0.5 truncate sm:whitespace-normal">
+                          Across all {studentTeam.members?.length || 0} members
+                        </p>
+                      </Card>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {Array.isArray(studentTeam.members) &&
-                          studentTeam.members.map((member) => (
-                            <Card key={member._id} className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-xs shrink-0">
-                                  {member.name ? member.name.slice(0, 2).toUpperCase() : 'ST'}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <h4 className="text-xs font-bold text-slate-900 truncate">
-                                    {member.name}
-                                  </h4>
-                                  <p className="text-[11px] text-slate-500 font-mono truncate">
-                                    {member.email}
-                                  </p>
-                                  {(member.branch || member.year) && (
-                                    <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                                      {member.branch} {member.year ? `• Year ${member.year}` : ''}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </Card>
-                          ))}
-                      </div>
+                      {/* 2. Verified & Approved */}
+                      <Card className="p-3 sm:p-4 border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs hover:border-[#D5D0C2] transition-colors">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] sm:text-xs font-bold text-emerald-800 uppercase tracking-wider truncate">Verified</span>
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200/80 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          </div>
+                        </div>
+                        <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-black text-emerald-700">
+                          {teamProgressData?.totalCompleted ?? 0}
+                        </div>
+                        <p className="text-[10px] sm:text-[11px] text-emerald-700/80 font-medium mt-0.5 truncate sm:whitespace-normal">
+                          {teamProgressData?.teamCompletionRate ?? 0}% completed
+                        </p>
+                      </Card>
+
+                      {/* 3. Under Review */}
+                      <Card className="p-3 sm:p-4 border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs hover:border-[#D5D0C2] transition-colors">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] sm:text-xs font-bold text-amber-800 uppercase tracking-wider truncate">In Review</span>
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shrink-0">
+                            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          </div>
+                        </div>
+                        <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-black text-amber-700">
+                          {teamProgressData?.totalSubmitted ?? 0}
+                        </div>
+                        <p className="text-[10px] sm:text-[11px] text-amber-700/80 font-medium mt-0.5 truncate sm:whitespace-normal">
+                          Awaiting review
+                        </p>
+                      </Card>
+
+                      {/* 4. Pending Submissions */}
+                      <Card className="p-3 sm:p-4 border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs hover:border-[#D5D0C2] transition-colors">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] sm:text-xs font-bold text-stone-600 uppercase tracking-wider truncate">Pending</span>
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-stone-100 text-stone-600 border border-stone-200 flex items-center justify-center shrink-0">
+                            <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          </div>
+                        </div>
+                        <div className="mt-1 sm:mt-2 text-xl sm:text-3xl font-black text-stone-700">
+                          {teamProgressData?.totalPending ?? 0}
+                        </div>
+                        <p className="text-[10px] sm:text-[11px] text-stone-500 font-medium mt-0.5 truncate sm:whitespace-normal">
+                          To be submitted
+                        </p>
+                      </Card>
                     </div>
+
+                    {/* View Switcher & Member Filter Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                      {/* View Switch Buttons - full width grid on mobile */}
+                      <div className="w-full sm:w-auto grid grid-cols-2 sm:flex items-center gap-1 p-1 bg-[#EEECDF] border border-[#E0DDD0] rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setTeamActiveViewTab('members')}
+                          className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            teamActiveViewTab === 'members'
+                              ? 'bg-[#1C1B1A] text-white shadow-2xs'
+                              : 'text-[#66645E] hover:text-[#1C1B1A]'
+                          }`}
+                        >
+                          <Users className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">Members ({memberCounts.all})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTeamActiveViewTab('deliverables')}
+                          className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            teamActiveViewTab === 'deliverables'
+                              ? 'bg-[#1C1B1A] text-white shadow-2xs'
+                              : 'text-[#66645E] hover:text-[#1C1B1A]'
+                          }`}
+                        >
+                          <Layers className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">Tasks ({teamProgressData?.totalTasksCount ?? 0})</span>
+                        </button>
+                      </div>
+
+                      {/* Search Input for Members */}
+                      {teamActiveViewTab === 'members' && (
+                        <div className="relative w-full sm:w-72">
+                          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#66645E]" />
+                          <input
+                            type="text"
+                            placeholder="Filter by name, roll, or branch..."
+                            value={memberSearchQuery}
+                            onChange={(e) => setMemberSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:outline-hidden focus:ring-1 focus:ring-[#1C1B1A] focus:border-[#1C1B1A] transition-all placeholder:text-[#9E9C94]"
+                          />
+                          {memberSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setMemberSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#66645E] hover:text-[#1C1B1A] text-xs cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Member Filter Chips (Horizontally scrollable on small screens) */}
+                    {teamActiveViewTab === 'members' && (
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full custom-scroll text-[11px] sm:text-xs">
+                        <span className="text-[#66645E] font-semibold flex items-center gap-1 shrink-0 mr-1">
+                          <Filter className="w-3 h-3 text-[#66645E]" /> Filter:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMemberFilterStatus('all')}
+                          className={`px-2.5 py-1 rounded-lg font-semibold shrink-0 transition-colors cursor-pointer ${
+                            memberFilterStatus === 'all'
+                              ? 'bg-[#1C1B1A] text-white'
+                              : 'bg-white border border-[#E0DDD0] text-[#66645E] hover:bg-[#F4F1E8]'
+                          }`}
+                        >
+                          All ({memberCounts.all})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMemberFilterStatus('completed')}
+                          className={`px-2.5 py-1 rounded-lg font-semibold shrink-0 transition-colors flex items-center gap-1 cursor-pointer ${
+                            memberFilterStatus === 'completed'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-emerald-50/70 border border-emerald-200/80 text-emerald-800 hover:bg-emerald-100'
+                          }`}
+                        >
+                          <Check className="w-3 h-3" />
+                          Completed ({memberCounts.completed})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMemberFilterStatus('in_progress')}
+                          className={`px-2.5 py-1 rounded-lg font-semibold shrink-0 transition-colors flex items-center gap-1 cursor-pointer ${
+                            memberFilterStatus === 'in_progress'
+                              ? 'bg-amber-600 text-white shadow-xs'
+                              : 'bg-amber-50/70 border border-amber-200/80 text-amber-800 hover:bg-amber-100'
+                          }`}
+                        >
+                          <Clock className="w-3 h-3" />
+                          In Review ({memberCounts.inProgress})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMemberFilterStatus('pending')}
+                          className={`px-2.5 py-1 rounded-lg font-semibold shrink-0 transition-colors flex items-center gap-1 cursor-pointer ${
+                            memberFilterStatus === 'pending'
+                              ? 'bg-stone-700 text-white shadow-xs'
+                              : 'bg-stone-100 border border-stone-200 text-stone-700 hover:bg-stone-200'
+                          }`}
+                        >
+                          <AlertCircle className="w-3 h-3" />
+                          Pending ({memberCounts.pending})
+                        </button>
+                      </div>
+                    )}
+
+                    {/* ========================================================= */}
+                    {/* VIEW TAB 1: INDIVIDUAL TEAM MEMBERS PROGRESS */}
+                    {/* ========================================================= */}
+                    {teamActiveViewTab === 'members' && (
+                      <div className="space-y-3.5">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs font-bold text-[#66645E] uppercase tracking-wider">
+                            Individual Member Breakdown ({filteredMemberStats.length} shown)
+                          </h3>
+                        </div>
+
+                        {filteredMemberStats.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-3.5">
+                            {filteredMemberStats.map((member) => {
+                              const isCompletedAll = member.totalTasks > 0 && member.completionRate === 100;
+                              const hasSubmitted = member.submitted > 0;
+                              const hasStarted = member.completed > 0;
+
+                              return (
+                                <Card
+                                  key={member._id}
+                                  className="p-3.5 sm:p-4 border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs hover:shadow-xs transition-all hover:border-[#D5D0C2] flex flex-col justify-between"
+                                >
+                                  <div>
+                                    {/* Member Header */}
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                        <UserAvatar
+                                          user={member}
+                                          size="w-9 h-9 sm:w-10 sm:h-10"
+                                          rounded="rounded-xl"
+                                          animate="always"
+                                          className="shadow-2xs shrink-0"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                          <h4 className="text-xs sm:text-sm font-bold text-[#1C1B1A] truncate" title={member.name}>
+                                            {member.name}
+                                          </h4>
+                                          <p className="text-[10px] sm:text-[11px] text-[#66645E] font-mono truncate" title={member.email}>
+                                            {member.email}
+                                          </p>
+                                          {member.rollNumber && (
+                                            <p className="text-[10px] text-[#66645E] font-mono truncate">
+                                              Roll: <span className="font-semibold text-[#1C1B1A]">{member.rollNumber}</span>
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Status Badge */}
+                                      {member.totalTasks > 0 ? (
+                                        isCompletedAll ? (
+                                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[9px] sm:text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
+                                            <Check className="w-3 h-3 text-emerald-600" />
+                                            Completed
+                                          </span>
+                                        ) : hasSubmitted ? (
+                                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[9px] sm:text-[10px] font-bold border border-amber-200 flex items-center gap-1">
+                                            <Clock className="w-3 h-3 text-amber-600" />
+                                            In Review
+                                          </span>
+                                        ) : hasStarted ? (
+                                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 text-[9px] sm:text-[10px] font-bold border border-blue-200 flex items-center gap-1">
+                                            <TrendingUp className="w-3 h-3 text-blue-600" />
+                                            In Progress
+                                          </span>
+                                        ) : member.pending > 0 ? (
+                                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[9px] sm:text-[10px] font-bold border border-stone-200 flex items-center gap-1">
+                                            Pending
+                                          </span>
+                                        ) : null
+                                      ) : null}
+                                    </div>
+
+                                    {/* Branch / Year Tag */}
+                                    {(member.branch || member.year) && (
+                                      <div className="mt-2 text-[10px] text-[#4A4843] font-medium bg-[#EEECDF] px-2 py-0.5 rounded-md border border-[#E0DDD0] w-fit">
+                                        {member.branch} {member.year ? `• Year ${member.year}` : ''}
+                                      </div>
+                                    )}
+
+                                    {/* Member Progress Bar */}
+                                    <div className="mt-3 space-y-1.5">
+                                      <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold">
+                                        <span className="text-[#66645E]">Completion</span>
+                                        <span className="font-mono text-emerald-700 font-bold">
+                                          {member.completionRate}%
+                                        </span>
+                                      </div>
+                                      <div className="w-full h-2 rounded-full bg-stone-200/80 overflow-hidden shadow-inner border border-stone-200/50">
+                                        <div
+                                          style={{ width: `${member.completionRate}%` }}
+                                          className="h-full bg-emerald-500 transition-all duration-300"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    {/* Deliverables Breakdown Matrix */}
+                                    <div className="grid grid-cols-3 gap-1 sm:gap-1.5 mt-3 pt-2.5 border-t border-[#E0DDD0] text-center">
+                                      <div className="p-1 sm:p-1.5 bg-emerald-50/80 rounded-lg border border-emerald-200/80">
+                                        <div className="text-xs font-black text-emerald-800 font-mono">
+                                          {member.completed}
+                                        </div>
+                                        <div className="text-[9px] sm:text-[10px] font-bold text-emerald-700">Verified</div>
+                                      </div>
+                                      <div className="p-1 sm:p-1.5 bg-amber-50/80 rounded-lg border border-amber-200/80">
+                                        <div className="text-xs font-black text-amber-800 font-mono">
+                                          {member.submitted}
+                                        </div>
+                                        <div className="text-[9px] sm:text-[10px] font-bold text-amber-700">In Review</div>
+                                      </div>
+                                      <div className="p-1 sm:p-1.5 bg-stone-100/80 rounded-lg border border-stone-200/80">
+                                        <div className="text-xs font-black text-stone-700 font-mono">
+                                          {member.pending}
+                                        </div>
+                                        <div className="text-[9px] sm:text-[10px] font-bold text-stone-500">Pending</div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Footer Contact link */}
+                                  <div className="mt-3 pt-2 border-t border-[#E0DDD0] flex items-center justify-between text-[10px] sm:text-[11px] text-[#66645E]">
+                                    <span className="font-mono text-[10px] truncate mr-2">
+                                      {member.completed}/{member.totalTasks} deliverables verified
+                                    </span>
+                                    <a
+                                      href={`mailto:${member.email}`}
+                                      className="text-[#1C1B1A] hover:text-black font-semibold inline-flex items-center gap-1 hover:underline shrink-0"
+                                    >
+                                      <Mail className="w-3 h-3 text-[#66645E]" />
+                                      Email
+                                    </a>
+                                  </div>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center bg-[#FDFCF9] rounded-2xl border border-dashed border-[#E0DDD0]">
+                            <Users className="w-8 h-8 text-[#9E9C94] mx-auto mb-2" />
+                            <p className="text-xs font-bold text-[#1C1B1A]">No team members match this filter</p>
+                            <p className="text-[11px] text-[#66645E] mt-0.5">Try clearing your search query or selecting "All".</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setMemberSearchQuery('');
+                                setMemberFilterStatus('all');
+                              }}
+                              className="mt-3 text-xs h-7 border-[#D5D0C2] text-[#1C1B1A] hover:bg-[#F4F1E8]"
+                            >
+                              Reset Filters
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ========================================================= */}
+                    {/* VIEW TAB 2: TEAM ASSIGNMENTS & DELIVERABLES ROADMAP */}
+                    {/* ========================================================= */}
+                    {teamActiveViewTab === 'deliverables' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs font-bold text-[#66645E] uppercase tracking-wider">
+                            Team Deliverables Breakdown ({teamProgressData?.tasksBreakdown?.length || 0} active)
+                          </h3>
+                        </div>
+
+                        {Array.isArray(teamProgressData?.tasksBreakdown) && teamProgressData.tasksBreakdown.length > 0 ? (
+                          <div className="space-y-3">
+                            {teamProgressData.tasksBreakdown.map((task) => {
+                              const totalAssigned = task.assignedCount || 1;
+                              const pct = Math.round(((task.completedCount || 0) / totalAssigned) * 100);
+                              const reviewPct = Math.round(((task.submittedCount || 0) / totalAssigned) * 100);
+
+                              return (
+                                <Card key={task._id} className="p-4 border-[#E0DDD0] bg-[#FDFCF9] shadow-2xs hover:border-[#D5D0C2] transition-colors">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 rounded-md bg-[#EEECDF] text-[#1C1B1A] text-[10px] font-bold border border-[#E0DDD0]">
+                                          {task.source === 'admin' ? '🏛️ Admin Milestone' : '⚡ Team Lead Task'}
+                                        </span>
+                                        {task.deadline && (
+                                          <span className="text-[11px] text-[#66645E] flex items-center gap-1 font-mono">
+                                            <Calendar className="w-3 h-3 text-[#66645E]" />
+                                            Due {new Date(task.deadline).toLocaleDateString()}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <h4 className="text-sm font-bold text-[#1C1B1A] truncate">
+                                        {task.title}
+                                      </h4>
+                                    </div>
+
+                                    {/* Team Completion Ratio */}
+                                    <div className="sm:text-right shrink-0">
+                                      <div className="text-xs font-bold text-[#1C1B1A] font-mono">
+                                        {task.completedCount} / {task.assignedCount} Completed
+                                      </div>
+                                      <div className="text-[10px] text-[#66645E]">
+                                        {pct}% team completion
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Progress bar */}
+                                  <div className="mt-3 space-y-1.5">
+                                    <div className="w-full h-2 rounded-full bg-stone-200/80 overflow-hidden flex shadow-inner border border-stone-200/50">
+                                      <div
+                                        style={{ width: `${pct}%` }}
+                                        className="h-full bg-emerald-500 transition-all duration-300"
+                                        title={`Verified: ${task.completedCount}`}
+                                      />
+                                      <div
+                                        style={{ width: `${reviewPct}%` }}
+                                        className="h-full bg-amber-500 transition-all duration-300"
+                                        title={`In Review: ${task.submittedCount}`}
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between text-[11px] font-medium">
+                                      <span className="text-emerald-800 font-semibold">{task.completedCount} Verified</span>
+                                      <span className="text-amber-800 font-semibold">{task.submittedCount} In Review</span>
+                                      <span className="text-stone-600">{task.pendingCount} Pending</span>
+                                    </div>
+                                  </div>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center bg-[#FDFCF9] rounded-2xl border border-dashed border-[#E0DDD0]">
+                            <Layers className="w-8 h-8 text-[#9E9C94] mx-auto mb-2" />
+                            <p className="text-xs font-bold text-[#1C1B1A]">No deliverables assigned to this team yet</p>
+                            <p className="text-[11px] text-[#66645E] mt-0.5">Tasks created by your Admin or Team Lead will appear here.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <Card className="p-12 text-center bg-white border-dashed">
@@ -1688,53 +2300,63 @@ export default function StudentDashboard() {
       {/* DELIVERABLES SUBMISSION MODAL */}
       {/* ============================================================= */}
       {selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto custom-scroll">
             {/* Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="default">Task Submission</Badge>
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  <Badge variant="default" className="text-[11px] px-2.5 py-0.5 font-semibold">
+                    Task Submission
+                  </Badge>
                   {isTaskAdmin(selectedTask) ? (
-                    <Badge className="bg-purple-100 text-purple-800 border-purple-200">Admin Task • Reviewed by Admin</Badge>
+                    <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[11px] px-2.5 py-0.5 font-semibold">
+                      Admin Task • Reviewed by Admin
+                    </Badge>
                   ) : (
-                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">Team Lead Task • Reviewed by Team Lead</Badge>
+                    <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[11px] px-2.5 py-0.5 font-semibold">
+                      Team Lead Task • Reviewed by Team Lead
+                    </Badge>
                   )}
                   {getStatusBadge(selectedTask.assignment?.status || selectedTask.status)}
                 </div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 break-words leading-snug">
                   {selectedTask.title}
                 </h3>
               </div>
               <button
                 onClick={() => setSelectedTask(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="p-1.5 -mr-1 -mt-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0 cursor-pointer"
+                aria-label="Close modal"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Reviewer Notice */}
             {isTaskAdmin(selectedTask) ? (
-              <div className="p-3 rounded-xl bg-purple-50/90 border border-purple-200 text-xs text-purple-900 flex items-center gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
-                <span>
+              <div className="p-3 rounded-xl bg-purple-50/90 border border-purple-200 text-xs text-purple-900 flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
                   <strong>Admin Task:</strong> Your submission deliverables and proofs will be sent directly to the <strong>Admin Dashboard</strong> for official review and grading.
                 </span>
               </div>
             ) : (
-              <div className="p-3 rounded-xl bg-blue-50/90 border border-blue-200 text-xs text-blue-900 flex items-center gap-2.5">
-                <Users className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>
+              <div className="p-3 rounded-xl bg-blue-50/90 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
+                <Users className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
                   <strong>Team Lead Task:</strong> Your submission deliverables will be reviewed by your <strong>Team Lead</strong>.
                 </span>
               </div>
             )}
 
             {/* Fresher Guidance Box */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-1">
-              <p className="font-semibold text-slate-900">📋 Submission Instructions for Students:</p>
-              <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-slate-600">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-1.5">
+              <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                <span>📋</span>
+                <span>Submission Instructions for Students:</span>
+              </p>
+              <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-slate-600 leading-relaxed">
                 <li>Upload your report/document to Google Docs or Google Drive.</li>
                 <li>Upload your presentation slides to Google Slides or Google Drive.</li>
                 <li>
@@ -1792,24 +2414,24 @@ export default function StudentDashboard() {
                 const isSlide = name.toLowerCase().includes('demo') || name.toLowerCase().includes('presentation');
 
                 return (
-                  <div key={idx} className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-800 flex items-center justify-between">
-                      <span>
-                        {isDoc ? '📄 ' : isSlide ? '📊 ' : '🔗 '}
-                        {name} Link
-                      </span>
+                  <div key={idx} className="space-y-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                        <span>{isDoc ? '📄' : isSlide ? '📊' : '🔗'}</span>
+                        <span>{name} Link</span>
+                      </label>
                       {submissionDeliverables[name] && (
                         <a
                           href={submissionDeliverables[name]}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-0.5 font-normal"
+                          className="text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/60 transition-colors"
                         >
                           <span>Preview Drive Link</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
-                    </label>
+                    </div>
                     <input
                       type="url"
                       required
@@ -1857,12 +2479,13 @@ export default function StudentDashboard() {
               )}
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedTask(null)}
+                  className="w-full sm:w-auto cursor-pointer"
                 >
                   Close
                 </Button>
@@ -1870,7 +2493,7 @@ export default function StudentDashboard() {
                   type="submit"
                   size="sm"
                   disabled={submittingDeliverables}
-                  className="gap-1.5"
+                  className="gap-1.5 w-full sm:w-auto justify-center cursor-pointer"
                 >
                   {submittingDeliverables ? (
                     <>

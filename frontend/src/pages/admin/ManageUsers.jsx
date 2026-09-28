@@ -16,58 +16,6 @@ export default function ManageUsers() {
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-  const getDefaultUsers = () => [
-    {
-      _id: 'u-1',
-      name: 'platform',
-      email: 'rsdeducationplatform@gmail.com',
-      role: 'user',
-      status: 'active',
-    },
-    {
-      _id: 'u-2',
-      name: 'Swamy Rayudu',
-      email: 'swamyrayudu91@gmail.com',
-      role: 'user',
-      status: 'active',
-    },
-    {
-      _id: 'u-3',
-      name: 'palani rahul dravid',
-      email: 'rahuldravidpalani2005@gmail.com',
-      role: 'admin',
-      status: 'active',
-    },
-    {
-      _id: 'u-4',
-      name: 'PALIVELA LAKSHMI TARUN',
-      email: 'lakshmitaruntarn@gmail.com',
-      role: 'admin',
-      status: 'active',
-    },
-    {
-      _id: 'u-5',
-      name: 'Surendra Chennamalli',
-      email: 'surendrachennamalli177@gmail.com',
-      role: 'admin',
-      status: 'active',
-    },
-    {
-      _id: 'u-6',
-      name: 'Khub Team2',
-      email: 'khubteam2@gmail.com',
-      role: 'user',
-      status: 'active',
-    },
-    {
-      _id: 'u-7',
-      name: 'Rayudu Veera Venkata Swamy',
-      email: 'swamyrayudu7288@gmail.com',
-      role: 'admin',
-      status: 'active',
-    },
-  ];
-
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -78,17 +26,17 @@ export default function ManageUsers() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.success && Array.isArray(data.users) && data.users.length > 0) {
+        if (data.success && Array.isArray(data.users)) {
           setUsers(data.users);
         } else {
-          setUsers(getDefaultUsers());
+          setUsers([]);
         }
       } else {
-        setUsers(getDefaultUsers());
+        setUsers([]);
       }
     } catch (err) {
       console.error('Failed to load users from Atlas:', err);
-      setUsers(getDefaultUsers());
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -254,9 +202,6 @@ export default function ManageUsers() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-[#66645E] font-medium hidden md:inline">
-            Google SSO enabled
-          </span>
           <button
             type="button"
             onClick={fetchUsers}
@@ -470,7 +415,9 @@ export default function ManageUsers() {
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] text-[#66645E]">Google OAuth</span>
+                            {u.rollNumber && (
+                              <span className="text-[10px] font-mono text-[#66645E] block truncate">{u.rollNumber}</span>
+                            )}
                           </div>
                         </div>
                       </td>

@@ -831,13 +831,201 @@ const getStudentTeam = async (req, res) => {
       .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
       .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status');
 
+    // Auto-clean any dangling null or unpopulated members
+    const members = (populatedTeam.members || []).filter((m) => m && m._id);
+    const memberIds = members.map((m) => m._id);
+    const leadId = populatedTeam.teamLeadId ? populatedTeam.teamLeadId._id : null;
+
+    // Build task query for this team
+    const teamTasksQuery = [];
+    if (populatedTeam.teamNumber !== undefined && populatedTeam.teamNumber !== null) {
+      teamTasksQuery.push(
+        { assignedTeams: populatedTeam.teamNumber },
+        { assignedTeams: Number(populatedTeam.teamNumber) },
+        { assignedTeams: String(populatedTeam.teamNumber) }
+      );
+    }
+    if (leadId) {
+      teamTasksQuery.push({ createdBy: leadId });
+    }
+    if (memberIds.length > 0) {
+      teamTasksQuery.push({ assignedTo: { $in: memberIds } });
+    }
+
+    const tasks = teamTasksQuery.length > 0
+      ? await Task.find({ $or: teamTasksQuery }).sort({ deadline: 1 }).populate('createdBy', 'name email avatar role')
+      : [];
+
+    const taskIds = tasks.map((t) => t._id);
+
+    // Fetch assignments for this team's tasks and members
+    const assignments = memberIds.length > 0 && taskIds.length > 0
+      ? await TaskAssignment.find({
+          taskId: { $in: taskIds },
+          studentId: { $in: memberIds },
+        })
+      : [];
+
+    const assignmentMap = new Map();
+    assignments.forEach((a) => {
+      if (a.taskId && a.studentId) {
+        const key = `${a.taskId.toString()}_${a.studentId.toString()}`;
+        assignmentMap.set(key, a.status);
+      }
+    });
+
+    // Calculate individual member statistics
+    const memberStats = members.map((member) => {
+      const mId = member._id.toString();
+      const mType = member.memberType || '';
+      const allowedGroups = ['both', 'all', 'individual'];
+      if (mType === 'junior_developer') allowedGroups.push('junior_developers');
+      else if (mType === 'senior_developer' || mType === 'developer_intern') allowedGroups.push('developer_interns');
+      else allowedGroups.push('junior_developers', 'developer_interns');
+
+      const memberTasks = tasks.filter((t) => {
+        const assignedToStr = (t.assignedTo || []).map((id) => (id._id || id).toString());
+        if (assignedToStr.includes(mId)) return true;
+
+        const creatorRole = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
+        const isAdmin = t.source === 'admin' || creatorRole === 'admin';
+
+        if (isAdmin) {
+          const teamMatch = (t.assignedTeams || []).some((tn) => String(tn) === String(populatedTeam.teamNumber));
+          const groupMatch = !t.targetGroup || allowedGroups.includes(t.targetGroup);
+          const assignedMatch = assignedToStr.length === 0 || assignedToStr.includes(mId);
+          return teamMatch && groupMatch && assignedMatch;
+        } else {
+          if (leadId && t.createdBy?._id?.toString() === leadId.toString()) {
+            if (t.taskScope === 'individual') return assignedToStr.includes(mId);
+            return assignedToStr.length === 0 || assignedToStr.includes(mId);
+          }
+        }
+        return false;
+      });
+
+      let completed = 0;
+      let submitted = 0;
+      let pending = 0;
+
+      memberTasks.forEach((t) => {
+        const status = assignmentMap.get(`${t._id.toString()}_${mId}`) || 'pending';
+        if (status === 'completed') {
+          completed++;
+        } else if (status === 'submitted') {
+          submitted++;
+        } else {
+          pending++;
+        }
+      });
+
+      const total = memberTasks.length;
+      const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return {
+        _id: member._id,
+        name: member.name,
+        email: member.email,
+        rollNumber: member.rollNumber || '',
+        branch: member.branch || '',
+        year: member.year || '',
+        avatar: member.avatar || '',
+        memberType: member.memberType || '',
+        totalTasks: total,
+        completed,
+        submitted,
+        pending,
+        completionRate: rate,
+      };
+    });
+
+    // Calculate aggregated team totals
+    const totalDeliverables = memberStats.reduce((sum, m) => sum + m.totalTasks, 0);
+    const totalCompleted = memberStats.reduce((sum, m) => sum + m.completed, 0);
+    const totalSubmitted = memberStats.reduce((sum, m) => sum + m.submitted, 0);
+    const totalPending = memberStats.reduce((sum, m) => sum + m.pending, 0);
+    const teamCompletionRate = totalDeliverables > 0 ? Math.round((totalCompleted / totalDeliverables) * 100) : 0;
+    const teamSubmissionRate = totalDeliverables > 0 ? Math.round(((totalCompleted + totalSubmitted) / totalDeliverables) * 100) : 0;
+
+    // Team tasks deliverables breakdown
+    const tasksBreakdown = tasks.map((t) => {
+      const creatorRole = t.createdBy?.role ? String(t.createdBy.role).toLowerCase().trim() : '';
+      const isAdm = t.source === 'admin' || creatorRole === 'admin';
+      const assignedToStr = (t.assignedTo || []).map((id) => (id._id || id).toString());
+
+      let assignedCount = 0;
+      let completedCount = 0;
+      let submittedCount = 0;
+      let pendingCount = 0;
+
+      members.forEach((member) => {
+        const mId = member._id.toString();
+        const mType = member.memberType || '';
+        const allowedGroups = ['both', 'all', 'individual'];
+        if (mType === 'junior_developer') allowedGroups.push('junior_developers');
+        else if (mType === 'senior_developer' || mType === 'developer_intern') allowedGroups.push('developer_interns');
+        else allowedGroups.push('junior_developers', 'developer_interns');
+
+        let hasTask = false;
+        if (assignedToStr.includes(mId)) {
+          hasTask = true;
+        } else if (isAdm) {
+          const teamMatch = (t.assignedTeams || []).some((tn) => String(tn) === String(populatedTeam.teamNumber));
+          const groupMatch = !t.targetGroup || allowedGroups.includes(t.targetGroup);
+          const assignedMatch = assignedToStr.length === 0 || assignedToStr.includes(mId);
+          hasTask = teamMatch && groupMatch && assignedMatch;
+        } else if (leadId && t.createdBy?._id?.toString() === leadId.toString()) {
+          if (t.taskScope === 'individual') hasTask = assignedToStr.includes(mId);
+          else hasTask = assignedToStr.length === 0 || assignedToStr.includes(mId);
+        }
+
+        if (hasTask) {
+          assignedCount++;
+          const st = assignmentMap.get(`${t._id.toString()}_${mId}`) || 'pending';
+          if (st === 'completed') completedCount++;
+          else if (st === 'submitted') submittedCount++;
+          else pendingCount++;
+        }
+      });
+
+      return {
+        _id: t._id,
+        title: t.title,
+        source: isAdm ? 'admin' : 'teamlead',
+        deadline: t.deadline,
+        assignedCount,
+        completedCount,
+        submittedCount,
+        pendingCount,
+        rate: assignedCount > 0 ? Math.round((completedCount / assignedCount) * 100) : 0,
+      };
+    }).filter((t) => t.assignedCount > 0);
+
+    const adminTasksCount = tasksBreakdown.filter((t) => t.source === 'admin').length;
+    const teamLeadTasksCount = tasksBreakdown.filter((t) => t.source === 'teamlead').length;
+
+    const teamProgress = {
+      totalDeliverables,
+      totalCompleted,
+      totalSubmitted,
+      totalPending,
+      teamCompletionRate,
+      teamSubmissionRate,
+      totalTasksCount: tasksBreakdown.length,
+      adminTasksCount,
+      teamLeadTasksCount,
+      memberStats,
+      tasksBreakdown,
+    };
+
     const maxMembers = populatedTeam.maxMembers || 9;
-    const currentMembersCount = (populatedTeam.members ? populatedTeam.members.length : 0) + (populatedTeam.teamLeadId ? 1 : 0);
+    const currentMembersCount = members.length + (populatedTeam.teamLeadId ? 1 : 0);
 
     res.status(200).json({
       success: true,
       hasTeam: true,
       team: populatedTeam,
+      teamProgress,
       maxMembers,
       currentMembersCount,
     });

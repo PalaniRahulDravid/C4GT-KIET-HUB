@@ -93,7 +93,7 @@ function MobileSidebar({ children, className = '' }) {
           {/* Drawer */}
           <motion.aside
             key="sidebar-drawer"
-            className={`fixed top-0 left-0 z-50 h-screen max-h-screen w-72 max-w-[85vw] flex flex-col lg:hidden shadow-2xl ${className}`}
+            className={`fixed top-0 left-0 z-50 h-screen max-h-screen w-80 max-w-[88vw] flex flex-col lg:hidden shadow-2xl ${className}`}
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
@@ -103,7 +103,7 @@ function MobileSidebar({ children, className = '' }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer z-20"
+              className="absolute top-3.5 right-3 p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer z-30"
               aria-label="Close sidebar"
             >
               <X className="w-5 h-5" />
@@ -178,7 +178,7 @@ export function SidebarLogo({ logo, className = '' }) {
   return (
     <Link
       to={logo.href || '/'}
-      className={`flex items-center h-12 gap-3 px-1 rounded-xl group transition-colors overflow-hidden ${className}`}
+      className={`flex items-center min-h-[48px] gap-3 px-1 pr-12 lg:pr-1 rounded-xl group transition-colors overflow-hidden ${className}`}
     >
       <span className="flex-shrink-0 flex items-center justify-center w-10 h-10">
         {logo.icon}
@@ -192,12 +192,12 @@ export function SidebarLogo({ logo, className = '' }) {
         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
         className={`flex flex-col min-w-0 overflow-hidden ${!open ? 'pointer-events-none' : ''}`}
       >
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-white text-[15px] tracking-tight whitespace-nowrap leading-tight">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-bold text-white text-[14px] sm:text-[15px] tracking-tight whitespace-nowrap leading-tight">
             {logo.label}
           </span>
           {logo.badge && (
-            <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-white text-neutral-900 tracking-wider">
+            <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-white text-neutral-900 tracking-wider shrink-0">
               {logo.badge}
             </span>
           )}

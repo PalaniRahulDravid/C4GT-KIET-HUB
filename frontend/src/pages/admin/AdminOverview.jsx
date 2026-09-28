@@ -3,16 +3,17 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Sparkles, Users, GraduationCap, Award, Layers, CheckSquare, ArrowRight, ShieldCheck } from 'lucide-react';
 import { SkeletonCard, SkeletonTable } from '../../components/skeleton';
+import UserAvatar from '../../components/UserAvatar';
 
 export default function AdminOverview() {
   const { user: currentUser, token, apiBaseUrl } = useAuth();
   const [stats, setStats] = useState({
-    totalUsers: 7,
-    students: 3,
+    totalUsers: 0,
+    students: 0,
     teamLeads: 0,
-    admins: 4,
-    teamsCount: 9,
-    tasksCount: 12,
+    admins: 0,
+    teamsCount: 0,
+    tasksCount: 0,
   });
   const [recentUsers, setRecentUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,17 +46,17 @@ export default function AdminOverview() {
         });
         if (usersRes.ok) {
           const usersData = await usersRes.json();
-          if (usersData.success && Array.isArray(usersData.users) && usersData.users.length > 0) {
+          if (usersData.success && Array.isArray(usersData.users)) {
             setRecentUsers(usersData.users.slice(0, 5));
           } else {
-            setRecentUsers(getDefaultUsers());
+            setRecentUsers([]);
           }
         } else {
-          setRecentUsers(getDefaultUsers());
+          setRecentUsers([]);
         }
       } catch (err) {
         console.error('Failed to load overview data from Atlas:', err);
-        setRecentUsers(getDefaultUsers());
+        setRecentUsers([]);
       } finally {
         setLoading(false);
       }
@@ -63,44 +64,6 @@ export default function AdminOverview() {
 
     fetchOverviewData();
   }, [API_BASE_URL, token]);
-
-  const getDefaultUsers = () => [
-    {
-      _id: 'default-1',
-      name: 'platform',
-      email: 'rsdeducationplatform@gmail.com',
-      role: 'user',
-      createdAt: '2026-09-08T05:30:00.000Z',
-    },
-    {
-      _id: 'default-2',
-      name: 'Swamy Rayudu',
-      email: 'swamyrayudu91@gmail.com',
-      role: 'user',
-      createdAt: '2026-09-08T04:15:00.000Z',
-    },
-    {
-      _id: 'default-3',
-      name: 'palani rahul dravid',
-      email: 'rahuldravidpalani2005@gmail.com',
-      role: 'admin',
-      createdAt: '2026-09-07T12:40:00.000Z',
-    },
-    {
-      _id: 'default-4',
-      name: 'PALIVELA LAKSHMI TARUN',
-      email: 'lakshmitaruntarn@gmail.com',
-      role: 'admin',
-      createdAt: '2026-09-07T11:20:00.000Z',
-    },
-    {
-      _id: 'default-5',
-      name: 'Surendra Chennamalli',
-      email: 'surendrachennamalli177@gmail.com',
-      role: 'admin',
-      createdAt: '2026-09-07T09:10:00.000Z',
-    },
-  ];
 
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -191,7 +154,7 @@ export default function AdminOverview() {
               </div>
               <div className="flex items-baseline gap-2">
                 <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-                  {stats.totalUsers || 7}
+                  {stats.totalUsers ?? 0}
                 </div>
                 <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   Synced
@@ -210,7 +173,7 @@ export default function AdminOverview() {
               </div>
               <div className="flex items-baseline gap-2">
                 <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-                  {stats.students || 3}
+                  {stats.students ?? 0}
                 </div>
                 <span className="text-[11px] text-[#66645E]">Active Learners</span>
               </div>
@@ -227,9 +190,9 @@ export default function AdminOverview() {
               </div>
               <div className="flex items-baseline gap-2">
                 <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-                  {stats.teamLeads || 0}
+                  {stats.teamLeads ?? 0}
                 </div>
-                {(stats.teamLeads || 0) === 0 ? (
+                {(stats.teamLeads ?? 0) === 0 ? (
                   <span className="text-[11px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                     Pending
                   </span>
@@ -252,9 +215,9 @@ export default function AdminOverview() {
               </div>
               <div className="flex items-baseline gap-2">
                 <div className="text-3xl font-bold text-[#1C1B1A] tracking-tight">
-                  {stats.teamsCount || 9}
+                  {stats.teamsCount ?? 0}
                 </div>
-                <span className="text-[11px] text-[#66645E]">ML & DSA Teams</span>
+                <span className="text-[11px] text-[#66645E]">Project Teams</span>
               </div>
               <p className="text-xs text-[#66645E] mt-1">C4GT HUB teams</p>
             </div>
@@ -367,7 +330,7 @@ export default function AdminOverview() {
         <div className="p-4 sm:p-6 border-b border-[#E0DDD0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="font-bold tracking-tight text-xl sm:text-2xl font-semibold text-[#1C1B1A]">Recent Registered Users</h3>
-            <p className="text-xs text-[#66645E]">Latest user accounts synced from Google OAuth.</p>
+            <p className="text-xs text-[#66645E]">Latest registered user accounts.</p>
           </div>
           <Link
             to="/admin/users"
@@ -389,6 +352,10 @@ export default function AdminOverview() {
 
             {loading ? (
               <SkeletonTable rows={4} rowsOnly />
+            ) : recentUsers.length === 0 ? (
+              <div className="py-12 text-center text-[#66645E] text-xs">
+                No registered users found.
+              </div>
             ) : (
               <div className="divide-y divide-[#E2DDD0]">
                 {recentUsers.map((u, idx) => {
@@ -400,9 +367,13 @@ export default function AdminOverview() {
                     >
                       {/* Col 1: Profile */}
                       <div className="flex items-center gap-3.5 min-w-0 pr-2">
-                        <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                          {getInitials(u.name)}
-                        </div>
+                        <UserAvatar
+                          user={u}
+                          size="w-9 h-9"
+                          rounded="rounded-full"
+                          animate="always"
+                          className="shadow-2xs shrink-0"
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-sm text-[#1C1B1A] truncate" title={u.name || 'User'}>

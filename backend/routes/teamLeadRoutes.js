@@ -6,6 +6,7 @@ const {
   getTeamInvitations,
   cancelInvitation,
   removeMember,
+  addMember,
   getTeamTasks,
   createTeamTask,
   deleteTeamTask,
@@ -24,6 +25,7 @@ router.get('/users', searchUsers);
 router.post('/invite', inviteMember);
 router.get('/invitations', getTeamInvitations);
 router.delete('/invitations/:id', cancelInvitation);
+router.post('/members', addMember);
 router.delete('/members/:memberId', removeMember);
 
 // Team Lead Student Task Assignment endpoints

@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useAuth } from '../../context/AuthContext';
 import ProfileDetailsModal from '../../components/ProfileDetailsModal';
 import ResourceUploadModal from '../../components/ResourceUploadModal';
+import UserAvatar from '../../components/UserAvatar';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -58,6 +59,7 @@ import {
   Layers,
   AlertTriangle,
   UserCheck,
+  UserPlus,
   Eye,
   EyeOff,
   MessageSquare,
@@ -67,6 +69,7 @@ import {
   Home,
 } from 'lucide-react';
 import { Skeleton, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
+import AddStudentModal from '../../components/AddStudentModal';
 
 export default function TeamLeadDashboard() {
   const { user, token, apiBaseUrl, logout, changePassword } = useAuth();
@@ -87,6 +90,7 @@ export default function TeamLeadDashboard() {
   const [passError, setPassError] = useState('');
   const [passSuccess, setPassSuccess] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
 
   // Check if first-time password change is mandatory for this Team Lead
   const isMandatoryPasswordChange = Boolean(
@@ -807,6 +811,18 @@ export default function TeamLeadDashboard() {
     }
   };
 
+  const getPageInfo = () => {
+    if (activeTab === 'roster') {
+      return { breadcrumb: 'Team Roster', title: 'Team Roster & Capacity', mobileTitle: 'Team Roster' };
+    }
+    if (activeTab === 'resources') {
+      return { breadcrumb: 'Resources', title: 'Learning Resources & Practice Hub', mobileTitle: 'Resources' };
+    }
+    return { breadcrumb: 'Team Tasks', title: 'Team Tasks & Milestone Management', mobileTitle: 'Team Tasks' };
+  };
+
+  const pageInfo = getPageInfo();
+
   return (
     <div className="w-full min-h-screen lg:h-screen lg:max-h-screen flex bg-slate-50/70 font-sans text-slate-900 overflow-hidden">
       {/* Toast Alert */}
@@ -916,42 +932,32 @@ export default function TeamLeadDashboard() {
       </Sidebar>
 
       {/* Main Workspace Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {/* Header Bar */}
-        <header className="sticky top-0 z-20 flex min-h-14 sm:min-h-16 py-2 sm:py-0 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 sm:px-6 lg:px-8 backdrop-blur-xs">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
+      <div className="flex-1 h-screen flex flex-col overflow-hidden min-w-0">
+        {/* Top Sticky Header */}
+        <header className="min-h-[64px] sm:min-h-[76px] lg:h-[84px] bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center justify-between flex-shrink-0 shadow-2xs z-20">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 mr-2">
+            {/* Mobile / Tablet Hamburger Toggle Button - Same as Admin Dashboard */}
             <button
+              type="button"
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-500 hover:bg-slate-100 shrink-0"
+              className="lg:hidden p-1.5 sm:p-2 rounded-xl text-slate-800 hover:bg-black/5 shrink-0 cursor-pointer"
               aria-label="Open sidebar"
             >
-              <CheckSquare className="w-5 h-5" />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
+
+            {/* Breadcrumb + Editorial Page Title */}
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] sm:text-xs text-slate-500 font-medium flex items-center gap-1.5 truncate">
-                <span>{team?.name || 'C4GT HUB Team'}</span>
-                <span>•</span>
-                <span>{team?.track || 'Engineering Track'}</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-slate-500 font-medium leading-none mb-1 truncate">
+                <span className="hidden min-[420px]:inline">{team?.name || 'Team Lead'}</span>
+                <span className="hidden min-[420px]:inline text-slate-400">/</span>
+                <span className="text-slate-900 font-semibold">{pageInfo.breadcrumb}</span>
               </div>
-              <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-900 capitalize truncate">
-                {activeTab === 'tasks' && (
-                  <>
-                    <span className="sm:hidden">Team Tasks</span>
-                    <span className="hidden sm:inline">Team Tasks & Milestone Management</span>
-                  </>
-                )}
-                {activeTab === 'roster' && (
-                  <>
-                    <span className="sm:hidden">Team Roster</span>
-                    <span className="hidden sm:inline">Team Roster & Capacity</span>
-                  </>
-                )}
-                {activeTab === 'resources' && (
-                  <>
-                    <span className="sm:hidden">Resources Hub</span>
-                    <span className="hidden sm:inline">Learning Resources & Practice Hub</span>
-                  </>
-                )}
+              <h1 className="font-bold tracking-tight text-base sm:text-2xl lg:text-[28px] text-slate-900 leading-tight truncate">
+                <span className="sm:hidden">{pageInfo.mobileTitle || pageInfo.title}</span>
+                <span className="hidden sm:inline">{pageInfo.title}</span>
               </h1>
             </div>
           </div>
@@ -960,53 +966,55 @@ export default function TeamLeadDashboard() {
             {/* Return to Landing Page */}
             <Link
               to="/"
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-1.5 shrink-0"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Return to Landing Page"
             >
               <Home className="w-3.5 h-3.5 text-slate-500" />
               <span className="hidden sm:inline">Landing Page</span>
             </Link>
-            <Button
-              variant="outline"
-              size="sm"
+
+            {/* Change Password (Hidden on mobile, available on sm+) */}
+            <button
+              type="button"
               onClick={() => {
                 setPassError('');
                 setPassSuccess('');
                 setShowPasswordChangeModal(true);
               }}
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs p-0 sm:px-3 shrink-0"
+              className="hidden sm:flex items-center justify-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Change Password"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Change Password</span>
-            </Button>
+              <span>Change Password</span>
+            </button>
 
-            <Button
-              variant="outline"
-              size="sm"
+            {/* Refresh */}
+            <button
+              type="button"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold p-0 sm:px-3 shrink-0"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Refresh"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
-            </Button>
+            </button>
 
-            <Button
-              size="sm"
+            {/* Student Dashboard */}
+            <button
+              type="button"
               onClick={() => navigate('/student')}
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-1.5 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs p-0 sm:px-3 shrink-0"
+              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Student Dashboard"
             >
               <GraduationCap className="w-4 h-4 text-blue-600" />
               <span className="hidden sm:inline">Student Dashboard</span>
-            </Button>
+            </button>
           </div>
         </header>
 
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8 custom-scroll">
           <div className="w-full space-y-6">
             {/* ============================================================= */}
             {/* VIEW 1: TASKS & MILESTONE MANAGEMENT */}
@@ -1033,7 +1041,7 @@ export default function TeamLeadDashboard() {
                 </div>
 
                 {/* Team Sprint Metrics */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                   <Card className="border-slate-200 shadow-2xs">
                     <CardHeader className="pb-1.5 pt-4 px-4">
                       <CardDescription className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -1109,20 +1117,20 @@ export default function TeamLeadDashboard() {
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
                   {/* Row 1: Task Persona Tabs (All / Student Tasks / Team Lead Tasks) */}
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 w-full sm:w-auto">
                       <button
                         onClick={() => {
                           setTaskAudienceFilter('all');
                           if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${taskAudienceFilter === 'all'
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'all'
                             ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                           }`}
                       >
-                        <Layers className="w-3.5 h-3.5 text-slate-500" />
-                        <span>All Tasks</span>
-                        <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px]">
+                        <Layers className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span className="truncate">All Tasks</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px] shrink-0 font-mono">
                           {teamTasks.length}
                         </span>
                       </button>
@@ -1132,14 +1140,14 @@ export default function TeamLeadDashboard() {
                           setTaskAudienceFilter('students');
                           if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${taskAudienceFilter === 'students'
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'students'
                             ? 'bg-white text-blue-700 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                           }`}
                       >
-                        <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Student Tasks</span>
-                        <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px]">
+                        <GraduationCap className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="truncate">Student Tasks</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px] shrink-0 font-mono">
                           {sprintStats.studentTasksCount}
                         </span>
                       </button>
@@ -1149,29 +1157,29 @@ export default function TeamLeadDashboard() {
                           setTaskAudienceFilter('team_lead');
                           setSelectedPersonFilter('team_lead');
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${taskAudienceFilter === 'team_lead'
+                        className={`col-span-2 sm:col-span-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'team_lead'
                             ? 'bg-white text-purple-700 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                           }`}
                       >
-                        <Crown className="w-3.5 h-3.5 text-purple-600" />
+                        <Crown className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                         <span>Team Lead (My Tasks)</span>
-                        <span className="px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 text-[10px]">
+                        <span className="px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 text-[10px] shrink-0 font-mono">
                           {sprintStats.leadTasksCount}
                         </span>
                       </button>
                     </div>
 
                     {/* Time Sorting Selector */}
-                    <div className="flex items-center gap-2 self-start md:self-auto">
-                      <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                    <div className="flex items-center justify-between sm:justify-start gap-2 self-stretch md:self-auto pt-1 sm:pt-0">
+                      <span className="text-xs font-medium text-slate-500 flex items-center gap-1 shrink-0">
                         <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                         <span>Order by:</span>
                       </span>
                       <select
                         value={taskTimeSort}
                         onChange={(e) => setTaskTimeSort(e.target.value)}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 cursor-pointer"
+                        className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 cursor-pointer"
                       >
                         <option value="due_asc">⏰ Deadline: Soonest First</option>
                         <option value="due_desc">⏳ Deadline: Furthest First</option>
@@ -1256,9 +1264,13 @@ export default function TeamLeadDashboard() {
                 {activeFilteredStudent && singleStudentStats && (
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50/50 border border-blue-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs animate-in fade-in">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                        {activeFilteredStudent.name ? activeFilteredStudent.name.slice(0, 2).toUpperCase() : 'ST'}
-                      </div>
+                      <UserAvatar
+                        user={activeFilteredStudent}
+                        size="w-11 h-11"
+                        rounded="rounded-xl"
+                        animate="always"
+                        className="shadow-xs shrink-0"
+                      />
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="text-sm font-bold text-slate-900">
@@ -1409,101 +1421,97 @@ export default function TeamLeadDashboard() {
                             }`}
                         >
                           {/* Card Header */}
-                          <CardHeader className="p-4 sm:p-5 pb-3 border-b border-slate-100 bg-slate-50/60">
-                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-                              <div className="space-y-1.5 flex-1 min-w-0">
-                                {/* Scope & Target Tags */}
-                                <div className="flex flex-wrap items-center gap-2">
-                                  {task.isCreatedByAdmin ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-800 text-[11px] font-bold border border-purple-200 font-mono">
-                                      <ShieldCheck className="w-3 h-3 text-purple-600" />
-                                      <span>Admin Task (Review by Admin)</span>
-                                    </span>
-                                  ) : task.isCreatedByLead ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[11px] font-bold border border-blue-200 font-mono">
-                                      <Crown className="w-3 h-3 text-blue-600" />
-                                      <span>Team Lead Task</span>
-                                    </span>
-                                  ) : task.audience === 'individual' ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-100 text-sky-800 text-[11px] font-bold border border-sky-200 font-mono">
-                                      <UserIcon className="w-3 h-3" />
-                                      <span>Specific Student(s)</span>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-bold border border-slate-200 font-mono">
-                                      <Users className="w-3 h-3" />
-                                      <span>Team Task</span>
-                                    </span>
-                                  )}
+                          <CardHeader className="p-4 sm:p-5 pb-3 border-b border-slate-100 bg-slate-50/60 space-y-3">
+                            {/* Top Meta Bar: Scope & Topic Badges + Creator Info */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                {task.isCreatedByAdmin ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-800 text-[11px] font-bold border border-purple-200 font-mono">
+                                    <ShieldCheck className="w-3 h-3 text-purple-600" />
+                                    <span>Admin Task (Review by Admin)</span>
+                                  </span>
+                                ) : task.isCreatedByLead ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[11px] font-bold border border-blue-200 font-mono">
+                                    <Crown className="w-3 h-3 text-blue-600" />
+                                    <span>Team Lead Task</span>
+                                  </span>
+                                ) : task.audience === 'individual' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-100 text-sky-800 text-[11px] font-bold border border-sky-200 font-mono">
+                                    <UserIcon className="w-3 h-3" />
+                                    <span>Specific Student(s)</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-bold border border-slate-200 font-mono">
+                                    <Users className="w-3 h-3" />
+                                    <span>Team Task</span>
+                                  </span>
+                                )}
 
-                                  {task.topic && (
-                                    <span className="px-2 py-0.5 rounded-md bg-slate-200/70 text-slate-700 text-[11px] font-semibold">
-                                      {task.topic}
-                                    </span>
-                                  )}
+                                {task.topic && (
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-200/70 text-slate-700 text-[11px] font-semibold">
+                                    {task.topic}
+                                  </span>
+                                )}
 
-                                  {task.priority && task.priority !== 'Normal' && (
-                                    <span
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase font-mono ${task.priority === 'Urgent'
-                                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                          : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                        }`}
-                                    >
-                                      {task.priority} Priority
-                                    </span>
-                                  )}
-                                </div>
+                                {task.priority && task.priority !== 'Normal' && (
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase font-mono ${task.priority === 'Urgent'
+                                        ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                      }`}
+                                  >
+                                    {task.priority} Priority
+                                  </span>
+                                )}
+                              </div>
 
-                                {/* Task Title */}
+                              {/* Creator Tag & Delete Action */}
+                              <div className="flex items-center gap-1.5 shrink-0 text-slate-500 text-[11px] font-mono">
+                                <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 shadow-2xs">
+                                  {task.isCreatedByLead
+                                    ? 'Assigned by You'
+                                    : `By Admin: ${task.createdBy?.name || 'Administrator'}`}
+                                </span>
+                                {task.isCreatedByLead && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteTask(task._id)}
+                                    className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 h-7 w-7 rounded-lg"
+                                    title="Delete task"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Title & Description with Deadline Info */}
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pt-0.5">
+                              <div className="space-y-1 flex-1 min-w-0">
                                 <CardTitle className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
                                   {task.title}
                                 </CardTitle>
-
-                                {/* Task Description */}
-                                <CardDescription className="text-xs text-slate-600 line-clamp-2 mt-0.5">
+                                <CardDescription className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
                                   {task.description}
                                 </CardDescription>
                               </div>
 
-                              {/* Time / Deadline & Actions */}
-                              <div className="flex flex-row md:flex-col md:items-end justify-between items-center gap-2 shrink-0 pt-1 md:pt-0">
-                                {/* Time Deadline Badge */}
-                                <div
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold ${deadlineInfo.color}`}
-                                >
-                                  {deadlineInfo.status === 'overdue' ? (
-                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600 animate-pulse" />
-                                  ) : (
-                                    <Clock className="w-3.5 h-3.5 shrink-0" />
-                                  )}
-                                  <div className="flex flex-col text-left md:text-right">
-                                    <span className="font-bold leading-tight">{deadlineInfo.text}</span>
-                                    {deadlineInfo.subtext && (
-                                      <span className="text-[10px] opacity-75 font-mono leading-tight">
-                                        {deadlineInfo.subtext}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Creator & Delete */}
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[11px] text-slate-400 font-mono">
-                                    {task.isCreatedByLead
-                                      ? 'Assigned by You'
-                                      : `By Admin: ${task.createdBy?.name || 'Administrator'}`}
-                                  </span>
-
-                                  {task.isCreatedByLead && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleDeleteTask(task._id)}
-                                      className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 h-7 w-7"
-                                      title="Delete task"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
+                              {/* Time Deadline Badge */}
+                              <div
+                                className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold shrink-0 self-start sm:self-auto ${deadlineInfo.color}`}
+                              >
+                                {deadlineInfo.status === 'overdue' ? (
+                                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 animate-pulse" />
+                                ) : (
+                                  <Clock className="w-4 h-4 shrink-0" />
+                                )}
+                                <div className="flex flex-col text-left sm:text-right">
+                                  <span className="font-bold leading-tight">{deadlineInfo.text}</span>
+                                  {deadlineInfo.subtext && (
+                                    <span className="text-[10px] opacity-80 font-mono leading-tight">
+                                      {deadlineInfo.subtext}
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1514,49 +1522,54 @@ export default function TeamLeadDashboard() {
                           <CardContent className="p-4 sm:p-5 space-y-3.5">
                             {/* Deliverables Tags */}
                             {Array.isArray(task.deliverables) && task.deliverables.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[11px] font-semibold text-slate-500 mr-1">
+                              <div className="space-y-1.5">
+                                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                                   Deliverables:
                                 </span>
-                                {task.deliverables.map((d, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200/80"
-                                  >
-                                    📄 {typeof d === 'string' ? d : d.name || 'Deliverable'}
-                                  </span>
-                                ))}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {task.deliverables.map((d, i) => (
+                                    <span
+                                      key={i}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200/80 shadow-2xs"
+                                    >
+                                      <span>📄</span>
+                                      <span>{typeof d === 'string' ? d : d.name || 'Deliverable'}</span>
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
                             )}
 
                             {/* Related Hub Resources if attached */}
                             {Array.isArray(task.relatedResources) && task.relatedResources.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <span className="text-[11px] font-semibold text-slate-500 mr-1">
+                              <div className="space-y-1.5 pt-1">
+                                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                                   Resources:
                                 </span>
-                                {task.relatedResources.map((resItem) => (
-                                  <button
-                                    key={resItem._id}
-                                    onClick={() => handleDownloadResource(resItem)}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-medium border border-indigo-200 transition-colors cursor-pointer"
-                                  >
-                                    <BookOpen className="w-3 h-3 text-indigo-500" />
-                                    <span>{resItem.title}</span>
-                                    <ExternalLink className="w-2.5 h-2.5 text-indigo-400 ml-0.5" />
-                                  </button>
-                                ))}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {task.relatedResources.map((resItem) => (
+                                    <button
+                                      key={resItem._id}
+                                      onClick={() => handleDownloadResource(resItem)}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-medium border border-indigo-200 transition-colors cursor-pointer shadow-2xs"
+                                    >
+                                      <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                                      <span>{resItem.title}</span>
+                                      <ExternalLink className="w-2.5 h-2.5 text-indigo-400 ml-0.5" />
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             )}
 
                             {/* =================================================== */}
                             {/* SUBMISSIONS SUMMARY & COLLAPSIBLE DRAWER */}
                             {/* =================================================== */}
-                            <div className="pt-2 border-t border-slate-100 space-y-2.5">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                                 {/* Summary Badge & Progress */}
-                                <div className="flex items-center gap-3">
-                                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80">
                                     <UserCheck className="w-4 h-4 text-slate-500" />
                                     <span>
                                       {task.completedCount || 0} of {task.totalAssigned || 1} Approved
@@ -1564,7 +1577,7 @@ export default function TeamLeadDashboard() {
                                   </div>
 
                                   {unreviewedCount > 0 && (
-                                    <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-bold font-mono animate-pulse">
+                                    <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-bold font-mono animate-pulse border border-amber-200">
                                       ⚠️ {unreviewedCount} Awaiting Review
                                     </span>
                                   )}
@@ -1572,10 +1585,10 @@ export default function TeamLeadDashboard() {
 
                                 {/* Expand / Collapse Toggle Button */}
                                 <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => toggleTaskExpanded(task._id)}
-                                  className="text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 h-8 gap-1.5 self-start sm:self-auto"
+                                  className="text-xs font-semibold text-slate-700 hover:text-slate-900 border-slate-200 bg-white hover:bg-slate-50 h-8 gap-1.5 w-full sm:w-auto justify-center cursor-pointer shadow-2xs"
                                 >
                                   <span>
                                     {isExpanded ? 'Hide Member Submissions' : `Review Submissions (${targetMembers.length} members)`}
@@ -1622,9 +1635,13 @@ export default function TeamLeadDashboard() {
                                         >
                                           {/* Student Details */}
                                           <div className="flex items-center gap-3 min-w-[220px]">
-                                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-200">
-                                              {member.name ? member.name.slice(0, 2).toUpperCase() : 'ST'}
-                                            </div>
+                                            <UserAvatar
+                                              user={member}
+                                              size="w-8 h-8"
+                                              rounded="rounded-full"
+                                              animate="always"
+                                              className="shrink-0 shadow-2xs"
+                                            />
                                             <div className="truncate">
                                               <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
                                                 <span>{member.name}</span>
@@ -1797,9 +1814,21 @@ export default function TeamLeadDashboard() {
 
                 {/* Team Members List */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                    Assigned Team Members ({loadingTeam ? '...' : `${members.length} Members`})
-                  </h3>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      Assigned Team Members ({loadingTeam ? '...' : `${members.length} Members`})
+                    </h3>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAddStudentModal(true)}
+                      disabled={totalCount >= maxMembers}
+                      className="bg-[#1C1B1A] text-white hover:bg-black text-xs gap-1.5 h-8 px-3 rounded-xl shadow-2xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={totalCount >= maxMembers ? `Team is at maximum capacity (${maxMembers}/${maxMembers}). Remove a member who quit before adding a replacement.` : 'Add a student member to your team roster'}
+                    >
+                      <UserPlus className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>+ Add Student</span>
+                    </Button>
+                  </div>
 
                   {loadingTeam ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1828,9 +1857,13 @@ export default function TeamLeadDashboard() {
                       {members.map((member) => (
                         <Card key={member._id} className="p-4 flex flex-col justify-between hover:border-slate-300 transition-colors">
                           <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-xs shrink-0">
-                              {member.name ? member.name.slice(0, 2).toUpperCase() : 'ST'}
-                            </div>
+                            <UserAvatar
+                              user={member}
+                              size="w-10 h-10"
+                              rounded="rounded-full"
+                              animate="always"
+                              className="shrink-0 shadow-2xs"
+                            />
                             <div className="min-w-0 flex-1">
                               <h4 className="text-xs font-bold text-slate-900 truncate">
                                 {member.name}
@@ -2774,6 +2807,21 @@ export default function TeamLeadDashboard() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Add Student Modal */}
+      {showAddStudentModal && team && (
+        <AddStudentModal
+          isOpen={showAddStudentModal}
+          onClose={() => setShowAddStudentModal(false)}
+          team={team}
+          endpoint={`${API_BASE_URL}/teamlead/members`}
+          token={token}
+          onStudentAdded={(updatedTeam, newMember) => {
+            showToast(`${newMember?.name || 'Student'} successfully added to team roster!`);
+            fetchMyTeam();
+          }}
+        />
       )}
     </div>
   );

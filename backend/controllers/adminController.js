@@ -121,17 +121,7 @@ const getAdminStats = async (req, res) => {
   }
 };
 
-const trackNames = {
-  1: 'Machine Learning & AI Track',
-  2: 'DSA & Problem Solving Track',
-  3: 'Full Stack Web Development Track',
-  4: 'Web3 & Smart Contracts Track',
-  5: 'Cloud & DevOps Automation Track',
-  6: 'Open Source Contributions Track',
-  7: 'Mobile Application Development Track',
-  8: 'Cybersecurity & Network Defense Track',
-  9: 'Data Engineering & Analytics Track',
-};
+
 
 /**
  * Helper to compute standardized performance metrics for a team across a given timeframe.
@@ -184,8 +174,8 @@ const computeTeamMetrics = (teamDoc, allTasks, allAssignments, timeframe = 'over
     const subTime = a.submittedAt
       ? new Date(a.submittedAt)
       : a.updatedAt
-      ? new Date(a.updatedAt)
-      : new Date(0);
+        ? new Date(a.updatedAt)
+        : new Date(0);
     return subTime >= windowStart || a.status === 'completed' || a.status === 'submitted';
   });
 
@@ -300,12 +290,12 @@ const computeTeamMetrics = (teamDoc, allTasks, allAssignments, timeframe = 'over
       relevantTasks.length === 0
         ? 'No Tasks'
         : score >= 70
-        ? 'Optimal'
-        : score >= 40
-        ? 'Moderate'
-        : score > 0
-        ? 'Needs Attention'
-        : 'Inactive',
+          ? 'Optimal'
+          : score >= 40
+            ? 'Moderate'
+            : score > 0
+              ? 'Needs Attention'
+              : 'Inactive',
   };
 };
 
@@ -316,16 +306,43 @@ const computeTeamMetrics = (teamDoc, allTasks, allAssignments, timeframe = 'over
  */
 const getTeams = async (req, res) => {
   try {
-    const batchId = req.query.batch || '2026-2027';
+    let targetBatch = null;
+    if (req.query.batch) {
+      targetBatch = await Batch.findOne({
+        $or: [
+          { id: req.query.batch },
+          { batchId: req.query.batch },
+          { year: req.query.batch },
+          { name: req.query.batch },
+        ],
+      });
+    } else {
+      targetBatch =
+        (await Batch.findOne({ status: 'Active Batch' }).sort({ createdAt: -1 })) ||
+        (await Batch.findOne().sort({ createdAt: -1 }));
+    }
 
-    // Ensure all 9 teams (1 through 9) exist with designated tracks and max capacity of 9
+    // If no batch exists in database at all, do not seed phantom teams
+    if (!targetBatch) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        teams: [],
+        message: 'No batches found in database.',
+      });
+    }
+
+    const batchId = targetBatch.id;
+
+    // Ensure all 9 teams (1 through 9) exist with max capacity of 9
     for (let i = 1; i <= 9; i++) {
       let team = await Team.findOne({ teamNumber: i, batch: batchId });
       if (!team) {
         await Team.create({
           name: `Team ${i}`,
           teamNumber: i,
-          track: trackNames[i] || `Track ${i}`,
+          project: '',
+          track: '',
           batch: batchId,
           maxMembers: 9,
           teamLeadId: null,
@@ -333,10 +350,6 @@ const getTeams = async (req, res) => {
         });
       } else {
         let changed = false;
-        if (!team.track) {
-          team.track = trackNames[i] || `Track ${i}`;
-          changed = true;
-        }
         if (!team.maxMembers) {
           team.maxMembers = 9;
           changed = true;
@@ -356,6 +369,21 @@ const getTeams = async (req, res) => {
       .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
       .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
 
+    // Clean up members array on loaded docs if any populated member was null or dangling
+    for (const t of teams) {
+      if (Array.isArray(t.members)) {
+        const hasNullOrLead = t.members.some(
+          (m) => !m || (t.teamLeadId && m._id?.toString() === t.teamLeadId._id?.toString())
+        );
+        if (hasNullOrLead) {
+          t.members = t.members.filter(
+            (m) => m && (!t.teamLeadId || m._id?.toString() !== t.teamLeadId._id?.toString())
+          );
+          await Team.findByIdAndUpdate(t._id, { members: t.members.map((m) => m._id) });
+        }
+      }
+    }
+
     // Fetch all published tasks and assignments to compute team progress
     const allTasks = await Task.find().populate('createdBy', 'name role email');
     const allAssignments = await TaskAssignment.find();
@@ -371,6 +399,67 @@ const getTeams = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch teams',
+    });
+  }
+};
+
+/**
+ * @desc    Update team project/responsibility and general properties in MongoDB Atlas
+ * @route   PATCH /api/admin/teams/:id
+ * @access  Private/Admin
+ */
+const updateTeam = async (req, res) => {
+  try {
+    const { project, name, track } = req.body;
+    let team = null;
+
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      team = await Team.findById(req.params.id);
+    }
+    if (!team) {
+      const match = String(req.params.id).match(/\d+/);
+      if (match) {
+        team = await Team.findOne({ teamNumber: parseInt(match[0], 10) });
+      }
+    }
+
+    if (!team) {
+      return res.status(404).json({
+        success: false,
+        message: 'Team not found',
+      });
+    }
+
+    if (project !== undefined) {
+      team.project = String(project).trim();
+    }
+    if (name !== undefined && String(name).trim()) {
+      team.name = String(name).trim();
+    }
+    if (track !== undefined) {
+      team.track = String(track).trim();
+    }
+
+    await team.save();
+
+    const populatedTeam = await Team.findById(team._id)
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber');
+
+    const allTasks = await Task.find().populate('createdBy', 'name role email');
+    const allAssignments = await TaskAssignment.find();
+    const enrichedTeam = computeTeamMetrics(populatedTeam, allTasks, allAssignments, 'overall');
+
+    res.status(200).json({
+      success: true,
+      message: `Team ${team.teamNumber} project updated successfully in MongoDB Atlas.`,
+      team: enrichedTeam,
+    });
+  } catch (error) {
+    console.error('Error updating team:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update team project',
     });
   }
 };
@@ -494,7 +583,14 @@ const removeTeamMember = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Team not found' });
     }
 
-    team.members = team.members.filter((m) => m && m.toString() !== memberId);
+    if (team.teamLeadId && team.teamLeadId.toString() === memberId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot remove the Team Lead from members list. To change or remove the Team Lead, use the Assign Lead dropdown on the team card.',
+      });
+    }
+
+    team.members = (team.members || []).filter((m) => m && m.toString() !== memberId);
     await team.save();
 
     const user = await User.findById(memberId);
@@ -519,6 +615,205 @@ const removeTeamMember = async (req, res) => {
     });
   }
 };
+
+/**
+ * @desc    Add a new student member to a team (Admin)
+ * @route   POST /api/admin/teams/:id/members
+ * @access  Private/Admin
+ */
+const addTeamMember = async (req, res) => {
+  try {
+    const { id: teamId } = req.params;
+    let team = null;
+
+    if (mongoose.Types.ObjectId.isValid(teamId)) {
+      team = await Team.findById(teamId);
+    }
+    if (!team) {
+      const match = String(teamId).match(/\d+/);
+      if (match) {
+        team = await Team.findOne({ teamNumber: parseInt(match[0], 10) });
+      }
+    }
+
+    if (!team) {
+      return res.status(404).json({ success: false, message: 'Team not found' });
+    }
+
+    // Clean up any ghost IDs or duplicate lead IDs in team.members
+    const validMembers = await User.find({ _id: { $in: team.members || [] } }).select('_id');
+    const validMemberIdStrings = validMembers.map((u) => u._id.toString());
+    team.members = (team.members || []).filter(
+      (m) =>
+        m &&
+        validMemberIdStrings.includes(m.toString()) &&
+        m.toString() !== team.teamLeadId?.toString()
+    );
+
+    const currentMemberCount = team.members.length;
+    const maxMembersAllowed = team.maxMembers || 9;
+    const totalCount = currentMemberCount + (team.teamLeadId ? 1 : 0);
+
+    if (totalCount >= maxMembersAllowed) {
+      return res.status(400).json({
+        success: false,
+        message: `Team has reached its maximum capacity limit of ${maxMembersAllowed} members (1 Lead + 8 Members). Please remove a member who quit before adding a new student.`,
+      });
+    }
+
+    const {
+      name,
+      rollNumber,
+      email,
+      phone,
+      phoneNumber,
+      college = 'KIET',
+      branch = 'CSE',
+      year,
+      roleCode,
+      memberType,
+      type = 'DS',
+      dayScholarHostel,
+      backlogs = 0,
+      activeBacklogs = 0,
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Student full name is required' });
+    }
+    if (!rollNumber || !rollNumber.trim()) {
+      return res.status(400).json({ success: false, message: 'Roll number is required' });
+    }
+    if (!email || !email.trim()) {
+      return res.status(400).json({ success: false, message: 'Email address is required' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanRoll = rollNumber.toUpperCase().trim();
+    const cleanPhone = (phone || phoneNumber || '').trim();
+    const isSenior = roleCode === 'SD' || memberType === 'senior_developer';
+    const yearVal = Number(year) || (isSenior ? 4 : 3);
+    const mType = isSenior ? 'senior_developer' : 'junior_developer';
+    const residence = (dayScholarHostel || type || 'DS').trim().toUpperCase();
+    const backlogsCount = Number(activeBacklogs || backlogs) || 0;
+
+    // Check if Roll Number or Email belongs to any Team Lead or Admin
+    const userByEmail = await User.findOne({ email: cleanEmail });
+    const userByRoll = await User.findOne({ rollNumber: cleanRoll });
+
+    const existingLeadOrAdmin =
+      (userByEmail && (userByEmail.role === 'teamlead' || userByEmail.role === 'admin')) ||
+      (userByRoll && (userByRoll.role === 'teamlead' || userByRoll.role === 'admin'));
+
+    if (existingLeadOrAdmin) {
+      const match = userByEmail || userByRoll;
+      return res.status(400).json({
+        success: false,
+        message: `Cannot add student: Credentials belong to an active Team Lead or Administrator (${match.name} - ${match.role}). Team Leads cannot be overwritten or replaced with student members.`,
+      });
+    }
+
+    // Check if student is already assigned to a team
+    if (userByEmail && userByEmail.teamId) {
+      const existingTeam = await Team.findById(userByEmail.teamId);
+      return res.status(400).json({
+        success: false,
+        message: `A student with email "${cleanEmail}" is already assigned to ${existingTeam ? existingTeam.name : 'a team'} (${userByEmail.name}).`,
+      });
+    }
+
+    if (userByRoll && userByRoll.teamId) {
+      const existingTeam = await Team.findById(userByRoll.teamId);
+      return res.status(400).json({
+        success: false,
+        message: `A student with Roll Number "${cleanRoll}" is already assigned to ${existingTeam ? existingTeam.name : 'a team'} (${userByRoll.name}).`,
+      });
+    }
+
+    // Check if email and roll number belong to different users
+    if (userByEmail && userByRoll && userByEmail._id.toString() !== userByRoll._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: `The email "${cleanEmail}" and Roll Number "${cleanRoll}" belong to two different existing user records. Please provide consistent credentials.`,
+      });
+    }
+
+    let user = userByEmail || userByRoll;
+
+    if (user) {
+      // Re-assigning an existing unassigned student
+      user.name = name.trim();
+      user.rollNumber = cleanRoll;
+      user.email = cleanEmail;
+      if (cleanPhone) {
+        user.phone = cleanPhone;
+        user.phoneNumber = cleanPhone;
+      }
+      user.college = college || user.college || 'KIET';
+      user.branch = branch || user.branch || 'CSE';
+      user.year = yearVal;
+      user.memberType = mType;
+      user.dayScholarHostel = residence;
+      user.activeBacklogs = backlogsCount;
+      user.teamId = team._id;
+      user.batch = team.batch || user.batch || '2026-2027';
+      user.role = 'user';
+      user.status = 'active';
+      await user.save();
+    } else {
+      // Create new student
+      user = new User({
+        name: name.trim(),
+        email: cleanEmail,
+        rollNumber: cleanRoll,
+        phone: cleanPhone || null,
+        phoneNumber: cleanPhone || null,
+        password: cleanRoll,
+        college: college || 'KIET',
+        dayScholarHostel: residence,
+        activeBacklogs: backlogsCount,
+        branch: branch || 'CSE',
+        year: yearVal,
+        batch: team.batch || '2026-2027',
+        memberType: mType,
+        role: 'user',
+        status: 'active',
+        teamId: team._id,
+      });
+      await user.save();
+    }
+
+    // Add student exclusively to team.members without modifying teamLeadId
+    if (!team.members) team.members = [];
+    if (team.teamLeadId) {
+      team.members = team.members.filter(
+        (m) => m && m.toString() !== team.teamLeadId.toString()
+      );
+    }
+    if (!team.members.some((m) => m && m.toString() === user._id.toString())) {
+      team.members.push(user._id);
+    }
+    await team.save();
+
+    const updatedTeam = await Team.findById(team._id)
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status');
+
+    res.status(201).json({
+      success: true,
+      message: `Student ${user.name} (${user.rollNumber}) successfully added to ${team.name}.`,
+      member: user,
+      team: updatedTeam,
+    });
+  } catch (error) {
+    console.error('Error adding team member:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to add student to team',
+    });
+  }
+};
+
 
 /**
  * @desc    Get all resources (auto-seeds default resources if none exist)
@@ -639,15 +934,39 @@ const getTasks = async (req, res) => {
   try {
     // Admin workspace strictly manages tasks created by administrators.
     // Team lead tasks are internal to their teams and are not displayed or reviewed in the admin tasks dashboard.
+    const existingBatches = await Batch.find().select('id batchId year name');
+    const validBatchIdentifiers = [];
+    existingBatches.forEach((b) => {
+      if (b.id) validBatchIdentifiers.push(b.id);
+      if (b.batchId) validBatchIdentifiers.push(b.batchId);
+      if (b.year) validBatchIdentifiers.push(b.year);
+      if (b.name) validBatchIdentifiers.push(b.name);
+    });
+
+    if (validBatchIdentifiers.length === 0) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        tasks: [],
+      });
+    }
+
     const adminUsers = await User.find({ role: 'admin' }).select('_id');
     const adminUserIds = adminUsers.map((u) => u._id);
 
-    const tasks = await Task.find({
+    const taskFilter = {
       $or: [
         { createdBy: { $in: adminUserIds } },
         { createdBy: req.user._id },
       ],
-    })
+    };
+    if (req.query.batch) {
+      taskFilter.batch = req.query.batch;
+    } else {
+      taskFilter.batch = { $in: validBatchIdentifiers };
+    }
+
+    const tasks = await Task.find(taskFilter)
       .sort({ createdAt: -1 })
       .populate('createdBy', 'name email avatar role')
       .populate('relatedResources', 'title type description url topic fileSize fileFormat');
@@ -726,6 +1045,17 @@ const createTask = async (req, res) => {
       });
     }
 
+    let targetBatch = null;
+    if (req.body.batch) {
+      targetBatch = await Batch.findOne({
+        $or: [{ id: req.body.batch }, { batchId: req.body.batch }, { year: req.body.batch }, { name: req.body.batch }],
+      });
+    }
+    if (!targetBatch) {
+      targetBatch = (await Batch.findOne({ status: 'Active Batch' }).sort({ createdAt: -1 })) || (await Batch.findOne().sort({ createdAt: -1 }));
+    }
+    const taskBatch = targetBatch ? (targetBatch.id || targetBatch.batchId || targetBatch.year) : (req.body.batch || null);
+
     const task = await Task.create({
       title: title.trim(),
       description: description.trim(),
@@ -745,6 +1075,7 @@ const createTask = async (req, res) => {
       status: 'Published',
       createdBy: req.user._id,
       taskScope: 'students',
+      batch: taskBatch,
     });
 
     const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar role');
@@ -1086,8 +1417,49 @@ const deleteTask = async (req, res) => {
  * Requirements:
  * - Exactly 9 teams (1 through 9)
  * - For EACH team: exactly 1 LEAD, 4 SDs, and 4 JDs
+/**
+ * Robust CSV Line Parser
+ * Handles commas, quotes, double-quotes (""), and whitespace
+ */
+const parseCsvLine = (text) => {
+  const result = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (c === ',' && !inQuotes) {
+      result.push(cur.trim());
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+};
+
+/**
+ * Helper to validate Cohort CSV data
+ * Requirements:
+ * - Exactly 9 teams (1 through 9)
+ * - For EACH team: exactly 1 LEAD, 4 SDs, and 4 JDs
  * - Total students = 81
- * - Required headers: teamNumber, roleCode, name, rollNumber, email, phone, college, branch, backlogs, type
+ * - Supported columns:
+ *     1. Team No
+ *     2. Role
+ *     3. Name of the Student
+ *     4. Roll No
+ *     5. PHONE NO
+ *     6. Mail ID
+ * - Other fields (college, branch, backlogs, type) default cleanly
+ *   and students can update them directly from their profile.
  */
 const parseAndValidateCohort = (input) => {
   let rows = [];
@@ -1099,23 +1471,59 @@ const parseAndValidateCohort = (input) => {
       return { valid: false, errors: ['CSV file is empty or missing data lines.'], records: [] };
     }
 
-    const headerLine = lines[0];
-    const rawHeaders = headerLine.split(',').map((h) => h.trim().replace(/^["']|["']$/g, ''));
+    // Locate header line (skips potential title banner row like 'K-Hub Final List')
+    let headerLineIndex = -1;
+    let headerMap = {};
 
-    const headerMap = {};
-    rawHeaders.forEach((h, idx) => {
-      const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (['team', 'teamnum', 'teamnumber', 'teamno'].includes(lower)) headerMap.teamNumber = idx;
-      else if (['role', 'rolecode', 'designation', 'memberrole'].includes(lower)) headerMap.roleCode = idx;
-      else if (['name', 'fullname', 'studentname'].includes(lower)) headerMap.name = idx;
-      else if (['roll', 'rollnumber', 'rollno', 'regno', 'registrationnumber'].includes(lower)) headerMap.rollNumber = idx;
-      else if (['email', 'mail', 'emailaddress'].includes(lower)) headerMap.email = idx;
-      else if (['phone', 'phonenumber', 'mobile', 'contact'].includes(lower)) headerMap.phone = idx;
-      else if (['college', 'institution', 'campus'].includes(lower)) headerMap.college = idx;
-      else if (['branch', 'department', 'dept'].includes(lower)) headerMap.branch = idx;
-      else if (['backlogs', 'activebacklogs', 'backlog'].includes(lower)) headerMap.backlogs = idx;
-      else if (['type', 'dayscholarhostel', 'category', 'residence'].includes(lower)) headerMap.type = idx;
-    });
+    for (let lIdx = 0; lIdx < Math.min(lines.length, 5); lIdx++) {
+      const candidateHeaders = parseCsvLine(lines[lIdx]).map((h) => h.trim().replace(/^["']|["']$/g, ''));
+      const tempMap = {};
+      candidateHeaders.forEach((h, idx) => {
+        const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (['team', 'teamnum', 'teamnumber', 'teamno', 'teams', 'teamid'].includes(lower) || lower.startsWith('team')) {
+          tempMap.teamNumber = idx;
+        } else if (['role', 'rolecode', 'designation', 'memberrole', 'roles'].includes(lower) || lower.startsWith('role')) {
+          tempMap.roleCode = idx;
+        } else if (['name', 'fullname', 'studentname', 'nameofthestudent', 'student', 'names'].includes(lower) || lower.includes('name') || lower.includes('student')) {
+          tempMap.name = idx;
+        } else if (['roll', 'rollnumber', 'rollno', 'regno', 'registrationnumber', 'roll_no'].includes(lower) || lower.startsWith('roll') || lower.startsWith('reg')) {
+          tempMap.rollNumber = idx;
+        } else if (['phone', 'phonenumber', 'phoneno', 'mobile', 'mobileno', 'contact', 'contactno', 'phone_no'].includes(lower) || lower.includes('phone') || lower.includes('mobile') || lower.includes('contact')) {
+          tempMap.phone = idx;
+        } else if (['email', 'mail', 'emailaddress', 'mailid', 'emailid', 'mail_id', 'email_id'].includes(lower) || lower.includes('mail') || lower.includes('email')) {
+          tempMap.email = idx;
+        } else if (lower.includes('college') || lower.includes('institution') || lower.includes('campus')) {
+          tempMap.college = idx;
+        } else if (lower.includes('branch') || lower.includes('department') || lower.includes('dept')) {
+          tempMap.branch = idx;
+        } else if (lower.includes('backlog')) {
+          tempMap.backlogs = idx;
+        } else if (lower.includes('type') || lower.includes('dayscholar') || lower.includes('hostel') || lower.includes('residence')) {
+          tempMap.type = idx;
+        }
+      });
+
+      const matchedCount = ['teamNumber', 'roleCode', 'name', 'rollNumber', 'email'].filter((k) => tempMap[k] !== undefined).length;
+      if (matchedCount >= 3) {
+        headerLineIndex = lIdx;
+        headerMap = tempMap;
+        break;
+      }
+    }
+
+    if (headerLineIndex === -1) {
+      headerLineIndex = 0;
+      const rawHeaders = parseCsvLine(lines[0]).map((h) => h.trim().replace(/^["']|["']$/g, ''));
+      rawHeaders.forEach((h, idx) => {
+        const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (['team', 'teamnum', 'teamnumber', 'teamno', 'teams', 'teamid'].includes(lower) || lower.startsWith('team')) headerMap.teamNumber = idx;
+        else if (['role', 'rolecode', 'designation', 'memberrole', 'roles'].includes(lower) || lower.startsWith('role')) headerMap.roleCode = idx;
+        else if (['name', 'fullname', 'studentname', 'nameofthestudent', 'student', 'names'].includes(lower) || lower.includes('name') || lower.includes('student')) headerMap.name = idx;
+        else if (['roll', 'rollnumber', 'rollno', 'regno', 'registrationnumber', 'roll_no'].includes(lower) || lower.startsWith('roll') || lower.startsWith('reg')) headerMap.rollNumber = idx;
+        else if (['phone', 'phonenumber', 'phoneno', 'mobile', 'mobileno', 'contact', 'contactno', 'phone_no'].includes(lower) || lower.includes('phone') || lower.includes('mobile') || lower.includes('contact')) headerMap.phone = idx;
+        else if (['email', 'mail', 'emailaddress', 'mailid', 'emailid', 'mail_id', 'email_id'].includes(lower) || lower.includes('mail') || lower.includes('email')) headerMap.email = idx;
+      });
+    }
 
     const requiredKeys = ['teamNumber', 'roleCode', 'name', 'rollNumber', 'email'];
     const missingKeys = requiredKeys.filter((k) => headerMap[k] === undefined);
@@ -1123,17 +1531,17 @@ const parseAndValidateCohort = (input) => {
       return {
         valid: false,
         errors: [
-          `Missing required CSV header columns: ${missingKeys.join(', ')}. Required headers: teamNumber,roleCode,name,rollNumber,email,phone,college,branch,backlogs,type`,
+          `Missing required CSV header columns: ${missingKeys.join(', ')}. Expected columns: Team No, Role, Name of the Student, Roll No, PHONE NO, Mail ID`,
         ],
         records: [],
       };
     }
 
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = headerLineIndex + 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',').map((v) => v.trim());
-      const cleanValues = values.map((v) => v.replace(/^["']|["']$/g, '').trim());
+      const cleanValues = parseCsvLine(line).map((v) => v.replace(/^["']|["']$/g, '').trim());
+      if (cleanValues.every((v) => !v)) continue;
 
       rows.push({
         teamNumber: parseInt(cleanValues[headerMap.teamNumber], 10),
@@ -1142,21 +1550,21 @@ const parseAndValidateCohort = (input) => {
         rollNumber: cleanValues[headerMap.rollNumber] || '',
         email: cleanValues[headerMap.email] || '',
         phone: headerMap.phone !== undefined ? cleanValues[headerMap.phone] || '' : '',
-        college: headerMap.college !== undefined ? cleanValues[headerMap.college] || 'KIET' : 'KIET',
-        branch: headerMap.branch !== undefined ? cleanValues[headerMap.branch] || 'CSE' : 'CSE',
-        backlogs: headerMap.backlogs !== undefined ? parseInt(cleanValues[headerMap.backlogs], 10) || 0 : 0,
-        type: headerMap.type !== undefined ? cleanValues[headerMap.type] || 'DS' : 'DS',
+        college: headerMap.college !== undefined && cleanValues[headerMap.college] ? cleanValues[headerMap.college] : 'KIET',
+        branch: headerMap.branch !== undefined && cleanValues[headerMap.branch] ? cleanValues[headerMap.branch] : 'CSE',
+        backlogs: headerMap.backlogs !== undefined && cleanValues[headerMap.backlogs] ? parseInt(cleanValues[headerMap.backlogs], 10) || 0 : 0,
+        type: headerMap.type !== undefined && cleanValues[headerMap.type] ? cleanValues[headerMap.type] : 'DS',
         rowNumber: i + 1,
       });
     }
   } else if (Array.isArray(input)) {
     rows = input.map((r, idx) => ({
-      teamNumber: parseInt(r.teamNumber || r.teamNum || r.team, 10),
-      roleCode: String(r.roleCode || r.role || '').trim(),
-      name: String(r.name || r.fullName || '').trim(),
-      rollNumber: String(r.rollNumber || r.roll || '').trim(),
-      email: String(r.email || '').trim(),
-      phone: String(r.phone || r.phoneNumber || '').trim(),
+      teamNumber: parseInt(r.teamNumber || r.teamNum || r.team || r['Team No'] || r.teamNo, 10),
+      roleCode: String(r.roleCode || r.role || r['Role'] || '').trim(),
+      name: String(r.name || r.fullName || r.studentName || r['Name of the Student'] || '').trim(),
+      rollNumber: String(r.rollNumber || r.roll || r.rollNo || r['Roll No'] || '').trim(),
+      email: String(r.email || r.mail || r.mailId || r['Mail ID'] || '').trim(),
+      phone: String(r.phone || r.phoneNumber || r.phoneNo || r['PHONE NO'] || '').trim(),
       college: String(r.college || 'KIET').trim(),
       branch: String(r.branch || 'CSE').trim(),
       backlogs: Number(r.backlogs || r.activeBacklogs) || 0,
@@ -1199,14 +1607,14 @@ const parseAndValidateCohort = (input) => {
     }
 
     const code = String(r.roleCode).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (['LEAD', 'TL', 'TEAMLEAD', 'TEAMLEADER', 'LEADER'].includes(code)) {
+    if (['LEAD', 'TL', 'TEAMLEAD', 'TEAMLEADER', 'LEADER'].includes(code) || code.startsWith('LEAD') || code.startsWith('TL')) {
       r.normalizedRole = 'LEAD';
-    } else if (['SD', 'SD1', 'SD2', 'SD3', 'SD4', 'SENIOR', 'SENIORDEV', 'SENIORDEVELOPER'].includes(code)) {
+    } else if (['SD', 'SD1', 'SD2', 'SD3', 'SD4', 'SENIOR', 'SENIORDEV', 'SENIORDEVELOPER'].includes(code) || code.startsWith('SD') || code.includes('SENIOR')) {
       r.normalizedRole = 'SD';
-    } else if (['JD', 'JD1', 'JD2', 'JD3', 'JD4', 'JUNIOR', 'JUNIORDEV', 'JUNIORDEVELOPER'].includes(code)) {
+    } else if (['JD', 'JD1', 'JD2', 'JD3', 'JD4', 'JUNIOR', 'JUNIORDEV', 'JUNIORDEVELOPER'].includes(code) || code.startsWith('JD') || code.includes('JUNIOR')) {
       r.normalizedRole = 'JD';
     } else {
-      errors.push(`Row ${r.rowNumber}: Unrecognized roleCode '${r.roleCode}'. Must be LEAD, SD (SD1–SD4), or JD (JD1–JD4).`);
+      errors.push(`Row ${r.rowNumber}: Unrecognized Role '${r.roleCode}'. Must be LEAD, SD (SD1–SD4 / Senior Dev), or JD (JD1–JD4 / Junior Dev).`);
     }
   });
 
@@ -1253,35 +1661,31 @@ const parseAndValidateCohort = (input) => {
  */
 const getBatches = async (req, res) => {
   try {
-    let batches = await Batch.find().sort({ createdAt: -1 });
-
-    // Seed default 2026-2027 batch if no batches exist in DB
-    if (batches.length === 0) {
-      const defaultBatch = await Batch.create({
-        id: '2026-2027',
-        year: '2026 – 2027',
-        status: 'Active Batch',
-        teamsCount: 9,
-        activeTeamsCount: 9,
-        studentsCount: 81,
-        avgPerformance: '78%',
-        upcoming: false,
-      });
-      batches = [defaultBatch];
-    }
+    const batches = await Batch.find().sort({ createdAt: -1 });
 
     // Enrich batches with live learner count and team count
     const enrichedBatches = await Promise.all(
       batches.map(async (batchDoc) => {
         const batchObj = batchDoc.toObject();
+        const batchMatches = [
+          batchObj.id,
+          batchObj.batchId,
+          batchObj.year,
+          batchObj.name,
+          String(batchObj._id),
+        ].filter(Boolean);
+
         const liveCount = await User.countDocuments({
-          batch: batchObj.id,
+          batch: { $in: batchMatches },
           role: { $ne: 'admin' },
         });
-        const teamCount = await Team.countDocuments({ batch: batchObj.id });
-        batchObj.studentsCount = liveCount || batchObj.studentsCount || 81;
-        batchObj.teamsCount = teamCount || batchObj.teamsCount || 9;
-        batchObj.activeTeamsCount = teamCount || batchObj.activeTeamsCount || 9;
+        const teamCount = await Team.countDocuments({
+          batch: { $in: batchMatches },
+        });
+
+        batchObj.studentsCount = typeof liveCount === 'number' ? liveCount : 0;
+        batchObj.teamsCount = typeof teamCount === 'number' ? teamCount : 0;
+        batchObj.activeTeamsCount = batchObj.teamsCount;
         return batchObj;
       })
     );
@@ -1354,7 +1758,8 @@ const createBatchWithCohort = async (req, res) => {
         team = await Team.create({
           name: `Team ${i}`,
           teamNumber: i,
-          track: trackNames[i] || `Track ${i}`,
+          track: '',
+          project: '',
           batch: formattedId,
           maxMembers: 9,
           teamLeadId: null,
@@ -1376,7 +1781,7 @@ const createBatchWithCohort = async (req, res) => {
       const cleanRoll = record.rollNumber.toUpperCase().trim();
       const isLead = record.normalizedRole === 'LEAD';
       const isSenior = record.normalizedRole === 'SD';
-      const yearVal = isSenior ? 3 : 2;
+      const yearVal = isLead || isSenior ? 4 : 3;
 
       let user = await User.findOne({
         $or: [{ email: cleanEmail }, { rollNumber: cleanRoll }],
@@ -1494,11 +1899,23 @@ const deleteBatch = async (req, res) => {
         { batchId: cleanId },
         { batchId: normalizedId },
         { year: cleanId },
+        { name: cleanId },
       ],
     });
 
     if (!batch && mongoose.Types.ObjectId.isValid(cleanId)) {
       batch = await Batch.findById(cleanId);
+    }
+
+    if (!batch) {
+      const escaped = cleanId.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      batch = await Batch.findOne({
+        $or: [
+          { id: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+          { year: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+          { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+        ],
+      });
     }
 
     if (!batch) {
@@ -1511,50 +1928,115 @@ const deleteBatch = async (req, res) => {
     const batchKey = batch.id || normalizedId;
     const batchYear = batch.year || batch.name || batchKey;
 
-    // 2. Find all teams in this batch to get their IDs
+    const batchIdentifiers = Array.from(
+      new Set(
+        [
+          cleanId,
+          normalizedId,
+          batchKey,
+          batch.year,
+          batch.name,
+          batch.batchId,
+          String(batch._id),
+        ].filter(Boolean)
+      )
+    );
+
+    // 2. Delete the batch document itself FIRST so it never resurrects
+    await Batch.deleteOne({ _id: batch._id });
+
+    // 3. Find and delete all teams in this batch
     const teams = await Team.find({
-      $or: [{ batch: batchKey }, { batch: cleanId }, { batch: normalizedId }],
-    });
+      batch: { $in: batchIdentifiers },
+    }).select('_id');
     const teamIds = teams.map((t) => t._id);
 
-    // 3. Find all users associated with this batch (excluding admin accounts)
+    await Team.deleteMany({
+      $or: [{ batch: { $in: batchIdentifiers } }, { _id: { $in: teamIds } }],
+    });
+
+    // 4. Find all users associated with this batch (excluding admin accounts)
     const batchUsers = await User.find({
-      $or: [{ batch: batchKey }, { batch: cleanId }, { batch: normalizedId }],
+      batch: { $in: batchIdentifiers },
       role: { $ne: 'admin' },
     }).select('_id');
     const userIds = batchUsers.map((u) => u._id);
 
-    // 4. Delete related task assignments and student activities for these users
+    // 5. Find all tasks directly or indirectly associated with this batch
+    let taskIdsFromAssignments = [];
     if (userIds.length > 0) {
-      await TaskAssignment.deleteMany({ studentId: { $in: userIds } });
-      const StudentActivity = mongoose.models.StudentActivity || require('../models/StudentActivity');
-      await StudentActivity.deleteMany({ studentId: { $in: userIds } });
-      await User.deleteMany({ _id: { $in: userIds } });
+      try {
+        const relatedAssignments = await TaskAssignment.find({
+          studentId: { $in: userIds },
+        }).select('taskId');
+        taskIdsFromAssignments = relatedAssignments.map((a) => a.taskId).filter(Boolean);
+      } catch (err) { }
     }
 
-    // 5. Delete team requests related to these teams
+    const tasksToDelete = await Task.find({
+      $or: [
+        { batch: { $in: batchIdentifiers } },
+        ...(taskIdsFromAssignments.length > 0 ? [{ _id: { $in: taskIdsFromAssignments } }] : []),
+        ...(userIds.length > 0 ? [{ createdBy: { $in: userIds } }, { assignedTo: { $in: userIds } }] : []),
+      ],
+    }).select('_id');
+    const allTaskIdsToDelete = tasksToDelete.map((t) => t._id);
+
+    // 6. Delete all TaskAssignment records for these tasks or students
+    try {
+      await TaskAssignment.deleteMany({
+        $or: [
+          ...(userIds.length > 0 ? [{ studentId: { $in: userIds } }] : []),
+          ...(allTaskIdsToDelete.length > 0 ? [{ taskId: { $in: allTaskIdsToDelete } }] : []),
+        ],
+      });
+    } catch (err) {
+      console.warn('Batch deletion task assignments error:', err.message);
+    }
+
+    // 7. Delete all tasks associated with this batch
+    try {
+      await Task.deleteMany({
+        $or: [
+          { batch: { $in: batchIdentifiers } },
+          ...(allTaskIdsToDelete.length > 0 ? [{ _id: { $in: allTaskIdsToDelete } }] : []),
+          ...(userIds.length > 0 ? [{ createdBy: { $in: userIds } }, { assignedTo: { $in: userIds } }] : []),
+        ],
+      });
+    } catch (err) {
+      console.warn('Batch deletion tasks error:', err.message);
+    }
+
+    // 8. Delete related users and activities safely
+    if (userIds.length > 0) {
+      try {
+        await User.deleteMany({ _id: { $in: userIds } });
+      } catch (err) {
+        console.warn('Batch deletion users error:', err.message);
+      }
+      try {
+        const StudentActivity = mongoose.models.StudentActivity || require('../models/StudentActivity');
+        await StudentActivity.deleteMany({ studentId: { $in: userIds } });
+      } catch (err) { }
+    }
+
+    // 9. Delete team requests related to these teams
     if (teamIds.length > 0) {
-      const TeamRequest = mongoose.models.TeamRequest || require('../models/TeamRequest');
-      await TeamRequest.deleteMany({ teamId: { $in: teamIds } });
+      try {
+        const TeamRequest = mongoose.models.TeamRequest || require('../models/TeamRequest');
+        await TeamRequest.deleteMany({ teamId: { $in: teamIds } });
+      } catch (err) { }
     }
-
-    // 6. Delete teams in this batch
-    await Team.deleteMany({
-      $or: [{ batch: batchKey }, { batch: cleanId }, { batch: normalizedId }],
-    });
-
-    // 7. Delete the batch document itself
-    await Batch.deleteOne({ _id: batch._id });
 
     console.log(`Successfully deleted Batch '${batchKey}' (${batchYear}) and all associated records.`);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: `Batch '${batchYear}' deleted successfully.`,
     });
   } catch (error) {
     console.error('Error deleting batch:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete batch',
     });
@@ -1643,7 +2125,8 @@ const getTeamPerformanceAnalytics = async (req, res) => {
       trendData = teamsAnalytics.map((t) => ({
         label: `T${t.teamNumber}`,
         teamName: t.name,
-        track: t.track,
+        track: t.project || 'Project Not Assigned',
+        project: t.project || '',
         score: t.score,
         completed: t.completedAssignments,
         submitted: t.submittedAssignments,
@@ -1691,9 +2174,11 @@ module.exports = {
   updateUserRole,
   getAdminStats,
   getTeams,
+  updateTeam,
   getTeamPerformanceAnalytics,
   assignTeamLead,
   removeTeamMember,
+  addTeamMember,
   getResources,
   createResource,
   getTasks,
@@ -1704,6 +2189,7 @@ module.exports = {
   createBatchWithCohort,
   deleteBatch,
   reviewTaskSubmission,
+  parseAndValidateCohort,
 };
 
 

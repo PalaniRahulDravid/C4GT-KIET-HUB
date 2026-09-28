@@ -41,6 +41,7 @@ router.patch('/notifications/:id/read', markNotificationRead);
 
 // Team & Invitation endpoints
 router.get('/team', getStudentTeam);
+router.get('/team-progress', getStudentTeam);
 router.get('/team-invitations', getStudentInvitations);
 router.post('/team-invitations/:id/respond', respondToTeamInvitation);
 

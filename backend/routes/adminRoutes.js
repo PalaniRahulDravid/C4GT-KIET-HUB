@@ -4,9 +4,11 @@ const {
   updateUserRole,
   getAdminStats,
   getTeams,
+  updateTeam,
   getTeamPerformanceAnalytics,
   assignTeamLead,
   removeTeamMember,
+  addTeamMember,
   getResources,
   createResource,
   getTasks,
@@ -31,7 +33,10 @@ router.get('/users', getUsers);
 router.patch('/users/:id/role', updateUserRole);
 router.get('/teams/analytics', getTeamPerformanceAnalytics);
 router.get('/teams', getTeams);
+router.patch('/teams/:id/project', updateTeam);
 router.patch('/teams/:id/lead', assignTeamLead);
+router.patch('/teams/:id', updateTeam);
+router.post('/teams/:id/members', addTeamMember);
 router.delete('/teams/:id/members/:memberId', removeTeamMember);
 router.get('/resources', getResources);
 router.post('/resources', createResource);

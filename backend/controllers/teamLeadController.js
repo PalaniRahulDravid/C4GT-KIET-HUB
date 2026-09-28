@@ -45,6 +45,18 @@ const getMyTeam = async (req, res) => {
       .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber status')
       .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status createdAt');
 
+    if (populatedTeam && Array.isArray(populatedTeam.members)) {
+      const hasNullOrLead = populatedTeam.members.some(
+        (m) => !m || (populatedTeam.teamLeadId && m._id?.toString() === populatedTeam.teamLeadId._id?.toString())
+      );
+      if (hasNullOrLead) {
+        populatedTeam.members = populatedTeam.members.filter(
+          (m) => m && (!populatedTeam.teamLeadId || m._id?.toString() !== populatedTeam.teamLeadId._id?.toString())
+        );
+        await Team.findByIdAndUpdate(populatedTeam._id, { members: populatedTeam.members.map((m) => m._id) });
+      }
+    }
+
     const pendingInvitations = await TeamRequest.find({
       teamId: team._id,
       status: 'pending',
@@ -355,6 +367,13 @@ const removeMember = async (req, res) => {
       });
     }
 
+    if (team.teamLeadId && team.teamLeadId.toString() === memberId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot remove yourself as Team Lead from your roster.',
+      });
+    }
+
     team.members = (team.members || []).filter((m) => m && m.toString() !== memberId);
     await team.save();
 
@@ -395,6 +414,211 @@ const removeMember = async (req, res) => {
     });
   }
 };
+
+/**
+ * @desc    Add a student member to the team (Team Lead)
+ * @route   POST /api/teamlead/members
+ * @access  Private (Team Lead / Admin)
+ */
+const addMember = async (req, res) => {
+  try {
+    const team = await findLeadTeam(req.user._id, req.body.teamId);
+
+    if (!team) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not assigned as Team Lead of any team',
+      });
+    }
+
+    // Clean up any ghost IDs or duplicate lead IDs in team.members
+    const validMembers = await User.find({ _id: { $in: team.members || [] } }).select('_id');
+    const validMemberIdStrings = validMembers.map((u) => u._id.toString());
+    team.members = (team.members || []).filter(
+      (m) =>
+        m &&
+        validMemberIdStrings.includes(m.toString()) &&
+        m.toString() !== team.teamLeadId?.toString()
+    );
+
+    const currentMemberCount = team.members.length;
+    const maxMembersAllowed = team.maxMembers || 9;
+    const totalCount = currentMemberCount + (team.teamLeadId ? 1 : 0);
+
+    if (totalCount >= maxMembersAllowed) {
+      return res.status(400).json({
+        success: false,
+        message: `Your team has reached the maximum capacity limit of ${maxMembersAllowed} members (1 Lead + 8 Members). Please remove the member who quit before adding a replacement.`,
+      });
+    }
+
+    const {
+      name,
+      rollNumber,
+      email,
+      phone,
+      phoneNumber,
+      college = 'KIET',
+      branch = 'CSE',
+      year,
+      roleCode,
+      memberType,
+      type = 'DS',
+      dayScholarHostel,
+      backlogs = 0,
+      activeBacklogs = 0,
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Student full name is required' });
+    }
+    if (!rollNumber || !rollNumber.trim()) {
+      return res.status(400).json({ success: false, message: 'Roll number is required' });
+    }
+    if (!email || !email.trim()) {
+      return res.status(400).json({ success: false, message: 'Email address is required' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanRoll = rollNumber.toUpperCase().trim();
+    const cleanPhone = (phone || phoneNumber || '').trim();
+    const isSenior = roleCode === 'SD' || memberType === 'senior_developer';
+    const yearVal = Number(year) || (isSenior ? 4 : 3);
+    const mType = isSenior ? 'senior_developer' : 'junior_developer';
+    const residence = (dayScholarHostel || type || 'DS').trim().toUpperCase();
+    const backlogsCount = Number(activeBacklogs || backlogs) || 0;
+
+    // Check if Roll Number or Email belongs to any Team Lead or Admin
+    const userByEmail = await User.findOne({ email: cleanEmail });
+    const userByRoll = await User.findOne({ rollNumber: cleanRoll });
+
+    const existingLeadOrAdmin =
+      (userByEmail && (userByEmail.role === 'teamlead' || userByEmail.role === 'admin')) ||
+      (userByRoll && (userByRoll.role === 'teamlead' || userByRoll.role === 'admin'));
+
+    if (existingLeadOrAdmin) {
+      const match = userByEmail || userByRoll;
+      return res.status(400).json({
+        success: false,
+        message: `Cannot add student: Credentials belong to an active Team Lead or Administrator (${match.name} - ${match.role}). Team Leads cannot be overwritten or replaced with student members.`,
+      });
+    }
+
+    // Check if student is already assigned to any team
+    if (userByEmail && userByEmail.teamId) {
+      const existingTeam = await Team.findById(userByEmail.teamId);
+      return res.status(400).json({
+        success: false,
+        message: `A student with email "${cleanEmail}" is already assigned to ${existingTeam ? existingTeam.name : 'a team'} (${userByEmail.name}).`,
+      });
+    }
+
+    if (userByRoll && userByRoll.teamId) {
+      const existingTeam = await Team.findById(userByRoll.teamId);
+      return res.status(400).json({
+        success: false,
+        message: `A student with Roll Number "${cleanRoll}" is already assigned to ${existingTeam ? existingTeam.name : 'a team'} (${userByRoll.name}).`,
+      });
+    }
+
+    // Check if email and roll number belong to different users
+    if (userByEmail && userByRoll && userByEmail._id.toString() !== userByRoll._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: `The email "${cleanEmail}" and Roll Number "${cleanRoll}" belong to two different existing user records. Please provide consistent credentials.`,
+      });
+    }
+
+    let user = userByEmail || userByRoll;
+
+    if (user) {
+      // Re-assigning an existing unassigned student
+      user.name = name.trim();
+      user.rollNumber = cleanRoll;
+      user.email = cleanEmail;
+      if (cleanPhone) {
+        user.phone = cleanPhone;
+        user.phoneNumber = cleanPhone;
+      }
+      user.college = college || user.college || 'KIET';
+      user.branch = branch || user.branch || 'CSE';
+      user.year = yearVal;
+      user.memberType = mType;
+      user.dayScholarHostel = residence;
+      user.activeBacklogs = backlogsCount;
+      user.teamId = team._id;
+      user.batch = team.batch || user.batch || '2026-2027';
+      user.role = 'user';
+      user.status = 'active';
+      await user.save();
+    } else {
+      // Create brand new student
+      user = new User({
+        name: name.trim(),
+        email: cleanEmail,
+        rollNumber: cleanRoll,
+        phone: cleanPhone || null,
+        phoneNumber: cleanPhone || null,
+        password: cleanRoll,
+        college: college || 'KIET',
+        dayScholarHostel: residence,
+        activeBacklogs: backlogsCount,
+        branch: branch || 'CSE',
+        year: yearVal,
+        batch: team.batch || '2026-2027',
+        memberType: mType,
+        role: 'user',
+        status: 'active',
+        teamId: team._id,
+      });
+      await user.save();
+    }
+
+    // Add student strictly to team.members, preserving teamLeadId intact
+    if (!team.members) team.members = [];
+    if (team.teamLeadId) {
+      team.members = team.members.filter(
+        (m) => m && m.toString() !== team.teamLeadId.toString()
+      );
+    }
+    if (!team.members.some((m) => m && m.toString() === user._id.toString())) {
+      team.members.push(user._id);
+    }
+    await team.save();
+
+    // Create welcome notification
+    try {
+      await Notification.create({
+        studentId: user._id,
+        teamId: team._id,
+        title: `Welcome to ${team.name}!`,
+        message: `You have been added to ${team.name} by ${req.user.name || 'Team Lead'}.`,
+        type: 'team_joined',
+        assignedBy: req.user.name || 'Team Lead',
+      });
+    } catch (e) {
+      // ignore notification errors
+    }
+
+    const updatedTeam = await Team.findById(team._id)
+      .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
+      .populate('members', 'name email phone phoneNumber avatar role memberType branch year rollNumber status');
+
+    res.status(201).json({
+      success: true,
+      message: `Student ${user.name} (${user.rollNumber}) successfully added to ${team.name}.`,
+      member: user,
+      team: updatedTeam,
+    });
+  } catch (error) {
+    console.error('Error adding member in teamLeadController:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to add student to team',
+    });
+  }
+};
+
 
 /**
  * @desc    Get tasks assigned to this team / created by team lead
@@ -700,6 +924,7 @@ const createTeamTask = async (req, res) => {
       relatedResources: Array.isArray(relatedResources) ? relatedResources : [],
       status: 'Published',
       createdBy: req.user._id,
+      batch: team.batch || req.user.batch || null,
     });
 
     // Create TaskAssignment and Notification for each assigned member
@@ -796,6 +1021,7 @@ module.exports = {
   getTeamInvitations,
   cancelInvitation,
   removeMember,
+  addMember,
   getTeamTasks,
   createTeamTask,
   deleteTeamTask,

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
+import UserAvatar from '../components/UserAvatar';
 import { useAuth, getDashboardPath, isStudentProfileComplete } from '../context/AuthContext';
 import {
   User,
@@ -193,17 +194,13 @@ export default function CompleteProfile() {
         <CardHeader className="bg-slate-900 text-white pb-6 pt-6 px-6 border-b border-slate-800">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
-              {user?.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.name}
-                  className="w-12 h-12 rounded-full border-2 border-blue-400 object-cover"
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
-                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                </div>
-              )}
+              <UserAvatar
+                user={user}
+                size="w-12 h-12"
+                rounded="rounded-full"
+                animate="always"
+                className="border-2 border-blue-400 shrink-0"
+              />
               <div>
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-lg text-white font-bold">

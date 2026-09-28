@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import UserAvatar from '../../components/UserAvatar';
 import {
   Sparkles,
   Layers,
@@ -25,6 +26,7 @@ import {
   ShieldAlert,
   HelpCircle,
   Trash2,
+  Edit2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -92,32 +94,14 @@ export default function Batches() {
   const [isDeletingBatch, setIsDeletingBatch] = useState(false);
 
   // Batches state list - loaded from MongoDB Atlas
-  const [batches, setBatches] = useState([
-    {
-      id: '2026-2027',
-      year: '2026 – 2027',
-      status: 'Active Batch',
-      teamsCount: 9,
-      activeTeamsCount: 9,
-      studentsCount: 81,
-      avgPerformance: '78%',
-      upcoming: false,
-    },
-  ]);
+  const [batches, setBatches] = useState([]);
+
+  // Project editing state for selected team
+  const [editingTeamProject, setEditingTeamProject] = useState(false);
+  const [teamProjectInput, setTeamProjectInput] = useState('');
+  const [isSavingProject, setIsSavingProject] = useState(false);
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-  const trackNames = {
-    1: 'Machine Learning & AI Track',
-    2: 'DSA & Problem Solving Track',
-    3: 'Full Stack Web Development Track',
-    4: 'Web3 & Smart Contracts Track',
-    5: 'Cloud & DevOps Automation Track',
-    6: 'Open Source Contributions Track',
-    7: 'Mobile Application Development Track',
-    8: 'Cybersecurity & Network Defense Track',
-    9: 'Data Engineering & Analytics Track',
-  };
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -127,18 +111,15 @@ export default function Batches() {
   };
 
   // Generate downloadable sample CSV template for 9 teams (1 Lead, 4 SD, 4 JD each = 81 students)
+  // Generate downloadable sample CSV template for 9 teams (1 Lead, 4 SD, 4 JD each = 81 students)
   const downloadCohortTemplate = () => {
     const headers = [
-      'teamNumber',
-      'roleCode',
-      'name',
-      'rollNumber',
-      'email',
-      'phone',
-      'college',
-      'branch',
-      'backlogs',
-      'type',
+      'Team No',
+      'Role',
+      'Name of the Student',
+      'Roll No',
+      'PHONE NO',
+      'Mail ID',
     ];
     const sampleRows = [];
     for (let teamNum = 1; teamNum <= 9; teamNum++) {
@@ -148,12 +129,8 @@ export default function Batches() {
         'LEAD',
         `Lead Student Team ${teamNum}`,
         `24B21A${4200 + teamNum}`,
-        `lead.team${teamNum}@kiet.edu`,
         `987654321${teamNum}`,
-        'KIET',
-        'CSE',
-        0,
-        'DS',
+        `lead.team${teamNum}@kiet.edu`,
       ]);
       // Exactly 4 Senior Developers (SD1 - SD4)
       for (let sd = 1; sd <= 4; sd++) {
@@ -162,12 +139,8 @@ export default function Batches() {
           `SD${sd}`,
           `Senior Dev ${sd} Team ${teamNum}`,
           `24B21A${4500 + teamNum * 10 + sd}`,
-          `sd${sd}.team${teamNum}@kiet.edu`,
           `98765431${teamNum}${sd}`,
-          'KIET',
-          'AID',
-          0,
-          'DS',
+          `sd${sd}.team${teamNum}@kiet.edu`,
         ]);
       }
       // Exactly 4 Junior Developers (JD1 - JD4)
@@ -177,12 +150,8 @@ export default function Batches() {
           `JD${jd}`,
           `Junior Dev ${jd} Team ${teamNum}`,
           `25B21A${4300 + teamNum * 10 + jd}`,
-          `jd${jd}.team${teamNum}@kiet.edu`,
           `98765421${teamNum}${jd}`,
-          'KIET',
-          'CSM',
-          0,
-          'HS',
+          `jd${jd}.team${teamNum}@kiet.edu`,
         ]);
       }
     }
@@ -192,11 +161,36 @@ export default function Batches() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'c4gt_hub_batch_template_81_students.csv');
+    link.setAttribute('download', 'c4gt_hub_cohort_81_students.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('Downloaded sample CSV template (81 student slots across 9 teams).', 'success');
+    showToast('Downloaded sample CSV template (Team No, Role, Name of the Student, Roll No, PHONE NO, Mail ID).', 'success');
+  };
+
+  // Robust CSV Line Parser
+  const parseCsvLine = (text) => {
+    const result = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (c === '"') {
+        if (inQuotes && text[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (c === ',' && !inQuotes) {
+        result.push(cur.trim());
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    result.push(cur.trim());
+    return result;
   };
 
   // Client-side instant validator for Cohort CSV
@@ -206,22 +200,59 @@ export default function Batches() {
       return { valid: false, errors: ['CSV file is empty or missing data rows.'], records: [], stats: null };
     }
 
-    const headerLine = lines[0];
-    const rawHeaders = headerLine.split(',').map((h) => h.trim().replace(/^["']|["']$/g, ''));
-    const headerMap = {};
-    rawHeaders.forEach((h, idx) => {
-      const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (['team', 'teamnum', 'teamnumber', 'teamno'].includes(lower)) headerMap.teamNumber = idx;
-      else if (['role', 'rolecode', 'designation', 'memberrole'].includes(lower)) headerMap.roleCode = idx;
-      else if (['name', 'fullname', 'studentname'].includes(lower)) headerMap.name = idx;
-      else if (['roll', 'rollnumber', 'rollno', 'regno'].includes(lower)) headerMap.rollNumber = idx;
-      else if (['email', 'mail', 'emailaddress'].includes(lower)) headerMap.email = idx;
-      else if (['phone', 'phonenumber', 'mobile', 'contact'].includes(lower)) headerMap.phone = idx;
-      else if (['college', 'institution', 'campus'].includes(lower)) headerMap.college = idx;
-      else if (['branch', 'department', 'dept'].includes(lower)) headerMap.branch = idx;
-      else if (['backlogs', 'activebacklogs', 'backlog'].includes(lower)) headerMap.backlogs = idx;
-      else if (['type', 'dayscholarhostel', 'category', 'residence'].includes(lower)) headerMap.type = idx;
-    });
+    // Locate header line (skips potential title banner like 'K-Hub Final List')
+    let headerLineIndex = -1;
+    let headerMap = {};
+
+    for (let lIdx = 0; lIdx < Math.min(lines.length, 5); lIdx++) {
+      const candidateHeaders = parseCsvLine(lines[lIdx]).map((h) => h.trim().replace(/^["']|["']$/g, ''));
+      const tempMap = {};
+      candidateHeaders.forEach((h, idx) => {
+        const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (['team', 'teamnum', 'teamnumber', 'teamno', 'teams', 'teamid'].includes(lower) || lower.startsWith('team')) {
+          tempMap.teamNumber = idx;
+        } else if (['role', 'rolecode', 'designation', 'memberrole', 'roles'].includes(lower) || lower.startsWith('role')) {
+          tempMap.roleCode = idx;
+        } else if (['name', 'fullname', 'studentname', 'nameofthestudent', 'student', 'names'].includes(lower) || lower.includes('name') || lower.includes('student')) {
+          tempMap.name = idx;
+        } else if (['roll', 'rollnumber', 'rollno', 'regno', 'registrationnumber', 'roll_no'].includes(lower) || lower.startsWith('roll') || lower.startsWith('reg')) {
+          tempMap.rollNumber = idx;
+        } else if (['phone', 'phonenumber', 'phoneno', 'mobile', 'mobileno', 'contact', 'contactno', 'phone_no'].includes(lower) || lower.includes('phone') || lower.includes('mobile') || lower.includes('contact')) {
+          tempMap.phone = idx;
+        } else if (['email', 'mail', 'emailaddress', 'mailid', 'emailid', 'mail_id', 'email_id'].includes(lower) || lower.includes('mail') || lower.includes('email')) {
+          tempMap.email = idx;
+        } else if (lower.includes('college') || lower.includes('institution') || lower.includes('campus')) {
+          tempMap.college = idx;
+        } else if (lower.includes('branch') || lower.includes('department') || lower.includes('dept')) {
+          tempMap.branch = idx;
+        } else if (lower.includes('backlog')) {
+          tempMap.backlogs = idx;
+        } else if (lower.includes('type') || lower.includes('dayscholar') || lower.includes('hostel') || lower.includes('residence')) {
+          tempMap.type = idx;
+        }
+      });
+
+      const matchedCount = ['teamNumber', 'roleCode', 'name', 'rollNumber', 'email'].filter((k) => tempMap[k] !== undefined).length;
+      if (matchedCount >= 3) {
+        headerLineIndex = lIdx;
+        headerMap = tempMap;
+        break;
+      }
+    }
+
+    if (headerLineIndex === -1) {
+      headerLineIndex = 0;
+      const rawHeaders = parseCsvLine(lines[0]).map((h) => h.trim().replace(/^["']|["']$/g, ''));
+      rawHeaders.forEach((h, idx) => {
+        const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (['team', 'teamnum', 'teamnumber', 'teamno', 'teams', 'teamid'].includes(lower) || lower.startsWith('team')) headerMap.teamNumber = idx;
+        else if (['role', 'rolecode', 'designation', 'memberrole', 'roles'].includes(lower) || lower.startsWith('role')) headerMap.roleCode = idx;
+        else if (['name', 'fullname', 'studentname', 'nameofthestudent', 'student', 'names'].includes(lower) || lower.includes('name') || lower.includes('student')) headerMap.name = idx;
+        else if (['roll', 'rollnumber', 'rollno', 'regno', 'registrationnumber', 'roll_no'].includes(lower) || lower.startsWith('roll') || lower.startsWith('reg')) headerMap.rollNumber = idx;
+        else if (['phone', 'phonenumber', 'phoneno', 'mobile', 'mobileno', 'contact', 'contactno', 'phone_no'].includes(lower) || lower.includes('phone') || lower.includes('mobile') || lower.includes('contact')) headerMap.phone = idx;
+        else if (['email', 'mail', 'emailaddress', 'mailid', 'emailid', 'mail_id', 'email_id'].includes(lower) || lower.includes('mail') || lower.includes('email')) headerMap.email = idx;
+      });
+    }
 
     const requiredKeys = ['teamNumber', 'roleCode', 'name', 'rollNumber', 'email'];
     const missingKeys = requiredKeys.filter((k) => headerMap[k] === undefined);
@@ -231,7 +262,7 @@ export default function Batches() {
         errors: [
           `Missing required CSV headers: ${missingKeys.join(
             ', '
-          )}. Required: teamNumber,roleCode,name,rollNumber,email,phone,college,branch,backlogs,type`,
+          )}. Required columns: Team No, Role, Name of the Student, Roll No, PHONE NO, Mail ID`,
         ],
         records: [],
         stats: null,
@@ -243,11 +274,11 @@ export default function Batches() {
     const emailsSeen = new Set();
     const rollsSeen = new Set();
 
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = headerLineIndex + 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',').map((v) => v.trim());
-      const clean = values.map((v) => v.replace(/^["']|["']$/g, '').trim());
+      const clean = parseCsvLine(line).map((v) => v.replace(/^["']|["']$/g, '').trim());
+      if (clean.every((v) => !v)) continue;
 
       const teamNum = parseInt(clean[headerMap.teamNumber], 10);
       const roleCode = clean[headerMap.roleCode] || '';
@@ -257,13 +288,14 @@ export default function Batches() {
 
       const code = roleCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
       let normalizedRole = '';
-      if (['LEAD', 'TL', 'TEAMLEAD', 'TEAMLEADER', 'LEADER'].includes(code)) normalizedRole = 'LEAD';
-      else if (['SD', 'SD1', 'SD2', 'SD3', 'SD4', 'SENIOR', 'SENIORDEV', 'SENIORDEVELOPER'].includes(code))
+      if (['LEAD', 'TL', 'TEAMLEAD', 'TEAMLEADER', 'LEADER'].includes(code) || code.startsWith('LEAD') || code.startsWith('TL')) {
+        normalizedRole = 'LEAD';
+      } else if (['SD', 'SD1', 'SD2', 'SD3', 'SD4', 'SENIOR', 'SENIORDEV', 'SENIORDEVELOPER'].includes(code) || code.startsWith('SD') || code.includes('SENIOR')) {
         normalizedRole = 'SD';
-      else if (['JD', 'JD1', 'JD2', 'JD3', 'JD4', 'JUNIOR', 'JUNIORDEV', 'JUNIORDEVELOPER'].includes(code))
+      } else if (['JD', 'JD1', 'JD2', 'JD3', 'JD4', 'JUNIOR', 'JUNIORDEV', 'JUNIORDEVELOPER'].includes(code) || code.startsWith('JD') || code.includes('JUNIOR')) {
         normalizedRole = 'JD';
-      else {
-        errors.push(`Row ${i + 1}: Unrecognized roleCode '${roleCode}' (must be LEAD, SD, or JD)`);
+      } else {
+        errors.push(`Row ${i + 1}: Unrecognized Role '${roleCode}' (must be LEAD, SD, or JD)`);
       }
 
       if (isNaN(teamNum) || teamNum < 1 || teamNum > 9) {
@@ -289,10 +321,10 @@ export default function Batches() {
         rollNumber,
         email,
         phone: headerMap.phone !== undefined ? clean[headerMap.phone] || '' : '',
-        college: headerMap.college !== undefined ? clean[headerMap.college] || 'KIET' : 'KIET',
-        branch: headerMap.branch !== undefined ? clean[headerMap.branch] || 'CSE' : 'CSE',
-        backlogs: headerMap.backlogs !== undefined ? parseInt(clean[headerMap.backlogs], 10) || 0 : 0,
-        type: headerMap.type !== undefined ? clean[headerMap.type] || 'DS' : 'DS',
+        college: headerMap.college !== undefined && clean[headerMap.college] ? clean[headerMap.college] : 'KIET',
+        branch: headerMap.branch !== undefined && clean[headerMap.branch] ? clean[headerMap.branch] : 'CSE',
+        backlogs: headerMap.backlogs !== undefined && clean[headerMap.backlogs] ? parseInt(clean[headerMap.backlogs], 10) || 0 : 0,
+        type: headerMap.type !== undefined && clean[headerMap.type] ? clean[headerMap.type] : 'DS',
         rowNumber: i + 1,
       });
     }
@@ -364,6 +396,7 @@ export default function Batches() {
       const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
       // 1. Fetch Batches from Atlas
+      let activeBatches = [];
       const batchesRes = await fetch(`${API_BASE_URL}/admin/batches`, {
         credentials: 'include',
         headers: authHeaders,
@@ -371,52 +404,52 @@ export default function Batches() {
       if (batchesRes.ok) {
         const batchesData = await batchesRes.json();
         if (batchesData.success && Array.isArray(batchesData.batches)) {
+          activeBatches = batchesData.batches;
           setBatches(batchesData.batches);
+        } else {
+          setBatches([]);
         }
+      } else {
+        setBatches([]);
       }
 
-      // 2. Fetch Teams for selected or active batch
-      const currentBatchId = batchId || '2026-2027';
-      const teamsRes = await fetch(`${API_BASE_URL}/admin/teams?batch=${currentBatchId}`, {
-        credentials: 'include',
-        headers: authHeaders,
-      });
-      let fetchedTeams = [];
-      if (teamsRes.ok) {
-        const teamsData = await teamsRes.json();
-        if (teamsData.success && Array.isArray(teamsData.teams)) {
-          fetchedTeams = teamsData.teams;
+      // 2. Fetch Teams for selected or active batch (only if real batches exist)
+      const currentBatchId = batchId || (activeBatches.length > 0 ? (activeBatches[0].id || activeBatches[0].batchId || activeBatches[0].year) : null);
+      if (currentBatchId) {
+        const teamsRes = await fetch(`${API_BASE_URL}/admin/teams?batch=${encodeURIComponent(currentBatchId)}`, {
+          credentials: 'include',
+          headers: authHeaders,
+        });
+        if (teamsRes.ok) {
+          const teamsData = await teamsRes.json();
+          if (teamsData.success && Array.isArray(teamsData.teams)) {
+            setTeams(teamsData.teams);
+          } else {
+            setTeams([]);
+          }
+        } else {
+          setTeams([]);
         }
-      }
-      if (fetchedTeams.length === 0) {
-        fetchedTeams = Array.from({ length: 9 }, (_, i) => ({
-          _id: `team-${i + 1}`,
-          teamNumber: i + 1,
-          name: `Team ${i + 1}`,
-          track: trackNames[i + 1],
-          teamLeadId: null,
-          membersCount: 0,
-          juniorDevsCount: 0,
-          seniorDevsCount: 0,
-          taskCompletion: '0/0 (0%)',
-          performancePct: '0%',
-        }));
-      }
-      setTeams(fetchedTeams);
 
-      // 3. Fetch Users
-      const usersRes = await fetch(`${API_BASE_URL}/admin/users?batch=${currentBatchId}`, {
-        credentials: 'include',
-        headers: authHeaders,
-      });
-      let fetchedUsers = [];
-      if (usersRes.ok) {
-        const usersData = await usersRes.json();
-        if (usersData.success && Array.isArray(usersData.users)) {
-          fetchedUsers = usersData.users;
+        // 3. Fetch Users
+        const usersRes = await fetch(`${API_BASE_URL}/admin/users?batch=${encodeURIComponent(currentBatchId)}`, {
+          credentials: 'include',
+          headers: authHeaders,
+        });
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          if (usersData.success && Array.isArray(usersData.users)) {
+            setUsers(usersData.users);
+          } else {
+            setUsers([]);
+          }
+        } else {
+          setUsers([]);
         }
+      } else {
+        setTeams([]);
+        setUsers([]);
       }
-      setUsers(fetchedUsers);
 
       // 4. Fetch Tasks from Atlas
       const tasksRes = await fetch(`${API_BASE_URL}/admin/tasks`, {
@@ -427,10 +460,17 @@ export default function Batches() {
         const tasksData = await tasksRes.json();
         if (tasksData.success && Array.isArray(tasksData.tasks)) {
           setTasks(tasksData.tasks);
+        } else {
+          setTasks([]);
         }
+      } else {
+        setTasks([]);
       }
     } catch (err) {
       console.error('Error loading batches data from Atlas:', err);
+      setBatches([]);
+      setTeams([]);
+      setUsers([]);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -442,9 +482,13 @@ export default function Batches() {
       setAnalyticsLoading(true);
       const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
-      const currentBatchId = batchId || '2026-2027';
+      const currentBatchId = batchId || (batches.length > 0 ? (batches[0].id || batches[0].batchId || batches[0].year) : null);
+      if (!currentBatchId) {
+        setAnalyticsData(null);
+        return;
+      }
       const res = await fetch(
-        `${API_BASE_URL}/admin/teams/analytics?batch=${currentBatchId}&timeframe=${tf}`,
+        `${API_BASE_URL}/admin/teams/analytics?batch=${encodeURIComponent(currentBatchId)}&timeframe=${tf}`,
         {
           credentials: 'include',
           headers: authHeaders,
@@ -537,12 +581,13 @@ export default function Batches() {
       setIsDeletingBatch(true);
       const rawId = batch.id || batch._id;
       const targetId = encodeURIComponent(rawId);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/batches/${targetId}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
       });
 
@@ -555,8 +600,11 @@ export default function Batches() {
       showToast(data.message || `Batch ${batch.year || batch.id} deleted successfully.`, 'success');
       setBatchToDelete(null);
 
+      // Optimistically remove deleted batch from state immediately
+      setBatches((prev) => prev.filter((b) => b.id !== rawId && b._id !== rawId && b.id !== batch.id));
+
       // If user is currently viewing the deleted batch, navigate back to batches list
-      if (batchId && (batchId === batch.id || batchId === batch._id)) {
+      if (batchId && (batchId === batch.id || batchId === batch._id || batchId === rawId)) {
         navigate('/admin/batches');
       }
 
@@ -572,16 +620,7 @@ export default function Batches() {
   // Resolve selected Batch based on URL params
   const selectedBatch = useMemo(() => {
     if (!batchId) return null;
-    return batches.find((b) => b.id === batchId) || {
-      id: batchId,
-      year: batchId.replace('-', ' – '),
-      status: 'Active Batch',
-      teamsCount: 9,
-      activeTeamsCount: 9,
-      studentsCount: 81,
-      avgPerformance: '78%',
-      upcoming: false,
-    };
+    return batches.find((b) => b.id === batchId || b._id === batchId) || null;
   }, [batchId, batches]);
 
   // Resolve selected Team based on URL params
@@ -592,7 +631,7 @@ export default function Batches() {
         _id: teamId,
         teamNumber: parseInt(teamId, 10) || 1,
         name: `Team ${teamId}`,
-        track: trackNames[parseInt(teamId, 10) || 1] || 'Core Engineering Track',
+        project: '',
         teamLeadId: null,
         membersCount: 0,
         juniorDevsCount: 0,
@@ -602,6 +641,40 @@ export default function Batches() {
       }
     );
   }, [teamId, selectedBatch, teams]);
+
+  const handleSaveTeamProject = async () => {
+    if (!selectedTeam?._id) return;
+    try {
+      setIsSavingProject(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const res = await fetch(`${API_BASE_URL}/admin/teams/${selectedTeam._id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({ project: teamProjectInput.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Team project updated successfully.');
+        setEditingTeamProject(false);
+        setTeams((prev) =>
+          prev.map((t) =>
+            t._id === selectedTeam._id ? { ...t, project: teamProjectInput.trim() } : t
+          )
+        );
+      } else {
+        showToast(data.message || 'Failed to update project.', 'error');
+      }
+    } catch (err) {
+      console.error('Error saving team project:', err);
+      showToast('Error updating project.', 'error');
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
 
   // Helper to fetch members of a team safely with real individual performance stats
   const getTeamMembers = (teamObj) => {
@@ -942,11 +1015,31 @@ export default function Batches() {
                     </div>
                   </div>
                 ))
+              ) : batches.length === 0 ? (
+                <div className="col-span-full bg-[#FDFCF9] rounded-2xl p-12 border border-dashed border-[#E0DDD0] text-center flex flex-col items-center justify-center space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-[#F2EFE6] flex items-center justify-center text-[#66645E]">
+                    <Layers className="w-8 h-8 text-[#66645E]" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-bold text-[#1C1B1A]">No Batches Found</h3>
+                    <p className="text-xs text-[#66645E] max-w-md mx-auto">
+                      All academic batches have been deleted or none exist yet. You can create a new cohort at any time.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCreateModalOpen(true)}
+                    className="mt-2 px-5 py-2.5 bg-[#1C1B1A] text-white hover:bg-black rounded-full font-medium text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create New Batch</span>
+                  </button>
+                </div>
               ) : (
                 batches.map((b) => (
                   <div
-                    key={b.id}
-                    onClick={() => navigate(`/admin/batches/${b.id}`)}
+                    key={b.id || b._id}
+                    onClick={() => navigate(`/admin/batches/${b.id || b._id}`)}
                     className="bg-[#FDFCF9] rounded-2xl p-6 sm:p-8 border border-[#E0DDD0] hover:border-[#1C1B1A] shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
                   >
                     <div>
@@ -1000,6 +1093,28 @@ export default function Batches() {
                   </div>
                 )))}
             </div>
+          </div>
+        )}
+
+        {/* If user navigated directly to an invalid or deleted batch URL */}
+        {batchId && !loading && !selectedBatch && (
+          <div className="bg-[#FDFCF9] rounded-2xl p-12 border border-dashed border-[#E0DDD0] text-center flex flex-col items-center justify-center space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+              <AlertCircle className="w-8 h-8 text-rose-500" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xl font-bold text-[#1C1B1A]">Batch Not Found</h3>
+              <p className="text-xs text-[#66645E] max-w-md mx-auto">
+                The batch &ldquo;{batchId}&rdquo; does not exist or has been deleted.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/admin/batches')}
+              className="mt-2 px-5 py-2.5 bg-[#1C1B1A] text-white hover:bg-black rounded-full font-medium text-xs transition-all cursor-pointer"
+            >
+              ← Back to All Batches
+            </button>
           </div>
         )}
 
@@ -1307,7 +1422,7 @@ export default function Batches() {
                                           <p className="font-bold text-amber-300">
                                             {d.name} (Team {d.teamNumber})
                                           </p>
-                                          <p className="text-[11px] text-gray-300 line-clamp-1">{d.track}</p>
+                                          <p className="text-[11px] text-gray-300 line-clamp-1">{d.project || 'Project Not Assigned'}</p>
                                           <div className="pt-1.5 border-t border-gray-700 space-y-0.5 font-mono">
                                             <p>
                                               Performance:{' '}
@@ -1573,7 +1688,12 @@ export default function Batches() {
                           </span>
                         </div>
 
-                        <p className="text-xs font-medium text-[#66645E] line-clamp-1">{t.track}</p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-mono font-bold uppercase text-[#8C8A84] shrink-0">Project:</span>
+                          <p className={`text-xs truncate ${t.project ? 'font-semibold text-[#1C1B1A]' : 'italic text-[#8C8A84]'}`}>
+                            {t.project || 'Project Not Assigned'}
+                          </p>
+                        </div>
 
                         <div className="mt-4 space-y-1.5 text-xs text-[#66645E]">
                           <p>
@@ -1610,7 +1730,54 @@ export default function Batches() {
               <div className="min-w-0">
                 <span className="text-xs font-mono font-semibold uppercase text-[#66645E]">Batch {selectedBatch?.year}</span>
                 <h3 className="font-bold tracking-tight text-2xl sm:text-3xl text-[#1C1B1A] truncate">{selectedTeam.name} Details</h3>
-                <p className="text-xs text-[#66645E] mt-1">{selectedTeam.track}</p>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-mono font-bold uppercase text-[#8C8A84]">Assigned Project:</span>
+                  {editingTeamProject ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={teamProjectInput}
+                        onChange={(e) => setTeamProjectInput(e.target.value)}
+                        placeholder="Enter project name..."
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-[#1C1B1A] bg-white text-[#1C1B1A] focus:outline-none focus:ring-1 focus:ring-[#1C1B1A] min-w-[220px]"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveTeamProject();
+                          if (e.key === 'Escape') setEditingTeamProject(false);
+                        }}
+                      />
+                      <button
+                        onClick={handleSaveTeamProject}
+                        disabled={isSavingProject}
+                        className="px-2.5 py-1 rounded-lg bg-[#1C1B1A] hover:bg-black text-white text-xs font-bold font-mono transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingProject ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingTeamProject(false)}
+                        className="px-2 py-1 rounded-lg border border-[#D0CDBE] bg-white hover:bg-[#F2EFE6] text-[#66645E] text-xs font-medium cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs ${selectedTeam.project ? 'font-semibold text-[#1C1B1A]' : 'italic text-[#8C8A84]'}`}>
+                        {selectedTeam.project || 'Project Not Assigned'}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setTeamProjectInput(selectedTeam.project || '');
+                          setEditingTeamProject(true);
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
+                        title="Edit Project Name"
+                      >
+                        <Edit2 className="w-2.5 h-2.5" />
+                        <span>Edit Project</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <button
@@ -1936,9 +2103,13 @@ export default function Batches() {
                                   <span className="w-6 h-6 rounded-md bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
                                     {idx + 1}
                                   </span>
-                                  <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                                    {getInitials(m.name)}
-                                  </div>
+                                  <UserAvatar
+                                    user={m}
+                                    size="w-9 h-9"
+                                    rounded="rounded-full"
+                                    animate="always"
+                                    className="shadow-2xs shrink-0"
+                                  />
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <p className="text-sm font-semibold text-[#1C1B1A] truncate">{m.name}</p>
@@ -2043,12 +2214,13 @@ export default function Batches() {
                                   <span className="w-6 h-6 rounded-md bg-[#EEECDF] font-mono font-bold text-xs text-[#1C1B1A] flex items-center justify-center border border-[#E0DDD0] shrink-0">
                                     {idx + 1}
                                   </span>
-                                  <div
-                                    className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs ${isLead ? 'bg-[#1C1B1A] text-amber-300' : 'bg-indigo-950 text-white'
-                                      }`}
-                                  >
-                                    {getInitials(m.name)}
-                                  </div>
+                                  <UserAvatar
+                                    user={m}
+                                    size="w-9 h-9"
+                                    rounded="rounded-full"
+                                    animate="always"
+                                    className="shadow-2xs shrink-0"
+                                  />
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <p className="text-sm font-semibold text-[#1C1B1A] truncate">{m.name}</p>
@@ -2322,29 +2494,36 @@ export default function Batches() {
 
                 {/* CSV Headers Codebox */}
                 <div className="bg-[#1C1B1A] text-amber-200 rounded-xl p-3 font-mono text-[11px] overflow-x-auto select-all">
-                  teamNumber,roleCode,name,rollNumber,email,phone,college,branch,backlogs,type
+                  Team No,Role,Name of the Student,Roll No,PHONE NO,Mail ID
                 </div>
 
                 {/* Field description tags */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-[#66645E]">
                   <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
-                    <span className="font-mono font-bold text-[#1C1B1A]">teamNumber</span>: 1 to 9
+                    <span className="font-mono font-bold text-[#1C1B1A]">Team No</span>: 1 to 9
                   </div>
                   <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
-                    <span className="font-mono font-bold text-[#1C1B1A]">roleCode</span>: LEAD, SD, JD
+                    <span className="font-mono font-bold text-[#1C1B1A]">Role</span>: LEAD, SD, JD
                   </div>
                   <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
-                    <span className="font-mono font-bold text-[#1C1B1A]">rollNumber</span>: Initial Password
+                    <span className="font-mono font-bold text-[#1C1B1A]">Name of the Student</span>: Full Name
                   </div>
                   <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
-                    <span className="font-mono font-bold text-[#1C1B1A]">email</span>: Student Email
+                    <span className="font-mono font-bold text-[#1C1B1A]">Roll No</span>: Initial Password
                   </div>
                   <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
-                    <span className="font-mono font-bold text-[#1C1B1A]">phone</span>: Mobile Number
+                    <span className="font-mono font-bold text-[#1C1B1A]">PHONE NO</span>: Mobile Number
                   </div>
                   <div className="bg-white/80 border border-[#E0DDD0] rounded-lg p-2">
-                    <span className="font-mono font-bold text-[#1C1B1A]">type</span>: DS (Day) / HS (Hostel)
+                    <span className="font-mono font-bold text-[#1C1B1A]">Mail ID</span>: Student Email
                   </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Student Self-Service:</strong> Remaining details (Branch, Academic Year, College, Hostel / Day Scholar, and Backlogs) default cleanly and students can easily update them by clicking their profile.
+                  </span>
                 </div>
               </div>
 

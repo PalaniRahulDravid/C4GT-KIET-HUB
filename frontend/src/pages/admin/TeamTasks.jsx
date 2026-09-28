@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import UserAvatar from '../../components/UserAvatar';
 import {
   Plus,
   RefreshCw,
@@ -94,9 +95,10 @@ export default function TeamTasks() {
   const fetchTasks = async () => {
     try {
       setLoading(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/tasks`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -107,10 +109,15 @@ export default function TeamTasks() {
             if (!prev) return null;
             return data.tasks.find((t) => t._id === prev._id) || prev;
           });
+        } else {
+          setTasks([]);
         }
+      } else {
+        setTasks([]);
       }
     } catch (err) {
       console.error('Failed to load tasks:', err);
+      setTasks([]);
     } finally {
       setLoading(false);
     }
@@ -173,9 +180,10 @@ export default function TeamTasks() {
 
   const fetchTeamsData = async () => {
     try {
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/teams`, {
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
       if (res.ok) {
         const data = await res.json();
@@ -300,12 +308,13 @@ export default function TeamTasks() {
         relatedResources: selectedResources.map((r) => r._id).filter(Boolean),
       };
 
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/tasks`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -342,12 +351,13 @@ export default function TeamTasks() {
   const handleDeleteTask = async (id) => {
     try {
       setDeletingId(id);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
       const res = await fetch(`${API_BASE_URL}/admin/tasks/${id}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
       });
 
@@ -991,12 +1001,12 @@ export default function TeamTasks() {
 
       {/* REVIEW SUBMISSIONS MODAL */}
       {selectedTaskForReview && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
-          <div className="bg-[#FFFDF8] border border-[#E0DDD0] rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-[#FFFDF8] border border-[#E0DDD0] rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl space-y-3 sm:space-y-4 max-h-[94vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-[#E0DDD0]">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-start justify-between pb-3 border-b border-[#E0DDD0] gap-2 shrink-0">
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-xs font-mono font-bold text-[#1C1B1A]">
                     {selectedTaskForReview.topic}
                   </span>
@@ -1020,17 +1030,18 @@ export default function TeamTasks() {
                     <span>Admin Review Only</span>
                   </span>
                 </div>
-                <h3 className="font-bold tracking-tight text-xl text-[#1C1B1A]">
+                <h3 className="font-bold tracking-tight text-base sm:text-xl text-[#1C1B1A] break-words leading-snug">
                   Review Submissions: {selectedTaskForReview.title}
                 </h3>
-                <p className="text-xs text-[#66645E]">
+                <p className="text-xs text-[#66645E] line-clamp-1 sm:line-clamp-none">
                   Inspect student deliverables (proof links & documentation) and approve or request revisions.
                 </p>
               </div>
 
               <button
                 onClick={() => setSelectedTaskForReview(null)}
-                className="p-1.5 rounded-full hover:bg-black/5 text-[#66645E] cursor-pointer"
+                className="p-1.5 -mr-1 -mt-1 rounded-full hover:bg-black/5 text-[#66645E] cursor-pointer shrink-0"
+                aria-label="Close review modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1052,7 +1063,7 @@ export default function TeamTasks() {
 
               return (
                 <>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none shrink-0 -mx-1 px-1">
                     {[
                       { id: 'all', label: `All (${allAssignments.length})` },
                       { id: 'submitted', label: `Pending Review (${submittedList.length})`, highlight: submittedList.length > 0 },
@@ -1063,7 +1074,7 @@ export default function TeamTasks() {
                       <button
                         key={tab.id}
                         onClick={() => setReviewFilter(tab.id)}
-                        className={`px-3 py-1.5 text-xs font-mono rounded-full transition-all cursor-pointer ${
+                        className={`px-3 py-1.5 text-xs font-mono rounded-full transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                           reviewFilter === tab.id
                             ? 'bg-[#1C1B1A] text-white shadow-2xs font-bold'
                             : tab.highlight
@@ -1077,7 +1088,7 @@ export default function TeamTasks() {
                   </div>
 
                   {/* Submissions List Container */}
-                  <div className="overflow-y-auto flex-1 pr-1 space-y-4 max-h-[55vh]">
+                  <div className="overflow-y-auto flex-1 min-h-0 pr-1 space-y-3.5 custom-scroll">
                     {displayedAssignments.length === 0 ? (
                       <div className="p-8 text-center text-xs text-[#8C8A84] bg-[#F9F8F3] rounded-xl border border-[#E0DDD0]">
                         No students found in this category.
@@ -1093,7 +1104,7 @@ export default function TeamTasks() {
                         return (
                           <div
                             key={a._id || sId}
-                            className={`p-4 rounded-xl border transition-all space-y-3 ${
+                            className={`p-3.5 sm:p-4 rounded-xl border transition-all space-y-3 ${
                               a.status === 'submitted'
                                 ? 'bg-amber-50/40 border-amber-300 shadow-2xs'
                                 : a.status === 'completed'
@@ -1102,14 +1113,18 @@ export default function TeamTasks() {
                             }`}
                           >
                             {/* Student Header */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-[#1C1B1A] text-white flex items-center justify-center font-bold text-xs uppercase">
-                                  {(student.name || 'S').slice(0, 2)}
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-sm text-[#1C1B1A]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                                <UserAvatar
+                                  user={student}
+                                  size="w-9 h-9"
+                                  rounded="rounded-full"
+                                  animate="always"
+                                  className="shrink-0 mt-0.5 sm:mt-0 shadow-2xs"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-bold text-sm text-[#1C1B1A] break-words">
                                       {student.name || 'Unknown Student'}
                                     </span>
                                     {student.rollNumber && (
@@ -1118,49 +1133,49 @@ export default function TeamTasks() {
                                       </span>
                                     )}
                                     {a.teamNumber && (
-                                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#EEECDF] text-[#1C1B1A]">
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#EEECDF] text-[#1C1B1A] shrink-0">
                                         Team {a.teamNumber}
                                       </span>
                                     )}
                                     {student.memberType && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-sky-100 text-sky-800">
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 shrink-0">
                                         {student.memberType.replace('_', ' ')}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-[11px] text-[#8C8A84] font-mono mt-0.5">
+                                  <div className="text-[11px] text-[#8C8A84] font-mono mt-0.5 break-all truncate">
                                     {student.email || 'No email provided'}
                                   </div>
                                 </div>
                               </div>
 
                               {/* Status Badge */}
-                              <div>
+                              <div className="self-start sm:self-auto shrink-0">
                                 {a.status === 'submitted' && (
-                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                  <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                                     <Clock className="w-3.5 h-3.5 text-amber-700 animate-spin" />
                                     <span>Submitted - Needs Review</span>
                                   </span>
                                 )}
                                 {a.status === 'completed' && (
-                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                                  <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
                                     <span>Approved / Completed</span>
                                   </span>
                                 )}
                                 {a.status === 'revision_requested' && (
-                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1">
+                                  <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1">
                                     <AlertCircle className="w-3.5 h-3.5 text-rose-700" />
                                     <span>Revision Requested</span>
                                   </span>
                                 )}
                                 {a.status === 'in_progress' && (
-                                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-blue-100 text-blue-900 border border-blue-300">
+                                  <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-blue-100 text-blue-900 border border-blue-300">
                                     In Progress
                                   </span>
                                 )}
                                 {a.status === 'pending' && (
-                                  <span className="px-3 py-1 rounded-full text-xs font-mono bg-[#EEECDF] text-[#66645E]">
+                                  <span className="px-2.5 py-1 rounded-full text-xs font-mono bg-[#EEECDF] text-[#66645E]">
                                     Not Started
                                   </span>
                                 )}
@@ -1169,10 +1184,10 @@ export default function TeamTasks() {
 
                             {/* Submitted Deliverables & Proofs */}
                             {hasSubmissions ? (
-                              <div className="p-3.5 rounded-xl bg-white border border-[#E0DDD0] space-y-2 text-xs">
-                                <div className="font-bold text-[#1C1B1A] flex items-center justify-between">
+                              <div className="p-3 sm:p-3.5 rounded-xl bg-white border border-[#E0DDD0] space-y-2 text-xs">
+                                <div className="font-bold text-[#1C1B1A] flex flex-wrap items-center justify-between gap-1">
                                   <span className="flex items-center gap-1.5">
-                                    <FileText className="w-3.5 h-3.5 text-[#4E7A53]" />
+                                    <FileText className="w-3.5 h-3.5 text-[#4E7A53] shrink-0" />
                                     <span>Submitted Proofs & Deliverables ({a.submissions.length})</span>
                                   </span>
                                   {a.submittedAt && (
@@ -1188,9 +1203,9 @@ export default function TeamTasks() {
                                     return (
                                       <div
                                         key={sIdx}
-                                        className="p-2 rounded-lg bg-[#F9F8F3] border border-[#E0DDD0] flex items-center justify-between gap-2"
+                                        className="p-2.5 rounded-lg bg-[#F9F8F3] border border-[#E0DDD0] flex items-center justify-between gap-2 min-w-0"
                                       >
-                                        <div className="min-w-0 pr-1">
+                                        <div className="min-w-0 flex-1 pr-1">
                                           <div className="font-semibold text-[#1C1B1A] truncate text-[11px]">
                                             {sub.deliverableName}
                                           </div>
@@ -1212,7 +1227,7 @@ export default function TeamTasks() {
                                             href={linkTarget}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="px-2 py-1 rounded bg-white hover:bg-[#EEECDF] border border-[#E0DDD0] text-[10px] font-bold text-[#1C1B1A] flex items-center gap-1 shrink-0"
+                                            className="px-2 py-1 rounded bg-white hover:bg-[#EEECDF] border border-[#E0DDD0] text-[10px] font-bold text-[#1C1B1A] flex items-center gap-1 shrink-0 transition-colors"
                                           >
                                             <ExternalLink className="w-3 h-3 text-[#4E7A53]" />
                                             <span>Open Proof</span>
@@ -1268,7 +1283,7 @@ export default function TeamTasks() {
                               </div>
                             ) : (hasSubmissions || a.status === 'submitted' || a.status === 'revision_requested') ? (
                               <div className="pt-2 border-t border-[#E0DDD0] space-y-2">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                                   <input
                                     type="text"
                                     value={notesVal}
@@ -1279,39 +1294,41 @@ export default function TeamTasks() {
                                       }))
                                     }
                                     placeholder="Optional feedback / revision notes for student..."
-                                    className="flex-1 px-3 py-1.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-none focus:border-[#1C1B1A]"
+                                    className="flex-1 w-full px-3 py-1.5 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:outline-none focus:border-[#1C1B1A]"
                                   />
 
-                                  <button
-                                    disabled={isReviewing}
-                                    onClick={() =>
-                                      handleAdminReview(
-                                        selectedTaskForReview._id,
-                                        sId,
-                                        'accept',
-                                        notesVal
-                                      )
-                                    }
-                                    className="px-4 py-1.5 rounded-xl bg-[#4E7A53] hover:bg-[#3D6341] text-white text-xs font-bold cursor-pointer transition-all shadow-2xs flex items-center gap-1 shrink-0 disabled:opacity-50"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    <span>{isReviewing ? 'Saving...' : 'Approve & Mark Done'}</span>
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      disabled={isReviewing}
+                                      onClick={() =>
+                                        handleAdminReview(
+                                          selectedTaskForReview._id,
+                                          sId,
+                                          'accept',
+                                          notesVal
+                                        )
+                                      }
+                                      className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-xl bg-[#4E7A53] hover:bg-[#3D6341] text-white text-xs font-bold cursor-pointer transition-all shadow-2xs flex items-center justify-center gap-1 shrink-0 disabled:opacity-50"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>{isReviewing ? 'Saving...' : 'Approve & Mark Done'}</span>
+                                    </button>
 
-                                  <button
-                                    disabled={isReviewing}
-                                    onClick={() =>
-                                      handleAdminReview(
-                                        selectedTaskForReview._id,
-                                        sId,
-                                        'request_revision',
-                                        notesVal
-                                      )
-                                    }
-                                    className="px-3.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 text-xs font-bold cursor-pointer transition-all shrink-0 disabled:opacity-50"
-                                  >
-                                    <span>Request Revision</span>
-                                  </button>
+                                    <button
+                                      disabled={isReviewing}
+                                      onClick={() =>
+                                        handleAdminReview(
+                                          selectedTaskForReview._id,
+                                          sId,
+                                          'request_revision',
+                                          notesVal
+                                        )
+                                      }
+                                      className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 text-xs font-bold cursor-pointer transition-all shrink-0 disabled:opacity-50 text-center"
+                                    >
+                                      <span>Request Revision</span>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ) : null}
@@ -1325,11 +1342,13 @@ export default function TeamTasks() {
             })()}
 
             {/* Footer */}
-            <div className="pt-3 border-t border-[#E0DDD0] flex items-center justify-between text-xs text-[#66645E]">
-              <span>Changes are dispatched immediately to student dashboards and notifications.</span>
+            <div className="pt-2.5 sm:pt-3 border-t border-[#E0DDD0] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 text-xs text-[#66645E] shrink-0">
+              <span className="text-[11px] sm:text-xs">
+                Changes are dispatched immediately to student dashboards and notifications.
+              </span>
               <button
                 onClick={() => setSelectedTaskForReview(null)}
-                className="px-6 py-2 rounded-full bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold cursor-pointer"
+                className="w-full sm:w-auto px-6 py-2 rounded-xl sm:rounded-full bg-[#1C1B1A] hover:bg-black text-white text-xs font-semibold cursor-pointer text-center"
               >
                 Done
               </button>

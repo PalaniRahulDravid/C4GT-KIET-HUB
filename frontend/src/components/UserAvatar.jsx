@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Blobatar } from '@blobatar/react';
 import 'blobatar/motion.css';
 
@@ -17,19 +17,32 @@ export default function UserAvatar({
   showImage = true,
   scale = 'scale-[1.18]',
 }) {
-  const avatarSrc = showImage ? user?.avatar : null;
-  const displayName = name || user?.name || user?.email || 'alain00';
+  const [imgError, setImgError] = useState(false);
+
+  const rawAvatar = typeof user === 'object' && user ? user.avatar : null;
+
+  useEffect(() => {
+    setImgError(false);
+  }, [rawAvatar]);
+
+  const avatarSrc = showImage && !imgError && rawAvatar ? rawAvatar : null;
+  const displayName =
+    name ||
+    (typeof user === 'string' ? user : (user?.name || user?.email)) ||
+    'User';
 
   return (
     <div
       className={`relative inline-flex items-center justify-center ${rounded} overflow-hidden shrink-0 select-none ${bgClassName} ${size} ${className}`}
-      title={user?.name || displayName}
+      title={typeof user === 'object' && user?.name ? user.name : displayName}
     >
       {avatarSrc ? (
         <img
           src={avatarSrc}
-          alt={user?.name || displayName}
+          alt={typeof user === 'object' && user?.name ? user.name : displayName}
           className={`w-full h-full object-cover ${rounded}`}
+          onError={() => setImgError(true)}
+          loading="lazy"
         />
       ) : (
         <div className="w-full h-full p-0.5 flex items-center justify-center overflow-hidden">
@@ -43,3 +56,4 @@ export default function UserAvatar({
     </div>
   );
 }
+

@@ -30,6 +30,11 @@ const teamSchema = new mongoose.Schema({
     min: [1, 'Maximum members must be at least 1'],
     max: [20, 'Maximum members cannot exceed 20'],
   },
+  project: {
+    type: String,
+    default: '',
+    trim: true,
+  },
   track: {
     type: String,
     default: '',

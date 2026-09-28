@@ -108,18 +108,6 @@ const rawCohortData = [
   { teamNum: 9, roleCode: 'JD4', name: 'GUMMADIDALA UMA DEVI', roll: '25B25A4202', phone: '8985913868', email: 'umadevigummadidala@gmail.com', college: 'KIET', backlogs: 0, type: 'HS', branch: 'CSM' },
 ];
 
-const trackNames = {
-  1: 'Machine Learning & AI Track',
-  2: 'DSA & Problem Solving Track',
-  3: 'Full Stack Web Development Track',
-  4: 'Web3 & Smart Contracts Track',
-  5: 'Cloud & DevOps Automation Track',
-  6: 'Open Source Contributions Track',
-  7: 'Mobile Application Development Track',
-  8: 'Cybersecurity & Network Defense Track',
-  9: 'Data Engineering & Analytics Track',
-};
-
 async function seedCohort() {
   try {
     console.log('Connecting to MongoDB Atlas...');
@@ -139,14 +127,16 @@ async function seedCohort() {
         team = await Team.create({
           name: `Team ${i}`,
           teamNumber: i,
-          track: trackNames[i],
+          track: '',
+          project: '',
           maxMembers: 9,
           teamLeadId: null,
           members: [],
         });
       } else {
         team.name = `Team ${i}`;
-        team.track = trackNames[i];
+        team.track = '';
+        team.project = team.project || '';
         team.maxMembers = 9;
         team.teamLeadId = null;
         team.members = [];

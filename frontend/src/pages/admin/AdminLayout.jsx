@@ -269,7 +269,7 @@ export default function AdminLayout() {
               <Home className="w-3.5 h-3.5 text-[#66645E]" />
               <span className="hidden sm:inline">Landing Page</span>
             </Link>
-            {/* Change Password Button */}
+            {/* Change Password Button (Hidden on mobile, available on sm+) */}
             <button
               type="button"
               onClick={() => {
@@ -280,11 +280,11 @@ export default function AdminLayout() {
                 setNewPassword('');
                 setConfirmPassword('');
               }}
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-2 rounded-full text-xs font-medium text-[#1C1B1A] bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] shadow-2xs transition-colors cursor-pointer shrink-0"
+              className="hidden sm:flex items-center justify-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium text-[#1C1B1A] bg-white hover:bg-[#F2EFE6] border border-[#E0DDD0] shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Change Password"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Change Password</span>
+              <span>Change Password</span>
             </button>
           </div>
         </header>

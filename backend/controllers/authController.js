@@ -297,6 +297,16 @@ const updateProfile = async (req, res) => {
       user.phoneNumber = p;
     }
 
+    if (req.body.college) {
+      user.college = String(req.body.college).trim();
+    }
+    if (req.body.dayScholarHostel || req.body.type) {
+      user.dayScholarHostel = String(req.body.dayScholarHostel || req.body.type).trim();
+    }
+    if (req.body.activeBacklogs !== undefined) {
+      user.activeBacklogs = Number(req.body.activeBacklogs) || 0;
+    }
+
     await user.save();
     console.log(`Updated student profile in MongoDB Atlas for: ${user.email} (Roll: ${user.rollNumber})`);
 
