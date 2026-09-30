@@ -21,6 +21,8 @@ import {
   Check,
   ShieldCheck,
   Users,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Skeleton, SkeletonTaskCard } from '../../components/skeleton';
 
@@ -63,11 +65,20 @@ export default function TeamTasks() {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [teamLeadsMap, setTeamLeadsMap] = useState({});
 
-  const defaultDeliverables = [
+  // Pagination states (6 tasks per page as requested)
+  const [currentPage, setCurrentPage] = useState(1);
+  const TASKS_PER_PAGE = 6;
+  const [reviewCurrentPage, setReviewCurrentPage] = useState(1);
+  const SUBMISSIONS_PER_PAGE = 6;
+
+  const defaultDeliverables = [];
+
+  const suggestedDeliverables = [
     'Source Code Repo',
     'GitHub Pull Request',
     'Documentation / Spec',
     'Demo / Presentation',
+    'Live Deployment Link',
   ];
 
   const initialForm = {
@@ -78,10 +89,12 @@ export default function TeamTasks() {
     description: '',
     priority: 'Normal',
     assignedTeams: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-    deliverables: [...defaultDeliverables],
+    deliverables: [],
   };
 
   const [form, setForm] = useState(initialForm);
+  const [deadlineDaysInput, setDeadlineDaysInput] = useState('');
+  const [customDeliverableInput, setCustomDeliverableInput] = useState('');
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   // Helper for temporary auto-disappearing toast notification (3.5s)
@@ -258,6 +271,7 @@ export default function TeamTasks() {
           url: newResourceUrl,
           description: newResourceDesc,
           topic: form.topic || 'General',
+          visibility: 'library',
         }),
       });
 
@@ -298,9 +312,73 @@ export default function TeamTasks() {
     }
   };
 
+  const handleDaysInputChange = (daysVal) => {
+    setDeadlineDaysInput(daysVal);
+    if (daysVal === '' || isNaN(daysVal) || Number(daysVal) < 0) {
+      return;
+    }
+    const days = parseInt(daysVal, 10);
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const newDeadline = `${year}-${month}-${day}T23:59`;
+    setForm((prev) => ({ ...prev, deadline: newDeadline }));
+  };
+
+  const syncDaysFromDate = (dateStr) => {
+    if (!dateStr) {
+      setDeadlineDaysInput('');
+      return;
+    }
+    const target = new Date(dateStr);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const targetMidnight = new Date(target);
+    targetMidnight.setHours(0, 0, 0, 0);
+    const diffMs = targetMidnight.getTime() - now.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0) {
+      setDeadlineDaysInput(String(diffDays));
+    } else {
+      setDeadlineDaysInput('');
+    }
+  };
+
+  // Helpers for deadline presets
+  const getTodayDateTimeLocal = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}T00:00`;
+  };
+
+  const getFutureDateTimeLocal = (daysToAdd) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysToAdd);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}T23:59`;
+  };
+
   // Form Submit Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.deadline) {
+      showToast('Please set a submission deadline', 'error');
+      return;
+    }
+    const deadlineDate = new Date(form.deadline);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    if (deadlineDate < todayStart) {
+      showToast('Deadline cannot be in the past. Please select today or an upcoming date.', 'error');
+      return;
+    }
+
     try {
       setSubmitting(true);
       const payload = {
@@ -322,6 +400,7 @@ export default function TeamTasks() {
       const data = await res.json();
       if (res.ok && data.success && data.task) {
         setTasks((prev) => [data.task, ...prev]);
+        fetchTasks();
         showToast('Task published successfully!', 'success');
         // Reset form
         setForm({
@@ -332,8 +411,10 @@ export default function TeamTasks() {
           description: '',
           priority: 'Normal',
           assignedTeams: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-          deliverables: [...defaultDeliverables],
+          deliverables: [],
         });
+        setDeadlineDaysInput('');
+        setCustomDeliverableInput('');
         setSelectedResources([]);
       } else {
         showToast('Unable to publish task. Please try again.', 'error');
@@ -399,6 +480,25 @@ export default function TeamTasks() {
     }
     return true;
   });
+
+  const totalPages = Math.ceil(filteredTasks.length / TASKS_PER_PAGE) || 1;
+
+  // Reset to page 1 on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter, searchQuery]);
+
+  // Adjust if out of bounds (e.g. after deletion)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  const paginatedTasks = useMemo(() => {
+    const start = (currentPage - 1) * TASKS_PER_PAGE;
+    return filteredTasks.slice(start, start + TASKS_PER_PAGE);
+  }, [filteredTasks, currentPage]);
 
   const filteredAvailableResources = availableResources.filter((r) => {
     if (!resourceSearchQuery.trim()) return true;
@@ -483,42 +583,66 @@ export default function TeamTasks() {
               </div>
             </div>
 
-            {/* Target Group, Deadline, Priority */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {/* Target Group, Deadline, Priority - Balanced Responsive Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div>
-                <label className="block font-medium text-[#1C1B1A] mb-1.5">Target Student Group</label>
+                <label className="block font-medium text-[#1C1B1A] mb-1.5 truncate">Target Student Group</label>
                 <select
                   value={form.targetGroup}
                   onChange={(e) => setForm({ ...form, targetGroup: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none"
+                  className="w-full h-[42px] px-3 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none text-xs font-medium"
                 >
-                  <option value="both">Both (Junior Devs & Interns)</option>
-                  <option value="junior_developers">Junior Developers Only</option>
-                  <option value="developer_interns">Developer Interns Only</option>
+                  <option value="both">Both (Junior & Interns)</option>
+                  <option value="junior_developers">Junior Devs Only</option>
+                  <option value="developer_interns">Interns Only</option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-medium text-[#1C1B1A] mb-1.5">Submission Deadline *</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={form.deadline}
-                  onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none font-mono"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-medium text-[#1C1B1A]">Submission Deadline *</label>
+                  <span className="text-[11px] text-[#88867E]">Pick date or type days</span>
+                </div>
+                {/* Unified, attractive input container without awkward wide gaps */}
+                <div className="flex items-center rounded-xl border border-[#E0DDD0] bg-white hover:border-[#C8C5B9] focus-within:border-[#1C1B1A] focus-within:ring-1 focus-within:ring-[#1C1B1A] transition-all p-1 h-[42px]">
+                  <input
+                    type="datetime-local"
+                    required
+                    min={getTodayDateTimeLocal()}
+                    value={form.deadline}
+                    onChange={(e) => {
+                      setForm({ ...form, deadline: e.target.value });
+                      syncDaysFromDate(e.target.value);
+                    }}
+                    className="flex-1 min-w-0 px-2 text-xs font-medium text-[#1C1B1A] bg-transparent focus:outline-none cursor-pointer"
+                  />
+                  <div className="h-5 w-[1px] bg-[#E8E5DC] mx-1 shrink-0" />
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-[#F5F3EC] rounded-lg text-xs shrink-0">
+                    <span className="text-[11px] font-medium text-[#7C7A72]">In</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 3"
+                      value={deadlineDaysInput}
+                      onChange={(e) => handleDaysInputChange(e.target.value)}
+                      className="w-12 h-6 text-center font-bold text-xs rounded bg-white border border-[#D5D1C6] text-[#1C1B1A] focus:outline-none focus:border-[#1C1B1A]"
+                      title="Enter days from today"
+                    />
+                    <span className="text-[11px] font-medium text-[#7C7A72]">days</span>
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block font-medium text-[#1C1B1A] mb-1.5">Task Priority</label>
+                <label className="block font-medium text-[#1C1B1A] mb-1.5 truncate">Task Priority</label>
                 <select
                   value={form.priority}
                   onChange={(e) => setForm({ ...form, priority: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none"
+                  className="w-full h-[42px] px-3 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none text-xs font-medium"
                 >
                   <option value="Normal">Normal Priority</option>
                   <option value="High">High Priority</option>
-                  <option value="Urgent">Urgent Deadline</option>
+                  <option value="Urgent">Urgent</option>
                 </select>
               </div>
             </div>
@@ -536,6 +660,134 @@ export default function TeamTasks() {
                 placeholder="Detail task requirements..."
                 className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD0] bg-white text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none"
               />
+            </div>
+
+            {/* REQUIRED DELIVERABLES SECTION */}
+            <div className="pt-4 border-t border-[#E0DDD0] space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="font-semibold text-sm text-[#1C1B1A] flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#4E7A53]" />
+                    <span>Required Student Deliverables</span>
+                  </label>
+                  <p className="text-xs text-[#66645E] mt-0.5">
+                    Select or add specific proof links required for submission. If none are selected, students will not be asked for proof links.
+                  </p>
+                </div>
+                {form.deliverables.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, deliverables: [] })}
+                    className="text-xs text-[#9E3B3B] hover:underline cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+
+              {/* Active Selected Deliverables */}
+              {form.deliverables.length > 0 ? (
+                <div className="flex flex-wrap gap-2 p-2.5 rounded-xl bg-white border border-[#E0DDD0]">
+                  {form.deliverables.map((d, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#E3EFE1] text-[#2F5233] text-xs font-semibold border border-[#CDE0CB] shadow-2xs"
+                    >
+                      <span>📄 {d}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            deliverables: form.deliverables.filter((_, i) => i !== idx),
+                          })
+                        }
+                        className="text-[#4E7A53] hover:text-[#9E3B3B] cursor-pointer"
+                        title="Remove deliverable"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-[#F7F6F1] border border-[#E0DDD0] text-xs text-[#66645E]">
+                  <em>No deliverables selected. Students will not be prompted for proof links or remarks by default.</em>
+                </div>
+              )}
+
+              {/* Suggested Quick-Add Chips */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-[#66645E] uppercase tracking-wider">
+                  Quick Add Suggested:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestedDeliverables.map((sug) => {
+                    const isSelected = form.deliverables.includes(sug);
+                    return (
+                      <button
+                        key={sug}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setForm({
+                              ...form,
+                              deliverables: form.deliverables.filter((item) => item !== sug),
+                            });
+                          } else {
+                            setForm({
+                              ...form,
+                              deliverables: [...form.deliverables, sug],
+                            });
+                          }
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#1C1B1A] text-white border-[#1C1B1A] font-medium'
+                            : 'bg-white text-[#4D4B46] border-[#E0DDD0] hover:border-[#1C1B1A]'
+                        }`}
+                      >
+                        {isSelected ? '✓ ' : '+ '}
+                        {sug}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Deliverable Input */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={customDeliverableInput}
+                  onChange={(e) => setCustomDeliverableInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = customDeliverableInput.trim();
+                      if (val && !form.deliverables.includes(val)) {
+                        setForm({ ...form, deliverables: [...form.deliverables, val] });
+                        setCustomDeliverableInput('');
+                      }
+                    }
+                  }}
+                  placeholder="Or type custom deliverable (e.g. Design Figma Link)..."
+                  className="flex-1 px-3.5 py-2 rounded-xl border border-[#E0DDD0] bg-white text-xs text-[#1C1B1A] focus:border-[#1C1B1A] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = customDeliverableInput.trim();
+                    if (val && !form.deliverables.includes(val)) {
+                      setForm({ ...form, deliverables: [...form.deliverables, val] });
+                      setCustomDeliverableInput('');
+                    }
+                  }}
+                  className="px-3 py-2 rounded-xl bg-[#E3EFE1] hover:bg-[#D5E8D2] text-[#2F5233] text-xs font-semibold border border-[#CDE0CB] cursor-pointer transition-colors"
+                >
+                  + Add Deliverable
+                </button>
+              </div>
             </div>
 
             {/* RELATED RESOURCES SECTION */}
@@ -656,7 +908,7 @@ export default function TeamTasks() {
               No tasks found for this filter.
             </div>
           ) : (
-            filteredTasks.map((t) => (
+            paginatedTasks.map((t) => (
               <div key={t._id} className="p-6 hover:bg-[#F4F1E8]/50 transition-colors space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                   <div className="space-y-1.5 flex-1">
@@ -737,6 +989,10 @@ export default function TeamTasks() {
                       onClick={() => {
                         setSelectedTaskForReview(t);
                         setReviewFilter('all');
+                        setReviewCurrentPage(1);
+                        if (!t.assignments || t.assignments.length === 0) {
+                          fetchTasks();
+                        }
                       }}
                       className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs ${
                         t.submittedCount > 0
@@ -783,6 +1039,72 @@ export default function TeamTasks() {
             ))
           )}
         </div>
+
+        {/* Pagination Bar */}
+        {filteredTasks.length > TASKS_PER_PAGE && (
+          <div className="p-4 sm:p-5 border-t border-[#E2DDD0] bg-[#FDFCF9] flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-xs text-[#66645E] font-medium">
+              Showing <span className="font-bold text-[#1C1B1A]">{(currentPage - 1) * TASKS_PER_PAGE + 1}</span> to{' '}
+              <span className="font-bold text-[#1C1B1A]">{Math.min(currentPage * TASKS_PER_PAGE, filteredTasks.length)}</span> of{' '}
+              <span className="font-bold text-[#1C1B1A]">{filteredTasks.length}</span> tasks
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-xs font-medium text-[#1C1B1A] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                aria-label="Previous Page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Prev</span>
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                  if (
+                    totalPages > 7 &&
+                    pageNum !== 1 &&
+                    pageNum !== totalPages &&
+                    Math.abs(pageNum - currentPage) > 1
+                  ) {
+                    if (pageNum === 2 || pageNum === totalPages - 1) {
+                      return <span key={pageNum} className="px-1 text-xs text-[#8C8A84]">…</span>;
+                    }
+                    return null;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
+                        currentPage === pageNum
+                          ? 'bg-[#1C1B1A] text-white shadow-2xs font-bold'
+                          : 'bg-white border border-[#E0DDD0] text-[#4D4B46] hover:bg-[#F2EFE6]'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-xs font-medium text-[#1C1B1A] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                aria-label="Next Page"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* RESOURCE SELECTION MODAL */}
@@ -1049,7 +1371,23 @@ export default function TeamTasks() {
 
             {/* Filter Tabs */}
             {(() => {
-              const allAssignments = selectedTaskForReview.assignments || [];
+              const liveTask = tasks.find((t) => t._id === selectedTaskForReview._id) || selectedTaskForReview;
+              const rawAssignments = liveTask.assignments || selectedTaskForReview.assignments || [];
+              const taskTargetGroup = liveTask.targetGroup || selectedTaskForReview.targetGroup;
+
+              // Strictly exclude students whose current memberType does not match the task targetGroup (e.g. promoted senior devs from junior tasks)
+              const allAssignments = rawAssignments.filter((a) => {
+                const s = a.studentId;
+                if (!s) return false;
+                const mType = s.memberType || '';
+                if (!taskTargetGroup || taskTargetGroup === 'both' || taskTargetGroup === 'all') return true;
+                if (taskTargetGroup === 'junior_developers') return mType === 'junior_developer';
+                if (taskTargetGroup === 'developer_interns' || taskTargetGroup === 'senior_developers') {
+                  return mType === 'senior_developer' || mType === 'developer_intern';
+                }
+                return true;
+              });
+
               const submittedList = allAssignments.filter((a) => a.status === 'submitted');
               const completedList = allAssignments.filter((a) => a.status === 'completed');
               const revisionList = allAssignments.filter((a) => a.status === 'revision_requested');
@@ -1060,6 +1398,12 @@ export default function TeamTasks() {
               else if (reviewFilter === 'completed') displayedAssignments = completedList;
               else if (reviewFilter === 'revision_requested') displayedAssignments = revisionList;
               else if (reviewFilter === 'pending') displayedAssignments = pendingList;
+
+              const reviewTotalPages = Math.ceil(displayedAssignments.length / SUBMISSIONS_PER_PAGE) || 1;
+              const paginatedAssignments = displayedAssignments.slice(
+                (reviewCurrentPage - 1) * SUBMISSIONS_PER_PAGE,
+                reviewCurrentPage * SUBMISSIONS_PER_PAGE
+              );
 
               return (
                 <>
@@ -1073,7 +1417,10 @@ export default function TeamTasks() {
                     ].map((tab) => (
                       <button
                         key={tab.id}
-                        onClick={() => setReviewFilter(tab.id)}
+                        onClick={() => {
+                          setReviewFilter(tab.id);
+                          setReviewCurrentPage(1);
+                        }}
                         className={`px-3 py-1.5 text-xs font-mono rounded-full transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                           reviewFilter === tab.id
                             ? 'bg-[#1C1B1A] text-white shadow-2xs font-bold'
@@ -1094,7 +1441,7 @@ export default function TeamTasks() {
                         No students found in this category.
                       </div>
                     ) : (
-                      displayedAssignments.map((a) => {
+                      paginatedAssignments.map((a) => {
                         const student = a.studentId || {};
                         const sId = student._id || a.studentId;
                         const isReviewing = reviewLoadingStudentId === sId;
@@ -1337,6 +1684,38 @@ export default function TeamTasks() {
                       })
                     )}
                   </div>
+
+                  {/* Review Submissions Pagination Bar */}
+                  {displayedAssignments.length > SUBMISSIONS_PER_PAGE && (
+                    <div className="pt-2.5 px-2 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-[#E0DDD0]/60 shrink-0 text-xs">
+                      <div className="text-[11px] text-[#66645E]">
+                        Showing <span className="font-bold text-[#1C1B1A]">{(reviewCurrentPage - 1) * SUBMISSIONS_PER_PAGE + 1}</span> -{' '}
+                        <span className="font-bold text-[#1C1B1A]">{Math.min(reviewCurrentPage * SUBMISSIONS_PER_PAGE, displayedAssignments.length)}</span> of{' '}
+                        <span className="font-bold text-[#1C1B1A]">{displayedAssignments.length}</span> students
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={reviewCurrentPage === 1}
+                          onClick={() => setReviewCurrentPage((p) => Math.max(p - 1, 1))}
+                          className="px-2.5 py-1 rounded-md border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-[11px] font-medium disabled:opacity-40 cursor-pointer shadow-2xs"
+                        >
+                          Prev
+                        </button>
+                        <span className="px-2 font-mono text-[11px] text-[#1C1B1A] font-bold">
+                          {reviewCurrentPage} / {reviewTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={reviewCurrentPage === reviewTotalPages}
+                          onClick={() => setReviewCurrentPage((p) => Math.min(p + 1, reviewTotalPages))}
+                          className="px-2.5 py-1 rounded-md border border-[#E0DDD0] bg-white hover:bg-[#F2EFE6] text-[11px] font-medium disabled:opacity-40 cursor-pointer shadow-2xs"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               );
             })()}

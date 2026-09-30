@@ -40,7 +40,7 @@ const taskSchema = new mongoose.Schema({
   },
   deliverables: {
     type: [String],
-    default: ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+    default: [],
   },
   relatedResources: [
     {

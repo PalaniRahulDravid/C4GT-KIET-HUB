@@ -1,11 +1,12 @@
 const express = require('express');
-const { loginWithRollNumber, googleAuth, getMe, updateProfile, logout, changePassword } = require('../controllers/authController');
+const { loginWithRollNumber, googleAuth, getMe, updateProfile, logout, changePassword, demoLogin } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Public routes - Roll Number & Password authentication
+// Public routes - Roll Number, Google & Demo Evaluator authentication
 router.post('/login', loginWithRollNumber);
+router.post('/demo-login', demoLogin);
 router.post('/google', googleAuth);
 router.post('/logout', logout);
 

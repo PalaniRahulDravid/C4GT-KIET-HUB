@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const config = require('../config/env');
+const { syncUserTaskAssignmentsOnRoleChange } = require('../services/taskSyncService');
 
 let googleOAuthClient = null;
 if (config.googleClientId) {
@@ -214,13 +215,100 @@ const getMe = async (req, res) => {
     });
   }
 
-  const token = generateToken(req.user);
+  const token = req.user.isDemo
+    ? jwt.sign(
+        {
+          id: req.user._id,
+          role: req.user.role,
+          email: req.user.email,
+          isDemo: true,
+        },
+        config.jwtSecret,
+        { expiresIn: '2h' }
+      )
+    : generateToken(req.user);
+
+  const formattedUser = formatUserResponse(req.user);
+  if (req.user.isDemo) {
+    formattedUser.isDemo = true;
+  }
 
   res.status(200).json({
     success: true,
     token,
-    user: formatUserResponse(req.user),
+    user: formattedUser,
   });
+};
+
+/**
+ * @desc    Instant Demo / Walkthrough Login for Project Mentors & HR Evaluators
+ * @route   POST /api/auth/demo-login
+ * @access  Public
+ */
+const demoLogin = async (req, res) => {
+  try {
+    const { role } = req.body;
+    let targetUser = null;
+
+    if (role === 'admin') {
+      targetUser = await User.findOne({ role: 'admin' });
+    } else if (role === 'teamlead') {
+      // Find Team 6 lead (Rahul) or any active team lead
+      targetUser =
+        (await User.findOne({ role: 'teamlead', rollNumber: '23B21A4546' })) ||
+        (await User.findOne({ role: 'teamlead' }));
+    } else {
+      // Student (Junior Developer or student with assigned team)
+      targetUser =
+        (await User.findOne({ role: 'user', memberType: 'junior_developer', teamId: { $ne: null } })) ||
+        (await User.findOne({ role: 'user', teamId: { $ne: null } })) ||
+        (await User.findOne({ role: 'user' }));
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: `No active account found for demo role '${role}'.`,
+      });
+    }
+
+    // Sign a temporary 2-hour JWT token with isDemo: true
+    const token = jwt.sign(
+      {
+        id: targetUser._id,
+        role: targetUser.role,
+        email: targetUser.email,
+        isDemo: true,
+      },
+      config.jwtSecret,
+      { expiresIn: '2h' }
+    );
+
+    // Set cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 2 * 60 * 60 * 1000,
+    });
+
+    const userObj = formatUserResponse(targetUser);
+    userObj.isDemo = true;
+
+    return res.status(200).json({
+      success: true,
+      token,
+      isDemo: true,
+      user: userObj,
+      message: `Signed in as Demo ${targetUser.role.toUpperCase()} (Read-Only Mode for Mentor Walkthrough)`,
+    });
+  } catch (error) {
+    console.error('Demo Login Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Demo login failed.',
+    });
+  }
 };
 
 /**
@@ -308,6 +396,7 @@ const updateProfile = async (req, res) => {
     }
 
     await user.save();
+    await syncUserTaskAssignmentsOnRoleChange(user._id, memberType);
     console.log(`Updated student profile in MongoDB Atlas for: ${user.email} (Roll: ${user.rollNumber})`);
 
     return res.status(200).json({
@@ -550,6 +639,7 @@ module.exports = {
   updateProfile,
   logout,
   changePassword,
+  demoLogin,
 };
 
 

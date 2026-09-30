@@ -22,6 +22,8 @@ import {
   Clock,
   Layers,
   CheckSquare,
+  Video,
+  Users,
 } from 'lucide-react';
 import { Skeleton, SkeletonResourceCard } from '../../components/skeleton';
 
@@ -36,6 +38,22 @@ export default function AdminResources() {
   const [selectedTopic, setSelectedTopic] = useState('all');
   const [deletingId, setDeletingId] = useState(null);
   const [toast, setToast] = useState(null);
+
+  // Responsive Pagination (9 on desktop, 6 on mobile)
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const resourcesPerPage = isMobile ? 6 : 9;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedType, selectedTopic]);
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -54,7 +72,11 @@ export default function AdminResources() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.resources)) {
-          setResources(data.resources);
+          // Sort newest created resources first
+          const sorted = [...data.resources].sort(
+            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+          );
+          setResources(sorted);
         }
       }
     } catch (err) {
@@ -123,24 +145,46 @@ export default function AdminResources() {
         item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.topic?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesType = selectedType === 'all' || item.type === selectedType;
+      const isYoutube = item.url && (item.url.includes('youtube.com') || item.url.includes('youtu.be'));
+      let matchesType = true;
+      if (selectedType === 'all') matchesType = true;
+      else if (selectedType === 'youtube') matchesType = isYoutube;
+      else if (selectedType === 'note') matchesType = item.type === 'note';
+      else matchesType = item.type === selectedType;
+
       const matchesTopic = selectedTopic === 'all' || item.topic === selectedTopic;
 
       return matchesSearch && matchesType && matchesTopic;
     });
   }, [resources, searchQuery, selectedType, selectedTopic]);
 
+  const totalPages = Math.ceil(filteredResources.length / resourcesPerPage) || 1;
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  const paginatedResources = useMemo(() => {
+    const start = (currentPage - 1) * resourcesPerPage;
+    return filteredResources.slice(start, start + resourcesPerPage);
+  }, [filteredResources, currentPage, resourcesPerPage]);
+
   // Statistics
   const stats = useMemo(() => {
     const total = resources.length;
     const files = resources.filter((r) => ['pdf', 'doc', 'excel', 'image'].includes(r.type)).length;
-    const links = resources.filter((r) => ['git_repo', 'dsa_problem', 'link'].includes(r.type)).length;
+    const links = resources.filter((r) => ['git_repo', 'dsa_problem', 'link', 'note'].includes(r.type)).length;
     const totalDownloads = resources.reduce((acc, r) => acc + (r.downloadsCount || 0), 0);
     const totalCompletions = resources.reduce((acc, r) => acc + (r.completedBy?.length || 0), 0);
     return { total, files, links, totalDownloads, totalCompletions };
   }, [resources]);
 
-  const getTypeIcon = (type) => {
+  const getTypeIcon = (type, url = '') => {
+    if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+      return <Video className="w-5 h-5 text-rose-600" />;
+    }
     switch (type) {
       case 'doc':
         return <FileText className="w-5 h-5 text-blue-600" />;
@@ -154,12 +198,17 @@ export default function AdminResources() {
         return <Code2 className="w-5 h-5 text-amber-600" />;
       case 'git_repo':
         return <GitBranch className="w-5 h-5 text-slate-800" />;
+      case 'note':
+        return <BookOpen className="w-5 h-5 text-amber-600" />;
       default:
-        return <BookOpen className="w-5 h-5 text-indigo-600" />;
+        return <ExternalLink className="w-5 h-5 text-indigo-600" />;
     }
   };
 
-  const getTypeLabel = (type) => {
+  const getTypeLabel = (type, url = '') => {
+    if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+      return 'YouTube Video';
+    }
     switch (type) {
       case 'doc':
         return 'Document';
@@ -173,6 +222,8 @@ export default function AdminResources() {
         return 'DSA Problem';
       case 'git_repo':
         return 'Git Repo';
+      case 'note':
+        return 'Study Notes';
       default:
         return 'External Link';
     }
@@ -238,7 +289,7 @@ export default function AdminResources() {
             className="px-4 py-2.5 rounded-xl bg-[#1C1B1A] text-white text-sm font-medium hover:bg-black transition-all flex items-center gap-2 cursor-pointer shadow-sm hover:shadow"
           >
             <Plus className="w-4 h-4" />
-            <span>Upload Resource</span>
+            <span>Share Resource</span>
           </button>
         </div>
       </div>
@@ -280,19 +331,21 @@ export default function AdminResources() {
 
         <div className="p-5 rounded-2xl bg-white border border-[#E2DDD0] shadow-xs">
           <div className="flex items-center justify-between text-[#57564F] text-xs font-medium uppercase tracking-wider">
-            <span>Downloads & Checks</span>
-            <CheckSquare className="w-4 h-4 text-emerald-500" />
+            <span>Total Downloads</span>
+            <Download className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#1C1B1A]">
             {loading ? (
-              <Skeleton className="w-20 h-8" />
+              <Skeleton className="w-16 h-8" />
             ) : (
-              <>
-                {stats.totalDownloads} <span className="text-xs font-normal text-neutral-400">/ {stats.totalCompletions}</span>
-              </>
+              stats.totalDownloads
             )}
           </div>
-          <div className="text-xs text-emerald-600 font-medium mt-1">Downloads / Completed marks</div>
+          <div className="text-xs text-emerald-600 font-medium mt-1">
+            {stats.totalCompletions > 0
+              ? `${stats.totalCompletions} student completions`
+              : 'Real-time download counts'}
+          </div>
         </div>
       </div>
 
@@ -310,11 +363,12 @@ export default function AdminResources() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* Topic Filter */}
             <select
               value={selectedTopic}
               onChange={(e) => setSelectedTopic(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-[#E2DDD0] bg-[#FAF9F5] text-sm text-[#1C1B1A] focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition cursor-pointer"
+              className="px-3 py-2.5 rounded-xl border border-[#E2DDD0] bg-[#FAF9F5] text-xs font-medium text-[#1C1B1A] focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition cursor-pointer"
             >
               <option value="all">All Topics</option>
               {uniqueTopics.map((top) => (
@@ -330,8 +384,10 @@ export default function AdminResources() {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-medium">
           {[
             { id: 'all', label: 'All Resources' },
+            { id: 'youtube', label: '🎬 YouTube Videos' },
+            { id: 'pdf', label: '📄 PDFs' },
+            { id: 'note', label: '📝 Study Notes' },
             { id: 'doc', label: 'Documents' },
-            { id: 'pdf', label: 'PDFs' },
             { id: 'excel', label: 'Spreadsheets' },
             { id: 'image', label: 'Images' },
             { id: 'dsa_problem', label: 'DSA Questions' },
@@ -357,7 +413,7 @@ export default function AdminResources() {
       {/* Resources Cards Grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {Array.from({ length: 6 }).map((_, idx) => (
+          {Array.from({ length: resourcesPerPage }).map((_, idx) => (
             <SkeletonResourceCard key={idx} />
           ))}
         </div>
@@ -381,7 +437,7 @@ export default function AdminResources() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredResources.map((res) => {
+          {paginatedResources.map((res) => {
             const isFile = ['pdf', 'doc', 'excel', 'image'].includes(res.type);
             const isCloudinary = Boolean(res.cloudinaryPublicId);
 
@@ -394,30 +450,27 @@ export default function AdminResources() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-10 h-10 rounded-xl bg-[#F7F5EE] border border-[#E2DDD0] flex items-center justify-center flex-shrink-0">
-                        {getTypeIcon(res.type)}
+                        {getTypeIcon(res.type, res.url)}
                       </div>
                       <div>
                         <span className="inline-block px-2 py-0.5 rounded-md bg-[#F2EFE9] text-[#57564F] text-[10px] font-semibold uppercase tracking-wider">
-                          {getTypeLabel(res.type)}
+                          {getTypeLabel(res.type, res.url)}
                         </span>
-                        {res.targetGroup === 'junior_developers' && (
+                        {res.visibility === 'library' ? (
+                          <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            📁 Library Repository
+                          </span>
+                        ) : res.targetGroup === 'junior_developers' ? (
                           <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            Junior Devs
+                            Junior Developers
                           </span>
-                        )}
-                        {res.targetGroup === 'developer_interns' && (
+                        ) : res.targetGroup === 'developer_interns' ? (
                           <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            Interns
+                            Developer Interns
                           </span>
-                        )}
-                        {res.targetGroup === 'both' && (
-                          <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                            Junior & Interns
-                          </span>
-                        )}
-                        {res.difficulty && (
-                          <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/50">
-                            {res.difficulty}
+                        ) : (
+                          <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            All Students
                           </span>
                         )}
                       </div>
@@ -471,12 +524,16 @@ export default function AdminResources() {
 
                 <div className="mt-4 pt-3 border-t border-[#E2DDD0] flex items-center justify-between">
                   <div className="flex items-center gap-3 text-xs text-[#57564F]">
-                    <span title="Number of downloads">
-                      ⬇ {res.downloadsCount || 0}
+                    <span title="Number of downloads" className="flex items-center gap-1 font-medium">
+                      <Download className="w-3.5 h-3.5 text-neutral-400" />
+                      {res.downloadsCount || 0}
                     </span>
-                    <span title="Students completed">
-                      ✓ {res.completedBy?.length || 0}
-                    </span>
+                    {res.completedBy && res.completedBy.length > 0 && (
+                      <span title="Students completed" className="flex items-center gap-1 font-medium text-emerald-600">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        {res.completedBy.length}
+                      </span>
+                    )}
                   </div>
 
                   <a
@@ -505,11 +562,73 @@ export default function AdminResources() {
         </div>
       )}
 
+      {/* Pagination Bar */}
+      {filteredResources.length > resourcesPerPage && (
+        <div className="p-4 rounded-2xl bg-white border border-[#E2DDD0] shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-[#57564F] font-medium">
+            Showing <span className="font-bold text-[#1C1B1A]">{(currentPage - 1) * resourcesPerPage + 1}</span> to{' '}
+            <span className="font-bold text-[#1C1B1A]">
+              {Math.min(currentPage * resourcesPerPage, filteredResources.length)}
+            </span> of{' '}
+            <span className="font-bold text-[#1C1B1A]">{filteredResources.length}</span> resources
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              className="px-3 py-1.5 rounded-lg border border-[#E2DDD0] bg-white text-xs font-semibold text-[#1C1B1A] hover:bg-[#F2EFE9] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              Prev
+            </button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                if (totalPages > 7 && pageNum !== 1 && pageNum !== totalPages && Math.abs(pageNum - currentPage) > 1) {
+                  if (pageNum === 2 || pageNum === totalPages - 1) {
+                    return <span key={pageNum} className="px-1 text-xs text-neutral-400">…</span>;
+                  }
+                  return null;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      currentPage === pageNum
+                        ? 'bg-[#1C1B1A] text-white shadow-2xs font-bold'
+                        : 'bg-white border border-[#E2DDD0] text-[#57564F] hover:text-[#1C1B1A] hover:bg-[#F2EFE9]'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              className="px-3 py-1.5 rounded-lg border border-[#E2DDD0] bg-white text-xs font-semibold text-[#1C1B1A] hover:bg-[#F2EFE9] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Resource Upload Modal */}
       <ResourceUploadModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-        onResourceUploaded={() => {
+        onResourceUploaded={(newRes) => {
+          if (newRes) {
+            setResources((prev) => [newRes, ...prev.filter((r) => r._id !== newRes._id)]);
+          }
+          setCurrentPage(1);
           fetchResources();
           showToast('New resource added successfully!');
         }}

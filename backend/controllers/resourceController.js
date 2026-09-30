@@ -146,60 +146,18 @@ const getResources = async (req, res) => {
             { targetGroup: null },
           ],
         });
+        // Students only see published resources in their general feed (library resources are attached to tasks)
+        query.$and.push({
+          $or: [
+            { visibility: 'published' },
+            { visibility: { $exists: false } },
+            { visibility: null },
+          ],
+        });
       }
     }
 
-    // Auto-seed starter learning resources if collection is completely empty
-    const totalCount = await Resource.countDocuments();
-    if (totalCount === 0) {
-      const seedResources = [
-        {
-          title: 'DSA: Two Pointers & Sliding Window Mastery Guide',
-          type: 'dsa_problem',
-          description: 'Top LeetCode practice problems and algorithmic patterns for dynamic arrays and subarrays.',
-          url: 'https://leetcode.com/problem-list/top-interview-questions/',
-          topic: 'Data Structures & Algorithms',
-          difficulty: 'Medium',
-          targetGroup: 'all',
-          createdBy: userId,
-        },
-        {
-          title: 'C4GT KIET HUB - Official Core Monorepo',
-          type: 'git_repo',
-          description: 'Main production repository covering React frontend architecture, Express API, and Atlas DB.',
-          url: 'https://github.com/c4gt-kiet/c4gt-hub',
-          topic: 'Full-Stack Web Dev',
-          difficulty: 'General',
-          targetGroup: 'all',
-          createdBy: userId,
-        },
-        {
-          title: 'System Design & Security RBAC Specification',
-          type: 'pdf',
-          description: 'Official architecture document outlining role-based authentication, token validation, and DB models.',
-          url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-          topic: 'Security & Cloud',
-          fileFormat: 'pdf',
-          fileSize: 1048576,
-          originalFilename: 'C4GT_Security_RBAC_Spec.pdf',
-          targetGroup: 'all',
-          createdBy: userId,
-        },
-        {
-          title: 'Cohort Student Performance & Milestone Tracker',
-          type: 'excel',
-          description: 'Master spreadsheet template for task completion metrics, daily streaks, and domain benchmarks.',
-          url: 'https://file-examples.com/storage/fe92451c276632f7413a968/2017/02/file_example_XLSX_50.xlsx',
-          topic: 'Student Performance',
-          fileFormat: 'xlsx',
-          fileSize: 524288,
-          originalFilename: 'Student_Milestone_Tracker_2026.xlsx',
-          targetGroup: 'all',
-          createdBy: userId,
-        },
-      ];
-      await Resource.insertMany(seedResources);
-    }
+
 
     const resources = await Resource.find(query)
       .sort({ createdAt: -1 })
@@ -278,14 +236,12 @@ const uploadResourceFile = async (req, res) => {
       });
     }
 
-    const { title, topic, description, difficulty, targetTeamId, targetGroup } = req.body;
+    const { title, topic, description, difficulty, targetTeamId, targetGroup, targetScope } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, message: 'Resource title is required.' });
     }
-    if (!topic || !topic.trim()) {
-      return res.status(400).json({ success: false, message: 'Topic / Domain is required.' });
-    }
+    const finalTopic = (topic && topic.trim()) ? topic.trim() : 'General';
 
     const originalFilename = req.file.originalname;
     const fileFormat = (originalFilename.split('.').pop() || '').toLowerCase();
@@ -307,18 +263,22 @@ const uploadResourceFile = async (req, res) => {
       publicId = `local_${Date.now()}`;
     }
 
-    let resolvedTeamId = targetTeamId || null;
-    if (!resolvedTeamId && (req.user.role === 'teamlead' || req.user.role === 'team_lead')) {
+    let resolvedTeamId = null;
+    if (targetTeamId && targetTeamId !== 'all' && targetTeamId !== 'none' && mongoose.Types.ObjectId.isValid(targetTeamId)) {
+      resolvedTeamId = targetTeamId;
+    } else if (targetScope === 'team' && (req.user.role === 'teamlead' || req.user.role === 'team_lead')) {
       const leadTeam = await Team.findOne({ teamLeadId: req.user._id });
       if (leadTeam) resolvedTeamId = leadTeam._id;
     }
+
+    const resourceVisibility = req.body.visibility === 'library' ? 'library' : 'published';
 
     const resource = await Resource.create({
       title: title.trim(),
       type: detectedType,
       description: description ? description.trim() : '',
       url: secureUrl,
-      topic: topic.trim(),
+      topic: finalTopic,
       difficulty: difficulty || 'General',
       fileSize: req.file.size,
       fileFormat,
@@ -326,6 +286,7 @@ const uploadResourceFile = async (req, res) => {
       cloudinaryPublicId: publicId,
       targetGroup: targetGroup || 'all',
       targetTeamId: resolvedTeamId,
+      visibility: resourceVisibility,
       createdBy: req.user._id,
     });
 
@@ -349,13 +310,13 @@ const uploadResourceFile = async (req, res) => {
 };
 
 /**
- * @desc    Create link resource (Git repo, DSA problem, Docs)
+ * @desc    Create link resource (Git repo, DSA problem, Docs, YouTube Video)
  * @route   POST /api/resources/link
  * @access  Private (Admin, TeamLead)
  */
 const createLinkResource = async (req, res) => {
   try {
-    const { title, url, type, topic, description, difficulty, targetTeamId, targetGroup } = req.body;
+    const { title, url, type, topic, description, difficulty, targetTeamId, targetGroup, targetScope, visibility } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, message: 'Resource title is required.' });
@@ -363,28 +324,31 @@ const createLinkResource = async (req, res) => {
     if (!url || !url.trim()) {
       return res.status(400).json({ success: false, message: 'Valid URL is required.' });
     }
-    if (!topic || !topic.trim()) {
-      return res.status(400).json({ success: false, message: 'Topic / Domain is required.' });
-    }
+    const finalTopic = (topic && topic.trim()) ? topic.trim() : 'General';
 
-    const validTypes = ['git_repo', 'dsa_problem', 'link', 'note'];
+    const validTypes = ['git_repo', 'dsa_problem', 'link', 'note', 'pdf', 'doc', 'excel', 'image', 'youtube'];
     const safeType = validTypes.includes(type) ? type : 'link';
 
-    let resolvedTeamId = targetTeamId || null;
-    if (!resolvedTeamId && (req.user.role === 'teamlead' || req.user.role === 'team_lead')) {
+    let resolvedTeamId = null;
+    if (targetTeamId && targetTeamId !== 'all' && targetTeamId !== 'none' && mongoose.Types.ObjectId.isValid(targetTeamId)) {
+      resolvedTeamId = targetTeamId;
+    } else if (targetScope === 'team' && (req.user.role === 'teamlead' || req.user.role === 'team_lead')) {
       const leadTeam = await Team.findOne({ teamLeadId: req.user._id });
       if (leadTeam) resolvedTeamId = leadTeam._id;
     }
+
+    const resourceVisibility = visibility === 'library' ? 'library' : 'published';
 
     const resource = await Resource.create({
       title: title.trim(),
       url: url.trim(),
       type: safeType,
-      topic: topic.trim(),
+      topic: finalTopic,
       description: description ? description.trim() : '',
       difficulty: difficulty || 'General',
       targetGroup: targetGroup || 'all',
       targetTeamId: resolvedTeamId,
+      visibility: resourceVisibility,
       createdBy: req.user._id,
     });
 

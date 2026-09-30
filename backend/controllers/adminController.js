@@ -6,6 +6,11 @@ const TaskAssignment = require('../models/TaskAssignment');
 const Batch = require('../models/Batch');
 const Resource = require('../models/Resource');
 const Notification = require('../models/Notification');
+const StudentActivity = require('../models/StudentActivity');
+const StudentResourceProgress = require('../models/StudentResourceProgress');
+const TeamRequest = require('../models/TeamRequest');
+const bcrypt = require('bcryptjs');
+const { isEligibleMember, syncUserTaskAssignmentsOnRoleChange } = require('../services/taskSyncService');
 
 /**
  * @desc    Get all registered users (Admin only)
@@ -21,7 +26,8 @@ const getUsers = async (req, res) => {
 
     const users = await User.find(filter)
       .sort({ createdAt: -1 })
-      .select('-__v');
+      .select('-__v')
+      .lean();
 
     res.status(200).json({
       success: true,
@@ -89,18 +95,74 @@ const updateUserRole = async (req, res) => {
 };
 
 /**
+ * @desc    Delete a user permanently from database and cascade clean relations (Admin only)
+ * @route   DELETE /api/admin/users/:id
+ * @access  Private/Admin
+ */
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found in database' });
+    }
+
+    if (user.role === 'admin' && req.user._id.toString() === id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Administrators cannot delete their own active account.',
+      });
+    }
+
+    // 1. If user was a team lead, clear lead from teams
+    await Team.updateMany({ teamLeadId: id }, { $set: { teamLeadId: null } });
+
+    // 2. Remove user from any team member arrays
+    await Team.updateMany({ members: id }, { $pull: { members: id } });
+
+    // 3. Cascade cleanup of student assignments, progress, activities, notifications, requests
+    await Promise.all([
+      TaskAssignment.deleteMany({ studentId: id }),
+      StudentActivity.deleteMany({ studentId: id }),
+      StudentResourceProgress.deleteMany({ studentId: id }),
+      Notification.deleteMany({ studentId: id }),
+      TeamRequest.deleteMany({ $or: [{ fromUserId: id }, { toUserId: id }] }),
+      Task.updateMany({ assignedTo: id }, { $pull: { assignedTo: id } }),
+    ]);
+
+    // 4. Permanently delete user document from MongoDB Atlas
+    await User.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: `User ${user.name} (${user.email}) permanently deleted from database.`,
+      deletedUserId: id,
+    });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete user',
+    });
+  }
+};
+
+/**
  * @desc    Get high-level statistics for Admin Dashboard
  * @route   GET /api/admin/stats
  * @access  Private/Admin
  */
 const getAdminStats = async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const students = await User.countDocuments({ role: { $in: ['user', 'student'] } });
-    const teamLeads = await User.countDocuments({ role: { $in: ['teamlead', 'team_lead'] } });
-    const admins = await User.countDocuments({ role: 'admin' });
-    const teamsCount = await Team.countDocuments();
-    const tasksCount = await Task.countDocuments();
+    const [totalUsers, students, teamLeads, admins, teamsCount, tasksCount] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: { $in: ['user', 'student'] } }),
+      User.countDocuments({ role: { $in: ['teamlead', 'team_lead'] } }),
+      User.countDocuments({ role: 'admin' }),
+      Team.countDocuments(),
+      Task.countDocuments(),
+    ]);
 
     res.status(200).json({
       success: true,
@@ -384,9 +446,11 @@ const getTeams = async (req, res) => {
       }
     }
 
-    // Fetch all published tasks and assignments to compute team progress
-    const allTasks = await Task.find().populate('createdBy', 'name role email');
-    const allAssignments = await TaskAssignment.find();
+    // Fetch all published tasks and assignments to compute team progress in parallel
+    const [allTasks, allAssignments] = await Promise.all([
+      Task.find().populate('createdBy', 'name role email').lean(),
+      TaskAssignment.find().lean(),
+    ]);
 
     const enrichedTeams = teams.map((teamDoc) => computeTeamMetrics(teamDoc, allTasks, allAssignments, 'overall'));
 
@@ -590,14 +654,25 @@ const removeTeamMember = async (req, res) => {
       });
     }
 
+    // 1. Remove member from this team's roster
     team.members = (team.members || []).filter((m) => m && m.toString() !== memberId);
     await team.save();
 
-    const user = await User.findById(memberId);
-    if (user && user.teamId && user.teamId.toString() === team._id.toString()) {
-      user.teamId = null;
-      await user.save();
-    }
+    // 2. Remove member from any other team's members just in case
+    await Team.updateMany({ members: memberId }, { $pull: { members: memberId } });
+
+    // 3. Cascade cleanup of student assignments, progress, activities, notifications, requests
+    await Promise.all([
+      TaskAssignment.deleteMany({ studentId: memberId }),
+      StudentActivity.deleteMany({ studentId: memberId }),
+      StudentResourceProgress.deleteMany({ studentId: memberId }),
+      Notification.deleteMany({ studentId: memberId }),
+      TeamRequest.deleteMany({ $or: [{ fromUserId: memberId }, { toUserId: memberId }] }),
+      Task.updateMany({ assignedTo: memberId }, { $pull: { assignedTo: memberId } }),
+    ]);
+
+    // 4. Permanently delete student from MongoDB User collection
+    const deletedUser = await User.findByIdAndDelete(memberId);
 
     const updatedTeam = await Team.findById(team._id)
       .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
@@ -605,8 +680,11 @@ const removeTeamMember = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Member removed from team successfully',
+      message: deletedUser
+        ? `Student ${deletedUser.name} removed and permanently deleted from database.`
+        : 'Member removed and deleted from database.',
       team: updatedTeam,
+      deletedStudentId: memberId,
     });
   } catch (error) {
     res.status(500).json({
@@ -783,6 +861,9 @@ const addTeamMember = async (req, res) => {
       await user.save();
     }
 
+    // Keep task assignments in sync with current memberType (clean up tasks from previous tracks)
+    await syncUserTaskAssignmentsOnRoleChange(user._id, mType);
+
     // Add student exclusively to team.members without modifying teamLeadId
     if (!team.members) team.members = [];
     if (team.teamLeadId) {
@@ -824,53 +905,8 @@ const getResources = async (req, res) => {
   try {
     let resources = await Resource.find()
       .sort({ createdAt: -1 })
-      .populate('createdBy', 'name email avatar');
-
-    // Auto-seed default learning resources if database is empty
-    if (resources.length === 0) {
-      const adminUser = (await User.findOne({ role: 'admin' })) || (await User.findOne());
-      if (adminUser) {
-        const seedResources = [
-          {
-            title: 'React Authentication & Google SSO Integration Guide',
-            type: 'link',
-            description: 'Official developer documentation for Google Identity Services (GIS) and React OAuth 2.0 flow.',
-            url: 'https://developers.google.com/identity/gsi/web/guides/overview',
-            topic: 'Full-Stack Web Dev / Security',
-            createdBy: adminUser._id,
-          },
-          {
-            title: 'MongoDB Atlas Schema & Role-Based Access Control Spec',
-            type: 'note',
-            description: 'Architectural specifications for user role gating, indexing, and connection security.',
-            url: 'https://www.mongodb.com/docs/atlas/',
-            topic: 'Database / MongoDB Atlas',
-            createdBy: adminUser._id,
-          },
-          {
-            title: 'RESTful API Security & Middleware Guidelines',
-            type: 'pdf',
-            description: 'Comprehensive checklist for JWT authentication middleware, CORS protection, and input sanitization.',
-            url: 'https://expressjs.com/en/advanced/best-practice-security.html',
-            topic: 'Full-Stack Web Dev / Backend',
-            createdBy: adminUser._id,
-          },
-          {
-            title: 'Data Structures & Algorithms Problem-Solving Patterns',
-            type: 'link',
-            description: 'Curated problem patterns for array manipulation, graph traversal, and dynamic programming.',
-            url: 'https://leetcode.com',
-            topic: 'Data Structures & Algorithms',
-            createdBy: adminUser._id,
-          },
-        ];
-
-        await Resource.insertMany(seedResources);
-        resources = await Resource.find()
-          .sort({ createdAt: -1 })
-          .populate('createdBy', 'name email avatar');
-      }
-    }
+      .populate('createdBy', 'name email avatar')
+      .lean();
 
     res.status(200).json({
       success: true,
@@ -892,7 +928,7 @@ const getResources = async (req, res) => {
  */
 const createResource = async (req, res) => {
   try {
-    const { title, type, description, url, topic } = req.body;
+    const { title, type, description, url, topic, visibility, targetGroup } = req.body;
 
     if (!title || !type || !url) {
       return res.status(400).json({
@@ -907,6 +943,8 @@ const createResource = async (req, res) => {
       description: description ? description.trim() : '',
       url: url.trim(),
       topic: topic ? topic.trim() : 'General',
+      visibility: visibility === 'published' ? 'published' : 'library',
+      targetGroup: targetGroup || 'all',
       createdBy: req.user._id,
     });
 
@@ -988,10 +1026,21 @@ const getTasks = async (req, res) => {
       }
     });
 
+    const orphanedPendingAssignmentIds = [];
+
     const tasksWithStats = tasks.map((t) => {
       const tObj = t.toObject ? t.toObject() : t;
       const relatedAssignments = taskAssignments
-        .filter((a) => a.taskId.toString() === t._id.toString())
+        .filter((a) => {
+          if (a.taskId.toString() !== t._id.toString()) return false;
+          if (!a.studentId) return false;
+          const eligible = isEligibleMember(a.studentId, t.targetGroup);
+          if (!eligible && (a.status === 'pending' || a.status === 'in_progress')) {
+            orphanedPendingAssignmentIds.push(a._id);
+            return false;
+          }
+          return eligible;
+        })
         .map((a) => {
           const aObj = a.toObject ? a.toObject() : a;
           const sid = aObj.studentId?._id ? aObj.studentId._id.toString() : (aObj.studentId ? aObj.studentId.toString() : '');
@@ -1005,6 +1054,12 @@ const getTasks = async (req, res) => {
       tObj.assignments = relatedAssignments;
       return tObj;
     });
+
+    if (orphanedPendingAssignmentIds.length > 0) {
+      TaskAssignment.deleteMany({ _id: { $in: orphanedPendingAssignmentIds } }).catch((err) => {
+        console.warn('Background cleanup of orphaned assignments:', err.message);
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -1045,6 +1100,23 @@ const createTask = async (req, res) => {
       });
     }
 
+    const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid deadline date format',
+      });
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    if (deadlineDate < todayStart) {
+      return res.status(400).json({
+        success: false,
+        message: 'Task deadline cannot be set to a past date. Please select today or an upcoming date.',
+      });
+    }
+
     let targetBatch = null;
     if (req.body.batch) {
       targetBatch = await Batch.findOne({
@@ -1067,10 +1139,9 @@ const createTask = async (req, res) => {
         Array.isArray(assignedTeams) && assignedTeams.length > 0
           ? assignedTeams
           : [1, 2, 3, 4, 5, 6, 7, 8, 9],
-      deliverables:
-        Array.isArray(deliverables) && deliverables.length > 0
-          ? deliverables
-          : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+      deliverables: Array.isArray(deliverables)
+        ? deliverables.filter((d) => typeof d === 'string' && d.trim().length > 0).map((d) => d.trim())
+        : [],
       relatedResources: Array.isArray(relatedResources) ? relatedResources : [],
       status: 'Published',
       createdBy: req.user._id,
@@ -1127,14 +1198,57 @@ const createTask = async (req, res) => {
           { upsert: true }
         );
       }
+
+      // Populate created assignments so the frontend immediately has student data upon creation
+      const createdAssignments = await TaskAssignment.find({ taskId: task._id })
+        .populate('studentId', 'name rollNumber email avatar memberType teamId')
+        .populate('reviewedBy', 'name email avatar role');
+
+      const teams = await Team.find().select('teamNumber name members teamLeadId');
+      const userTeamMap = {};
+      teams.forEach((tm) => {
+        if (tm.teamLeadId) userTeamMap[tm.teamLeadId.toString()] = tm.teamNumber;
+        if (Array.isArray(tm.members)) {
+          tm.members.forEach((m) => {
+            userTeamMap[m.toString()] = tm.teamNumber;
+          });
+        }
+      });
+
+      const relatedAssignments = createdAssignments
+        .filter((a) => a.studentId && isEligibleMember(a.studentId, task.targetGroup))
+        .map((a) => {
+          const aObj = a.toObject ? a.toObject() : a;
+          const sid = aObj.studentId?._id ? aObj.studentId._id.toString() : (aObj.studentId ? aObj.studentId.toString() : '');
+          aObj.teamNumber = userTeamMap[sid] || null;
+          return aObj;
+        });
+
+      const taskObj = populatedTask.toObject ? populatedTask.toObject() : populatedTask;
+      taskObj.assignments = relatedAssignments;
+      taskObj.totalAssignments = relatedAssignments.length;
+      taskObj.completedCount = 0;
+      taskObj.submittedCount = 0;
+
+      return res.status(201).json({
+        success: true,
+        message: 'Task published successfully',
+        task: taskObj,
+      });
     } catch (assignErr) {
       console.warn('Non-blocking assignment creation note:', assignErr.message);
     }
 
+    const fallbackObj = populatedTask.toObject ? populatedTask.toObject() : populatedTask;
+    fallbackObj.assignments = fallbackObj.assignments || [];
+    fallbackObj.totalAssignments = fallbackObj.totalAssignments || 0;
+    fallbackObj.completedCount = 0;
+    fallbackObj.submittedCount = 0;
+
     res.status(201).json({
       success: true,
       message: 'Task published successfully',
-      task: populatedTask,
+      task: fallbackObj,
     });
   } catch (error) {
     res.status(500).json({
@@ -1661,34 +1775,58 @@ const parseAndValidateCohort = (input) => {
  */
 const getBatches = async (req, res) => {
   try {
-    const batches = await Batch.find().sort({ createdAt: -1 });
+    const batches = await Batch.find().sort({ createdAt: -1 }).lean();
 
-    // Enrich batches with live learner count and team count
-    const enrichedBatches = await Promise.all(
-      batches.map(async (batchDoc) => {
-        const batchObj = batchDoc.toObject();
-        const batchMatches = [
-          batchObj.id,
-          batchObj.batchId,
-          batchObj.year,
-          batchObj.name,
-          String(batchObj._id),
-        ].filter(Boolean);
+    // Fetch user and team counts by batch in parallel using single aggregation pipelines
+    const [userCounts, teamCounts] = await Promise.all([
+      User.aggregate([
+        { $match: { role: { $ne: 'admin' } } },
+        { $group: { _id: '$batch', count: { $sum: 1 } } },
+      ]),
+      Team.aggregate([
+        { $group: { _id: '$batch', count: { $sum: 1 } } },
+      ]),
+    ]);
 
-        const liveCount = await User.countDocuments({
-          batch: { $in: batchMatches },
-          role: { $ne: 'admin' },
-        });
-        const teamCount = await Team.countDocuments({
-          batch: { $in: batchMatches },
-        });
+    const userCountMap = new Map();
+    userCounts.forEach((u) => {
+      if (u._id) userCountMap.set(String(u._id).toLowerCase(), u.count);
+    });
 
-        batchObj.studentsCount = typeof liveCount === 'number' ? liveCount : 0;
-        batchObj.teamsCount = typeof teamCount === 'number' ? teamCount : 0;
-        batchObj.activeTeamsCount = batchObj.teamsCount;
-        return batchObj;
-      })
-    );
+    const teamCountMap = new Map();
+    teamCounts.forEach((t) => {
+      if (t._id) teamCountMap.set(String(t._id).toLowerCase(), t.count);
+    });
+
+    const enrichedBatches = batches.map((batchObj) => {
+      const batchKeys = [
+        batchObj.id,
+        batchObj.batchId,
+        batchObj.year,
+        batchObj.name,
+      ].filter(Boolean).map((k) => String(k).toLowerCase());
+
+      let liveCount = 0;
+      for (const k of batchKeys) {
+        if (userCountMap.has(k)) {
+          liveCount = userCountMap.get(k);
+          break;
+        }
+      }
+
+      let teamCount = 0;
+      for (const k of batchKeys) {
+        if (teamCountMap.has(k)) {
+          teamCount = teamCountMap.get(k);
+          break;
+        }
+      }
+
+      batchObj.studentsCount = liveCount;
+      batchObj.teamsCount = teamCount;
+      batchObj.activeTeamsCount = teamCount;
+      return batchObj;
+    });
 
     res.status(200).json({
       success: true,
@@ -1750,12 +1888,17 @@ const createBatchWithCohort = async (req, res) => {
       });
     }
 
-    // 1. Create or upsert 9 Teams for this new batch
+    // 1. Create or retrieve 9 Teams for this new batch in bulk
+    const existingTeams = await Team.find({ batch: formattedId });
     const teamDocMap = {};
+    const teamsToCreate = [];
+
     for (let i = 1; i <= 9; i++) {
-      let team = await Team.findOne({ batch: formattedId, teamNumber: i });
-      if (!team) {
-        team = await Team.create({
+      const found = existingTeams.find((t) => t.teamNumber === i);
+      if (found) {
+        teamDocMap[i] = found;
+      } else {
+        teamsToCreate.push({
           name: `Team ${i}`,
           teamNumber: i,
           track: '',
@@ -1766,79 +1909,148 @@ const createBatchWithCohort = async (req, res) => {
           members: [],
         });
       }
-      teamDocMap[i] = team;
     }
 
-    // 2. Create/Update 81 Students in database
+    if (teamsToCreate.length > 0) {
+      const created = await Team.insertMany(teamsToCreate);
+      created.forEach((t) => {
+        teamDocMap[t.teamNumber] = t;
+      });
+    }
+
+    // 2. Single-query lookup for existing users
+    const cleanEmails = records.map((r) => r.email.toLowerCase().trim());
+    const cleanRolls = records.map((r) => r.rollNumber.toUpperCase().trim());
+
+    const existingUsers = await User.find({
+      $or: [
+        { email: { $in: cleanEmails } },
+        { rollNumber: { $in: cleanRolls } },
+      ],
+    }).select('_id email rollNumber password role phone phoneNumber college dayScholarHostel branch year');
+
+    const userMapByEmail = new Map();
+    const userMapByRoll = new Map();
+    existingUsers.forEach((u) => {
+      if (u.email) userMapByEmail.set(u.email.toLowerCase(), u);
+      if (u.rollNumber) userMapByRoll.set(u.rollNumber.toUpperCase(), u);
+    });
+
+    // 3. Parallel non-blocking password hashing
+    const saltRounds = 10;
+    const hashedPasswords = await Promise.all(
+      records.map((r) => {
+        const roll = r.rollNumber.toUpperCase().trim();
+        const existing = userMapByEmail.get(r.email.toLowerCase().trim()) || userMapByRoll.get(roll);
+        if (existing && existing.password) {
+          return Promise.resolve(null);
+        }
+        return bcrypt.hash(roll, saltRounds);
+      })
+    );
+
+    // 4. Build bulk operations for all 81 users & compute team rosters
+    const bulkUserOps = [];
     const teamLeadsMap = {};
     const teamMembersMap = {};
     for (let i = 1; i <= 9; i++) {
       teamMembersMap[i] = [];
     }
 
-    for (const record of records) {
+    records.forEach((record, index) => {
       const cleanEmail = record.email.toLowerCase().trim();
       const cleanRoll = record.rollNumber.toUpperCase().trim();
       const isLead = record.normalizedRole === 'LEAD';
       const isSenior = record.normalizedRole === 'SD';
       const yearVal = isLead || isSenior ? 4 : 3;
+      const teamDoc = teamDocMap[record.teamNumber];
+      const existing = userMapByEmail.get(cleanEmail) || userMapByRoll.get(cleanRoll);
 
-      let user = await User.findOne({
-        $or: [{ email: cleanEmail }, { rollNumber: cleanRoll }],
-      });
+      const userId = existing ? existing._id : new mongoose.Types.ObjectId();
 
-      if (!user) {
-        user = new User({
+      if (isLead) {
+        teamLeadsMap[record.teamNumber] = userId;
+      } else {
+        teamMembersMap[record.teamNumber].push(userId);
+      }
+
+      if (!existing) {
+        bulkUserOps.push({
+          insertOne: {
+            document: {
+              _id: userId,
+              name: record.name.trim(),
+              email: cleanEmail,
+              rollNumber: cleanRoll,
+              phone: record.phone || null,
+              phoneNumber: record.phone || null,
+              password: hashedPasswords[index],
+              college: record.college || 'KIET',
+              dayScholarHostel: record.type || 'DS',
+              activeBacklogs: Number(record.backlogs) || 0,
+              branch: record.branch || 'CSE',
+              year: yearVal,
+              batch: formattedId,
+              memberType: isLead || isSenior ? 'senior_developer' : 'junior_developer',
+              role: isLead ? 'teamlead' : 'user',
+              status: 'active',
+              teamId: teamDoc._id,
+            },
+          },
+        });
+      } else {
+        const updateSet = {
           name: record.name.trim(),
-          email: cleanEmail,
           rollNumber: cleanRoll,
-          phone: record.phone || null,
-          phoneNumber: record.phone || null,
-          password: cleanRoll, // password = roll number, will be hashed in pre-save
-          college: record.college || 'KIET',
-          dayScholarHostel: record.type || 'DS',
+          college: record.college || existing.college || 'KIET',
+          dayScholarHostel: record.type || existing.dayScholarHostel || 'DS',
           activeBacklogs: Number(record.backlogs) || 0,
-          branch: record.branch || 'CSE',
+          branch: record.branch || existing.branch || 'CSE',
           year: yearVal,
           batch: formattedId,
           memberType: isLead || isSenior ? 'senior_developer' : 'junior_developer',
-          role: isLead ? 'teamlead' : 'user',
+          role: isLead ? 'teamlead' : (existing.role === 'admin' ? 'admin' : 'user'),
           status: 'active',
-          teamId: teamDocMap[record.teamNumber]._id,
+          teamId: teamDoc._id,
+        };
+        if (record.phone) {
+          updateSet.phone = record.phone;
+          updateSet.phoneNumber = record.phone;
+        }
+        if (hashedPasswords[index]) {
+          updateSet.password = hashedPasswords[index];
+        }
+
+        bulkUserOps.push({
+          updateOne: {
+            filter: { _id: existing._id },
+            update: { $set: updateSet },
+          },
         });
-      } else {
-        user.name = record.name.trim();
-        user.rollNumber = cleanRoll;
-        user.phone = record.phone || user.phone;
-        user.phoneNumber = record.phone || user.phoneNumber;
-        user.college = record.college || user.college || 'KIET';
-        user.dayScholarHostel = record.type || user.dayScholarHostel || 'DS';
-        user.activeBacklogs = Number(record.backlogs) || 0;
-        user.branch = record.branch || user.branch || 'CSE';
-        user.year = yearVal;
-        user.batch = formattedId;
-        user.memberType = isLead || isSenior ? 'senior_developer' : 'junior_developer';
-        user.role = isLead ? 'teamlead' : (user.role === 'admin' ? 'admin' : 'user');
-        user.status = 'active';
-        user.teamId = teamDocMap[record.teamNumber]._id;
       }
+    });
 
-      await user.save();
-
-      if (isLead) {
-        teamLeadsMap[record.teamNumber] = user._id;
-      } else {
-        teamMembersMap[record.teamNumber].push(user._id);
-      }
+    // 5. Execute 81 User operations in ONE single database request
+    if (bulkUserOps.length > 0) {
+      await User.bulkWrite(bulkUserOps, { ordered: false });
     }
 
-    // 3. Link Leads and Members to their respective Teams
+    // 6. Update all 9 Teams in ONE single bulk database request
+    const bulkTeamOps = [];
     for (let i = 1; i <= 9; i++) {
-      const team = teamDocMap[i];
-      team.teamLeadId = teamLeadsMap[i] || null;
-      team.members = teamMembersMap[i] || [];
-      await team.save();
+      bulkTeamOps.push({
+        updateOne: {
+          filter: { _id: teamDocMap[i]._id },
+          update: {
+            $set: {
+              teamLeadId: teamLeadsMap[i] || null,
+              members: teamMembersMap[i] || [],
+            },
+          },
+        },
+      });
     }
+    await Team.bulkWrite(bulkTeamOps);
 
     // 4. Create Batch document
     const newBatch = await Batch.create({
@@ -2061,15 +2273,16 @@ const getTeamPerformanceAnalytics = async (req, res) => {
       windowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    // 1. Fetch all 9 teams for this batch
-    const teams = await Team.find({ batch: batchId })
-      .sort({ teamNumber: 1 })
-      .populate('teamLeadId', 'name email role')
-      .populate('members', 'name email role');
-
-    // 2. Fetch all tasks (both Admin & Team Lead tasks)
-    const allTasks = await Task.find().populate('createdBy', 'name role email');
-    const allAssignments = await TaskAssignment.find();
+    // 1. Fetch teams, tasks, and assignments concurrently in parallel
+    const [teams, allTasks, allAssignments] = await Promise.all([
+      Team.find({ batch: batchId })
+        .sort({ teamNumber: 1 })
+        .populate('teamLeadId', 'name email role')
+        .populate('members', 'name email role')
+        .lean(),
+      Task.find().populate('createdBy', 'name role email').lean(),
+      TaskAssignment.find().lean(),
+    ]);
 
     // Map each team with unified, standardized submission metrics
     const teamsAnalytics = teams.map((teamDoc) =>
@@ -2172,6 +2385,7 @@ const getTeamPerformanceAnalytics = async (req, res) => {
 module.exports = {
   getUsers,
   updateUserRole,
+  deleteUser,
   getAdminStats,
   getTeams,
   updateTeam,

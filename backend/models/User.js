@@ -126,6 +126,8 @@ const userSchema = new mongoose.Schema({
   },
 });
 
+userSchema.index({ batch: 1, role: 1 });
+
 // Normalize role & hash password before saving
 userSchema.pre('save', async function (next) {
   if (this.role === 'student') this.role = 'user';
@@ -149,5 +151,17 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
   if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
+
+// Auto-sync task assignments when memberType changes
+userSchema.post('save', async function (doc) {
+  try {
+    if (doc && doc.memberType) {
+      const { syncUserTaskAssignmentsOnRoleChange } = require('../services/taskSyncService');
+      await syncUserTaskAssignmentsOnRoleChange(doc._id, doc.memberType);
+    }
+  } catch (err) {
+    console.warn('Post-save role assignment sync error:', err.message);
+  }
+});
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);

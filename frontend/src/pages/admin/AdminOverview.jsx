@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, Users, GraduationCap, Award, Layers, CheckSquare, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Sparkles, Users, GraduationCap, Award, Layers, CheckSquare, ArrowRight, ShieldCheck, RefreshCw } from 'lucide-react';
 import { SkeletonCard, SkeletonTable } from '../../components/skeleton';
 import UserAvatar from '../../components/UserAvatar';
 
@@ -17,53 +17,59 @@ export default function AdminOverview() {
   });
   const [recentUsers, setRecentUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-  useEffect(() => {
-    const fetchOverviewData = async () => {
-      try {
+  const fetchOverviewData = useCallback(async (showRefreshing = false) => {
+    try {
+      if (showRefreshing) {
+        setIsRefreshing(true);
+      } else {
         setLoading(true);
-        const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
-        const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+      }
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
-        // Fetch stats
-        const statsRes = await fetch(`${API_BASE_URL}/admin/stats`, {
-          credentials: 'include',
-          headers: authHeaders,
-        });
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          if (statsData.success && statsData.stats) {
-            setStats(statsData.stats);
-          }
+      // Fetch stats
+      const statsRes = await fetch(`${API_BASE_URL}/admin/stats`, {
+        credentials: 'include',
+        headers: authHeaders,
+      });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        if (statsData.success && statsData.stats) {
+          setStats(statsData.stats);
         }
+      }
 
-        // Fetch users
-        const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
-          credentials: 'include',
-          headers: authHeaders,
-        });
-        if (usersRes.ok) {
-          const usersData = await usersRes.json();
-          if (usersData.success && Array.isArray(usersData.users)) {
-            setRecentUsers(usersData.users.slice(0, 5));
-          } else {
-            setRecentUsers([]);
-          }
+      // Fetch users
+      const usersRes = await fetch(`${API_BASE_URL}/admin/users`, {
+        credentials: 'include',
+        headers: authHeaders,
+      });
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        if (usersData.success && Array.isArray(usersData.users)) {
+          setRecentUsers(usersData.users.slice(0, 5));
         } else {
           setRecentUsers([]);
         }
-      } catch (err) {
-        console.error('Failed to load overview data from Atlas:', err);
+      } else {
         setRecentUsers([]);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    fetchOverviewData();
+    } catch (err) {
+      console.error('Failed to load overview data from Atlas:', err);
+      setRecentUsers([]);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
   }, [API_BASE_URL, token]);
+
+  useEffect(() => {
+    fetchOverviewData();
+  }, [fetchOverviewData]);
 
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -118,7 +124,7 @@ export default function AdminOverview() {
   return (
     <div className="w-full space-y-8">
       {/* 1. WELCOME HERO CARD */}
-      <div className="relative rounded-2xl bg-gradient-to-r from-[#EBF3EA]/60 via-[#F8F6F0] to-[#FCEEE9]/50 border border-[#E0DDD0] p-5 sm:p-8 text-[#1C1B1A] overflow-hidden shadow-2xs">
+      <div className="relative rounded-2xl bg-gradient-to-r from-[#EBF3EA]/60 via-[#F8F6F0] to-[#FCEEE9]/50 border border-[#E0DDD0] p-5 sm:p-8 text-[#1C1B1A] overflow-hidden shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="relative z-10 max-w-[680px] space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-black/10 text-[11px] font-mono font-semibold tracking-wider uppercase shadow-2xs">
             <span className="w-1.5 h-1.5 rounded-full bg-[#1C1B1A]"></span>
@@ -130,6 +136,17 @@ export default function AdminOverview() {
           <p className="text-[#66645E] text-sm leading-relaxed">
             Manage your C4GT HUB members, assign team leads, monitor student project teams, and publish upcoming tasks from one centralized workspace.
           </p>
+        </div>
+        <div className="relative z-10 shrink-0">
+          <button
+            type="button"
+            onClick={() => fetchOverviewData(true)}
+            disabled={isRefreshing || loading}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-[#E0DDD0] hover:bg-[#F2EFE6] text-[#1C1B1A] rounded-full text-xs font-semibold shadow-2xs transition-all cursor-pointer disabled:opacity-60"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[#66645E] ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Syncing...' : 'Sync Live Stats'}</span>
+          </button>
         </div>
       </div>
 

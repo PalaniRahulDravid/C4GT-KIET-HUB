@@ -210,6 +210,14 @@ const submitTaskDeliverables = async (req, res) => {
       });
     }
 
+    // Strict overdue enforcement: Once deadline is passed, tasks cannot be submitted
+    if (task.deadline && new Date() > new Date(task.deadline)) {
+      return res.status(400).json({
+        success: false,
+        message: 'The deadline for this task has passed. Overdue tasks cannot be submitted.',
+      });
+    }
+
     // Format deliverables array
     const cleanSubmissions = Array.isArray(submissions)
       ? submissions.map((s) => ({
@@ -231,12 +239,26 @@ const submitTaskDeliverables = async (req, res) => {
         submittedAt: new Date(),
       });
     } else {
+      if (assignment.status === 'completed') {
+        return res.status(400).json({
+          success: false,
+          message: 'This task has already been approved and marked Completed. Resubmission is not permitted.',
+        });
+      }
+      if (assignment.status === 'submitted') {
+        return res.status(400).json({
+          success: false,
+          message: 'Task deliverables are currently under review. Resubmission is disabled until a reviewer requests revisions.',
+        });
+      }
+
       assignment.status = 'submitted';
       assignment.submissions = cleanSubmissions;
       if (submissionNotes !== undefined) {
         assignment.submissionNotes = submissionNotes ? submissionNotes.trim() : '';
       }
       assignment.submittedAt = new Date();
+      assignment.completedAt = null;
     }
 
     await assignment.save();

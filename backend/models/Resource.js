@@ -10,11 +10,17 @@ const resourceSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Resource type is required'],
     enum: {
-      values: ['doc', 'excel', 'pdf', 'image', 'git_repo', 'dsa_problem', 'link', 'note'],
-      message: 'Resource type must be doc, excel, pdf, image, git_repo, dsa_problem, link, or note',
+      values: ['doc', 'excel', 'pdf', 'image', 'git_repo', 'dsa_problem', 'link', 'note', 'youtube'],
+      message: 'Resource type must be doc, excel, pdf, image, git_repo, dsa_problem, link, note, or youtube',
     },
     lowercase: true,
     trim: true,
+    index: true,
+  },
+  visibility: {
+    type: String,
+    enum: ['published', 'library'],
+    default: 'published',
     index: true,
   },
   description: {

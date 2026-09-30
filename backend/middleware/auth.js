@@ -47,6 +47,22 @@ const protect = async (req, res, next) => {
     }
 
     req.user = user;
+    if (decoded.isDemo) {
+      req.user.isDemo = true;
+      req.isDemo = true;
+
+      // Demo / Evaluator Guard: block any mutations (POST, PUT, PATCH, DELETE) to protect live data
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+        const isSafePath = req.originalUrl && req.originalUrl.includes('/logout');
+        if (!isSafePath) {
+          return res.status(403).json({
+            success: false,
+            isDemoBlocked: true,
+            message: 'Viewer / Demo Mode: Action disabled to safeguard live database cohort data.',
+          });
+        }
+      }
+    }
     next();
   } catch (error) {
     return res.status(401).json({

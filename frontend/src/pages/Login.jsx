@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { useAuth, isStudentProfileComplete } from '../context/AuthContext';
 import C4GTLogo from '../components/C4GTLogo';
-import { ArrowLeft, AlertCircle, Eye, EyeOff, Lock, User, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Eye, EyeOff, Lock, User, Sparkles, CheckCircle2, Shield, Users, GraduationCap } from 'lucide-react';
 
 export default function Login() {
-  const { user, isAuthenticated, loginWithRollNumber, loading } = useAuth();
+  const { user, isAuthenticated, loginWithRollNumber, loginAsDemo, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -14,6 +14,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [demoSubmitting, setDemoSubmitting] = useState('');
   const [error, setError] = useState(null);
 
   // Restore remembered roll number on initial mount
@@ -99,6 +100,25 @@ export default function Login() {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDemoAccess = async (role) => {
+    try {
+      setDemoSubmitting(role);
+      setError(null);
+      await loginAsDemo(role);
+      if (role === 'admin') {
+        navigate('/admin/dashboard', { replace: true });
+      } else if (role === 'teamlead') {
+        navigate('/teamlead', { replace: true });
+      } else {
+        navigate('/student', { replace: true });
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to initialize demo walkthrough');
+    } finally {
+      setDemoSubmitting('');
     }
   };
 
@@ -204,7 +224,7 @@ export default function Login() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || Boolean(demoSubmitting)}
               className="w-full py-3 sm:py-3.5 rounded-xl bg-[#1C1B1A] hover:bg-black text-white text-xs sm:text-sm font-semibold shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer mt-3 disabled:opacity-70 active:scale-[0.99]"
             >
               {submitting ? (
@@ -217,6 +237,63 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          {/* Quick Role Preview for Mentors / Evaluators */}
+          <div className="pt-2 border-t border-[#EAE7DC] space-y-3">
+            <div className="text-center">
+              <span className="text-xs font-medium text-[#66645E]">
+                Exploring as a mentor or evaluator?
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* Admin Button */}
+              <button
+                type="button"
+                disabled={Boolean(demoSubmitting) || submitting}
+                onClick={() => handleDemoAccess('admin')}
+                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border border-[#E0DDD0] bg-[#F9F8F3] hover:bg-[#F2EFE9] hover:border-[#CDC8B8] text-[#1C1B1A] transition-all cursor-pointer group disabled:opacity-50"
+              >
+                <Shield className="w-4 h-4 text-[#66645E] mb-1 group-hover:text-[#1C1B1A] transition-colors" />
+                <span className="text-xs font-semibold">
+                  {demoSubmitting === 'admin' ? 'Opening...' : 'Admin'}
+                </span>
+                <span className="text-[10px] text-[#8C887B]">Workspace</span>
+              </button>
+
+              {/* Team Lead Button */}
+              <button
+                type="button"
+                disabled={Boolean(demoSubmitting) || submitting}
+                onClick={() => handleDemoAccess('teamlead')}
+                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border border-[#E0DDD0] bg-[#F9F8F3] hover:bg-[#F2EFE9] hover:border-[#CDC8B8] text-[#1C1B1A] transition-all cursor-pointer group disabled:opacity-50"
+              >
+                <Users className="w-4 h-4 text-[#66645E] mb-1 group-hover:text-[#1C1B1A] transition-colors" />
+                <span className="text-xs font-semibold">
+                  {demoSubmitting === 'teamlead' ? 'Opening...' : 'Team Lead'}
+                </span>
+                <span className="text-[10px] text-[#8C887B]">Team 6</span>
+              </button>
+
+              {/* Student Button */}
+              <button
+                type="button"
+                disabled={Boolean(demoSubmitting) || submitting}
+                onClick={() => handleDemoAccess('student')}
+                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-xl border border-[#E0DDD0] bg-[#F9F8F3] hover:bg-[#F2EFE9] hover:border-[#CDC8B8] text-[#1C1B1A] transition-all cursor-pointer group disabled:opacity-50"
+              >
+                <GraduationCap className="w-4 h-4 text-[#66645E] mb-1 group-hover:text-[#1C1B1A] transition-colors" />
+                <span className="text-xs font-semibold">
+                  {demoSubmitting === 'student' ? 'Opening...' : 'Student'}
+                </span>
+                <span className="text-[10px] text-[#8C887B]">Portal</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-center text-[#8C887B] pt-0.5">
+              Select any role above to preview the application workflow.
+            </p>
+          </div>
         </div>
       </div>
     </div>

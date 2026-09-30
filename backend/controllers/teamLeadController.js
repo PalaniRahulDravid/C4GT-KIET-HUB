@@ -5,6 +5,9 @@ const TeamRequest = require('../models/TeamRequest');
 const Notification = require('../models/Notification');
 const Task = require('../models/Task');
 const TaskAssignment = require('../models/TaskAssignment');
+const StudentActivity = require('../models/StudentActivity');
+const StudentResourceProgress = require('../models/StudentResourceProgress');
+const { syncUserTaskAssignmentsOnRoleChange } = require('../services/taskSyncService');
 
 /**
  * Helper: Find team for current team lead
@@ -374,28 +377,25 @@ const removeMember = async (req, res) => {
       });
     }
 
+    // 1. Remove member from this team's roster
     team.members = (team.members || []).filter((m) => m && m.toString() !== memberId);
     await team.save();
 
-    const user = await User.findById(memberId);
-    if (user && user.teamId && user.teamId.toString() === team._id.toString()) {
-      user.teamId = null;
-      await user.save();
-    }
+    // 2. Remove member from any other team's members just in case
+    await Team.updateMany({ members: memberId }, { $pull: { members: memberId } });
 
-    // Notify student
-    try {
-      await Notification.create({
-        studentId: memberId,
-        teamId: team._id,
-        title: `Team Update: ${team.name}`,
-        message: `You are no longer a member of ${team.name}.`,
-        type: 'team_left',
-        assignedBy: req.user.name || 'Team Lead',
-      });
-    } catch (e) {
-      // ignore
-    }
+    // 3. Cascade cleanup of student assignments, progress, activities, notifications, requests
+    await Promise.all([
+      TaskAssignment.deleteMany({ studentId: memberId }),
+      StudentActivity.deleteMany({ studentId: memberId }),
+      StudentResourceProgress.deleteMany({ studentId: memberId }),
+      Notification.deleteMany({ studentId: memberId }),
+      TeamRequest.deleteMany({ $or: [{ fromUserId: memberId }, { toUserId: memberId }] }),
+      Task.updateMany({ assignedTo: memberId }, { $pull: { assignedTo: memberId } }),
+    ]);
+
+    // 4. Permanently delete student from MongoDB User collection
+    const deletedUser = await User.findByIdAndDelete(memberId);
 
     const updatedTeam = await Team.findById(team._id)
       .populate('teamLeadId', 'name email phone phoneNumber avatar role memberType branch year rollNumber')
@@ -403,8 +403,11 @@ const removeMember = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Member removed from team',
+      message: deletedUser
+        ? `Student ${deletedUser.name} removed and permanently deleted from database.`
+        : 'Member removed and permanently deleted from database.',
       team: updatedTeam,
+      deletedStudentId: memberId,
     });
   } catch (error) {
     console.error('Error removing member from team:', error);
@@ -574,6 +577,9 @@ const addMember = async (req, res) => {
       await user.save();
     }
 
+    // Keep task assignments in sync with current memberType
+    await syncUserTaskAssignmentsOnRoleChange(user._id, mType);
+
     // Add student strictly to team.members, preserving teamLeadId intact
     if (!team.members) team.members = [];
     if (team.teamLeadId) {
@@ -638,6 +644,14 @@ const getTeamTasks = async (req, res) => {
 
     const memberIds = [...(team.members || [])];
     const teamLeadId = team.teamLeadId ? team.teamLeadId.toString() : req.user._id.toString();
+    const memberIdStrings = memberIds.map((m) => (m._id || m).toString());
+    const teamUserIdsSet = new Set([...memberIdStrings, teamLeadId]);
+    const teamMemberObjectIds = Array.from(teamUserIdsSet).map((id) => new mongoose.Types.ObjectId(id));
+
+    // Fetch team members with memberType for precise targetGroup filtering
+    const teamMembers = await User.find({ _id: { $in: memberIds } })
+      .select('name rollNumber email memberType avatar')
+      .lean();
 
     const tasks = await Task.find({
       $or: [
@@ -650,21 +664,27 @@ const getTeamTasks = async (req, res) => {
       .sort({ deadline: 1 })
       .populate('createdBy', 'name email avatar role')
       .populate('assignedTo', 'name rollNumber email memberType avatar')
-      .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');
+      .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount')
+      .lean();
 
-    // Fetch all assignments for these tasks
+    // Fetch assignments for these tasks specifically belonging to this team's members and lead
     const taskIds = tasks.map((t) => t._id);
     const assignments = await TaskAssignment.find({
       taskId: { $in: taskIds },
+      studentId: { $in: teamMemberObjectIds },
     })
       .populate('studentId', 'name rollNumber email memberType avatar teamId')
-      .populate('reviewedBy', 'name email avatar role');
+      .populate('reviewedBy', 'name email avatar role')
+      .lean();
 
     const tasksWithMembersProgress = tasks.map((t) => {
-      const tObj = t.toObject();
-      const taskAssignments = assignments.filter(
-        (a) => a.taskId && (a.taskId._id || a.taskId).toString() === t._id.toString()
-      );
+      const tObj = { ...t };
+      const taskAssignments = assignments.filter((a) => {
+        if (!a.taskId || !a.studentId) return false;
+        const taskIdStr = (a.taskId._id || a.taskId).toString();
+        const studentIdStr = (a.studentId._id || a.studentId).toString();
+        return taskIdStr === t._id.toString() && teamUserIdsSet.has(studentIdStr);
+      });
       tObj.assignments = taskAssignments;
 
       const createdById = t.createdBy ? (t.createdBy._id || t.createdBy).toString() : '';
@@ -696,26 +716,53 @@ const getTeamTasks = async (req, res) => {
       // Filter out any assignments with missing/deleted studentId to avoid crashes
       const validAssignments = taskAssignments.filter((a) => a.studentId && (a.studentId._id || a.studentId));
 
-      // Determine targeted assignees
+      // Determine targeted assignees with 100% precision
       const hasSpecificAssignees = Array.isArray(tObj.assignedTo) && tObj.assignedTo.length > 0;
-      const relevantAssignments = hasSpecificAssignees
-        ? validAssignments.filter((a) => {
-            const sid = (a.studentId._id || a.studentId).toString();
-            return tObj.assignedTo.some(
-              (u) => (u._id || u).toString() === sid
-            );
-          })
-        : validAssignments.filter((a) => {
-            const sid = (a.studentId._id || a.studentId).toString();
-            return sid !== teamLeadId || audience === 'team_lead';
-          });
+      let eligibleMemberIds = [];
 
-      tObj.totalAssigned = hasSpecificAssignees
-        ? tObj.assignedTo.length
-        : audience === 'team_lead'
-        ? 1
-        : Math.max(memberIds.length, relevantAssignments.length);
+      if (hasSpecificAssignees) {
+        // Specific members assigned
+        const teamSpecificAssignees = tObj.assignedTo.filter((u) => {
+          const uid = (u._id || u).toString();
+          return teamUserIdsSet.has(uid);
+        });
+        eligibleMemberIds = teamSpecificAssignees.map((u) => (u._id || u).toString());
+      } else if (audience === 'team_lead') {
+        eligibleMemberIds = [teamLeadId];
+      } else {
+        // Filter by targetGroup
+        const targetGroup = tObj.targetGroup;
+        if (targetGroup === 'junior_developers' || targetGroup === 'junior_developer') {
+          eligibleMemberIds = teamMembers
+            .filter((m) => m.memberType === 'junior_developer')
+            .map((m) => m._id.toString());
+        } else if (targetGroup === 'developer_interns' || targetGroup === 'developer_intern') {
+          eligibleMemberIds = teamMembers
+            .filter((m) => m.memberType === 'developer_intern')
+            .map((m) => m._id.toString());
+        } else if (targetGroup === 'senior_developers' || targetGroup === 'senior_developer') {
+          eligibleMemberIds = teamMembers
+            .filter((m) => m.memberType === 'senior_developer')
+            .map((m) => m._id.toString());
+        } else {
+          eligibleMemberIds = teamMembers.map((m) => m._id.toString());
+        }
 
+        // Check if task assignments exist in DB for this task
+        const assignmentStudentIds = validAssignments.map((a) => (a.studentId._id || a.studentId).toString());
+        if (eligibleMemberIds.length === 0 && assignmentStudentIds.length > 0) {
+          eligibleMemberIds = assignmentStudentIds;
+        }
+      }
+
+      const relevantAssignments = validAssignments.filter((a) => {
+        const sid = (a.studentId._id || a.studentId).toString();
+        return eligibleMemberIds.includes(sid);
+      });
+
+      const totalAssigned = Math.max(relevantAssignments.length, eligibleMemberIds.length);
+      tObj.totalAssigned = totalAssigned;
+      tObj.eligibleMemberIds = eligibleMemberIds;
       tObj.completedCount = relevantAssignments.filter((a) => a.status === 'completed').length;
       tObj.submittedCount = relevantAssignments.filter((a) => a.status === 'submitted').length;
       tObj.pendingCount = Math.max(0, tObj.totalAssigned - tObj.completedCount - tObj.submittedCount);
@@ -887,6 +934,23 @@ const createTeamTask = async (req, res) => {
       });
     }
 
+    const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid deadline date format',
+      });
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    if (deadlineDate < todayStart) {
+      return res.status(400).json({
+        success: false,
+        message: 'Task deadline cannot be set to a past date. Please select today or an upcoming date.',
+      });
+    }
+
     // Determine assignees and scope
     let targetStudentIds = [];
     let determinedScope = taskScope || 'students';
@@ -902,6 +966,20 @@ const createTeamTask = async (req, res) => {
     } else if (typeof assignedTo === 'string' && mongoose.Types.ObjectId.isValid(assignedTo)) {
       determinedScope = 'individual';
       targetStudentIds = [assignedTo];
+    } else if (taskScope === 'junior_developers' || targetGroup === 'junior_developers') {
+      determinedScope = 'students';
+      const juniorMembers = await User.find({
+        _id: { $in: team.members || [] },
+        memberType: 'junior_developer',
+      }).select('_id').lean();
+      targetStudentIds = juniorMembers.map((m) => m._id);
+    } else if (taskScope === 'senior_developers' || targetGroup === 'senior_developers') {
+      determinedScope = 'students';
+      const seniorMembers = await User.find({
+        _id: { $in: team.members || [] },
+        memberType: 'senior_developer',
+      }).select('_id').lean();
+      targetStudentIds = seniorMembers.map((m) => m._id);
     } else {
       determinedScope = 'students';
       targetStudentIds = [...(team.members || [])];
@@ -917,10 +995,9 @@ const createTeamTask = async (req, res) => {
       assignedTeams: [team.teamNumber],
       assignedTo: targetStudentIds,
       taskScope: determinedScope,
-      deliverables:
-        Array.isArray(deliverables) && deliverables.length > 0
-          ? deliverables
-          : ['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation'],
+      deliverables: Array.isArray(deliverables)
+        ? deliverables.filter((d) => typeof d === 'string' && d.trim().length > 0).map((d) => d.trim())
+        : [],
       relatedResources: Array.isArray(relatedResources) ? relatedResources : [],
       status: 'Published',
       createdBy: req.user._id,

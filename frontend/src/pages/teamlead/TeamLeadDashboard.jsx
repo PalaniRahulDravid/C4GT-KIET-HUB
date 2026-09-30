@@ -48,6 +48,7 @@ import {
   X,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   UploadCloud,
   Check,
@@ -67,6 +68,7 @@ import {
   Lock,
   KeyRound,
   Home,
+  Video,
 } from 'lucide-react';
 import { Skeleton, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 import AddStudentModal from '../../components/AddStudentModal';
@@ -170,25 +172,29 @@ export default function TeamLeadDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Task Filtering, Person Division & Time Ordering States
-  const [taskAudienceFilter, setTaskAudienceFilter] = useState('all'); // 'all', 'students', 'team_lead'
+  const [taskAudienceFilter, setTaskAudienceFilter] = useState('all'); // 'all', 'pending', 'review_needed', 'completed', 'my_tasks', 'admin_tasks'
   const [selectedPersonFilter, setSelectedPersonFilter] = useState('all'); // 'all', 'team_lead', or studentId
   const [taskTimeSort, setTaskTimeSort] = useState('due_asc'); // 'due_asc', 'due_desc', 'created_desc', 'created_asc'
   const [taskStatusFilter, setTaskStatusFilter] = useState('all'); // 'all', 'review_needed', 'completed', 'pending'
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
-  const [expandedTaskIds, setExpandedTaskIds] = useState(new Set());
+  const [taskExpandedMap, setTaskExpandedMap] = useState({}); // { [taskId]: boolean }
+  const [taskMemberSubFilter, setTaskMemberSubFilter] = useState({}); // { [taskId]: 'all' | 'pending' | 'review' | 'completed' }
+  const [teamLeadTasksPage, setTeamLeadTasksPage] = useState(1);
+  const TEAMLEAD_TASKS_PER_PAGE = 6;
 
   // Task creation state
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [taskAssigneeType, setTaskAssigneeType] = useState('all_students'); // 'all_students', 'specific_students'
+  const [taskAssigneeType, setTaskAssigneeType] = useState('all_students'); // 'all_students', 'junior_developers', 'senior_developers', 'specific_students'
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskTopic, setTaskTopic] = useState('');
   const [taskDeadlineDate, setTaskDeadlineDate] = useState('');
+  const [taskDeadlineDaysInput, setTaskDeadlineDaysInput] = useState('');
   const [taskDeadlineTime, setTaskDeadlineTime] = useState('23:59');
   const [taskPriority, setTaskPriority] = useState('Normal');
-  const defaultDeliverables = ['Documentation / Spec', 'Demo / Presentation'];
-  const [taskDeliverables, setTaskDeliverables] = useState([...defaultDeliverables]);
+  const defaultDeliverables = [];
+  const [taskDeliverables, setTaskDeliverables] = useState([]);
   const [customDeliverableInput, setCustomDeliverableInput] = useState('');
   const [selectedResourceIds, setSelectedResourceIds] = useState([]);
   const [showResourcePicker, setShowResourcePicker] = useState(false);
@@ -227,14 +233,12 @@ export default function TeamLeadDashboard() {
   };
 
   const toggleTaskExpanded = (taskId) => {
-    setExpandedTaskIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) {
-        next.delete(taskId);
-      } else {
-        next.add(taskId);
-      }
-      return next;
+    setTaskExpandedMap((prev) => {
+      const current = prev[taskId] !== undefined ? prev[taskId] : false;
+      return {
+        ...prev,
+        [taskId]: !current,
+      };
     });
   };
 
@@ -294,7 +298,10 @@ export default function TeamLeadDashboard() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.resources)) {
-          setHubResources(data.resources);
+          const sorted = [...data.resources].sort(
+            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+          );
+          setHubResources(sorted);
         }
       }
     } catch (err) {
@@ -335,13 +342,30 @@ export default function TeamLeadDashboard() {
     }
 
     const fullDeadline = `${taskDeadlineDate}T${taskDeadlineTime || '23:59'}:00`;
+    const deadlineObj = new Date(fullDeadline);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    if (deadlineObj < todayStart) {
+      showToast('Deadline cannot be in the past. Please select today or an upcoming date.', 'error');
+      return;
+    }
 
     let payloadScope = 'students';
     let payloadAssignedTo = 'all_students';
+    let payloadTargetGroup = 'both';
 
-    if (taskAssigneeType === 'specific_students') {
+    if (taskAssigneeType === 'junior_developers') {
+      payloadScope = 'junior_developers';
+      payloadTargetGroup = 'junior_developers';
+      payloadAssignedTo = members.filter((m) => m.memberType === 'junior_developer').map((m) => m._id);
+    } else if (taskAssigneeType === 'senior_developers') {
+      payloadScope = 'senior_developers';
+      payloadTargetGroup = 'senior_developers';
+      payloadAssignedTo = members.filter((m) => m.memberType === 'senior_developer').map((m) => m._id);
+    } else if (taskAssigneeType === 'specific_students') {
       payloadScope = 'individual';
       payloadAssignedTo = selectedStudentIds;
+      payloadTargetGroup = 'individual';
     }
 
     try {
@@ -362,6 +386,7 @@ export default function TeamLeadDashboard() {
           deliverables: taskDeliverables,
           relatedResources: selectedResourceIds,
           taskScope: payloadScope,
+          targetGroup: payloadTargetGroup,
           assignedTo: payloadAssignedTo,
         }),
       });
@@ -373,10 +398,11 @@ export default function TeamLeadDashboard() {
         setTaskDescription('');
         setTaskTopic('');
         setTaskDeadlineDate('');
+        setTaskDeadlineDaysInput('');
         setTaskDeadlineTime('23:59');
         setTaskAssigneeType('all_students');
         setSelectedStudentIds([]);
-        setTaskDeliverables([...defaultDeliverables]);
+        setTaskDeliverables([]);
         setSelectedResourceIds([]);
         setShowResourcePicker(false);
         setShowAddCustomLink(false);
@@ -418,6 +444,7 @@ export default function TeamLeadDashboard() {
           topic: taskTopic.trim() || teamData?.team?.track || 'Engineering Track',
           description: `Attached reference resource for task: ${taskTitle || 'Team Task'}`,
           targetTeamId: teamData?.team?._id || null,
+          visibility: 'library',
         }),
       });
 
@@ -554,30 +581,95 @@ export default function TeamLeadDashboard() {
         (t.assignedTo && t.assignedTo.some((u) => (u._id || u).toString() === user?._id?.toString()))
     );
 
-    let totalExpected = 0;
-    let totalCompleted = 0;
+    const totalTasksCount = teamTasks.length;
+    const completedTasksCount = teamTasks.filter(
+      (t) => (t.completedCount || 0) >= (t.totalAssigned || 1) && (t.completedCount || 0) > 0
+    ).length;
+    const pendingTasksCount = teamTasks.filter((t) => (t.pendingCount || 0) > 0).length;
+    const reviewTasksCount = teamTasks.filter((t) => (t.submittedCount || 0) > 0).length;
+    const leadCreatedCount = teamTasks.filter((t) => t.isCreatedByLead).length;
+    const adminTasksCount = teamTasks.filter((t) => t.isCreatedByAdmin || t.audience === 'team_lead').length;
+
+    let totalAssignments = 0;
+    let totalCompletedAssignments = 0;
     let totalSubmitted = 0;
 
     teamTasks.forEach((t) => {
       const assignments = t.assignments || [];
       assignments.forEach((a) => {
-        if (a.status === 'completed') totalCompleted++;
+        if (a.status === 'completed') totalCompletedAssignments++;
         if (a.status === 'submitted') totalSubmitted++;
       });
-      totalExpected += t.totalAssigned || 1;
+      totalAssignments += t.totalAssigned || 1;
     });
 
-    const pct = totalExpected > 0 ? Math.min(100, Math.round((totalCompleted / totalExpected) * 100)) : 0;
+    const pct = totalTasksCount > 0 ? Math.min(100, Math.round((completedTasksCount / totalTasksCount) * 100)) : 0;
     return {
-      totalExpected,
-      totalCompleted,
+      totalExpected: totalTasksCount,
+      totalCompleted: completedTasksCount,
+      totalAssignments,
+      totalCompletedAssignments,
       totalSubmitted,
       pct,
       studentTasksCount: studentTasks.length,
       leadTasksCount: leadTasks.length,
-      totalTasksCount: teamTasks.length,
+      totalTasksCount,
+      pendingTasksCount,
+      reviewTasksCount,
+      completedTasksCount,
+      leadCreatedCount,
+      adminTasksCount,
     };
   }, [teamTasks, user]);
+
+  // Helpers for deadline date presets and past-date blocking
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getFutureDateStr = (daysToAdd) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysToAdd);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleDaysInputChange = (daysVal) => {
+    setTaskDeadlineDaysInput(daysVal);
+    if (daysVal === '' || isNaN(daysVal) || Number(daysVal) < 0) {
+      return;
+    }
+    const days = parseInt(daysVal, 10);
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    setTaskDeadlineDate(`${year}-${month}-${day}`);
+  };
+
+  const syncDaysFromDate = (dateStr) => {
+    if (!dateStr) {
+      setTaskDeadlineDaysInput('');
+      return;
+    }
+    const target = new Date(dateStr + 'T00:00:00');
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diffMs = target.getTime() - now.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0) {
+      setTaskDeadlineDaysInput(String(diffDays));
+    } else {
+      setTaskDeadlineDaysInput('');
+    }
+  };
 
   // Format deadline date & relative time calculation
   const getDeadlineInfo = (deadlineStr) => {
@@ -649,8 +741,18 @@ export default function TeamLeadDashboard() {
   const processedTasks = useMemo(() => {
     let result = [...teamTasks];
 
-    // 1. Filter by Task Role / Audience Tab
-    if (taskAudienceFilter === 'students') {
+    // 1. Filter by Task Category Tab
+    if (taskAudienceFilter === 'pending') {
+      result = result.filter((t) => (t.pendingCount || 0) > 0);
+    } else if (taskAudienceFilter === 'review_needed') {
+      result = result.filter((t) => (t.submittedCount || 0) > 0);
+    } else if (taskAudienceFilter === 'completed') {
+      result = result.filter((t) => (t.completedCount || 0) >= (t.totalAssigned || 1) && (t.completedCount || 0) > 0);
+    } else if (taskAudienceFilter === 'my_tasks') {
+      result = result.filter((t) => t.isCreatedByLead);
+    } else if (taskAudienceFilter === 'admin_tasks') {
+      result = result.filter((t) => t.isCreatedByAdmin || t.audience === 'team_lead');
+    } else if (taskAudienceFilter === 'students') {
       result = result.filter(
         (t) => t.audience === 'students' || t.audience === 'individual' || t.isCreatedByLead
       );
@@ -674,10 +776,22 @@ export default function TeamLeadDashboard() {
     } else if (selectedPersonFilter !== 'all') {
       // Single student selected: show only tasks relevant to this student
       result = result.filter((t) => {
+        const sId = selectedPersonFilter.toString();
+        if (Array.isArray(t.eligibleMemberIds) && t.eligibleMemberIds.length > 0) {
+          return t.eligibleMemberIds.includes(sId);
+        }
         if (Array.isArray(t.assignedTo) && t.assignedTo.length > 0) {
           return t.assignedTo.some(
-            (u) => (u._id || u).toString() === selectedPersonFilter
+            (u) => (u._id || u).toString() === sId
           );
+        }
+        if (t.targetGroup === 'junior_developers' || t.targetGroup === 'junior_developer') {
+          const studentObj = members.find((m) => m._id === selectedPersonFilter);
+          return studentObj?.memberType === 'junior_developer';
+        }
+        if (t.targetGroup === 'senior_developers' || t.targetGroup === 'senior_developer') {
+          const studentObj = members.find((m) => m._id === selectedPersonFilter);
+          return studentObj?.memberType === 'senior_developer';
         }
         return t.audience !== 'team_lead';
       });
@@ -732,6 +846,25 @@ export default function TeamLeadDashboard() {
     taskTimeSort,
     user,
   ]);
+
+  const teamLeadTotalPages = Math.ceil(processedTasks.length / TEAMLEAD_TASKS_PER_PAGE) || 1;
+
+  // Reset to page 1 on filter or search changes
+  useEffect(() => {
+    setTeamLeadTasksPage(1);
+  }, [taskAudienceFilter, selectedPersonFilter, taskStatusFilter, taskSearchQuery, taskTimeSort]);
+
+  // Adjust if out of bounds (e.g. after deletion)
+  useEffect(() => {
+    if (teamLeadTasksPage > teamLeadTotalPages && teamLeadTotalPages > 0) {
+      setTeamLeadTasksPage(teamLeadTotalPages);
+    }
+  }, [teamLeadTotalPages, teamLeadTasksPage]);
+
+  const paginatedLeadTasks = useMemo(() => {
+    const start = (teamLeadTasksPage - 1) * TEAMLEAD_TASKS_PER_PAGE;
+    return processedTasks.slice(start, start + TEAMLEAD_TASKS_PER_PAGE);
+  }, [processedTasks, teamLeadTasksPage]);
 
   // Student specific stats when a single student is selected in person filter
   const singleStudentStats = useMemo(() => {
@@ -795,7 +928,41 @@ export default function TeamLeadDashboard() {
     });
   }, [hubResources, resourceCategory, resourceSearch]);
 
-  const getResourceIcon = (type) => {
+  // Team Lead Learning Resources Responsive Pagination (9 on desktop, 6 on mobile)
+  const [isMobileLeadResources, setIsMobileLeadResources] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+  const [leadResourcesPage, setLeadResourcesPage] = useState(1);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobileLeadResources(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const leadResourcesPerPage = isMobileLeadResources ? 6 : 9;
+
+  useEffect(() => {
+    setLeadResourcesPage(1);
+  }, [resourceCategory, resourceSearch]);
+
+  const leadResourcesTotalPages = Math.ceil(filteredResources.length / leadResourcesPerPage) || 1;
+
+  useEffect(() => {
+    if (leadResourcesPage > leadResourcesTotalPages && leadResourcesTotalPages > 0) {
+      setLeadResourcesPage(leadResourcesTotalPages);
+    }
+  }, [leadResourcesTotalPages, leadResourcesPage]);
+
+  const paginatedLeadResources = useMemo(() => {
+    const start = (leadResourcesPage - 1) * leadResourcesPerPage;
+    return filteredResources.slice(start, start + leadResourcesPerPage);
+  }, [filteredResources, leadResourcesPage, leadResourcesPerPage]);
+
+  const getResourceIcon = (type, url = '') => {
+    if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+      return <Video className="w-5 h-5 text-rose-600" />;
+    }
     switch (type) {
       case 'doc':
       case 'pdf':
@@ -806,6 +973,8 @@ export default function TeamLeadDashboard() {
         return <Code2 className="w-5 h-5 text-amber-600" />;
       case 'git_repo':
         return <GitBranch className="w-5 h-5 text-slate-800" />;
+      case 'note':
+        return <BookOpen className="w-5 h-5 text-amber-600" />;
       default:
         return <BookOpen className="w-5 h-5 text-indigo-600" />;
     }
@@ -829,8 +998,8 @@ export default function TeamLeadDashboard() {
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-xs font-semibold animate-in fade-in ${toast.type === 'error'
-              ? 'bg-rose-900 text-white border-rose-700'
-              : 'bg-slate-900 text-white border-slate-800'
+            ? 'bg-rose-900 text-white border-rose-700'
+            : 'bg-slate-900 text-white border-slate-800'
             }`}
         >
           {toast.type === 'error' ? (
@@ -919,6 +1088,22 @@ export default function TeamLeadDashboard() {
                 isActive={false}
                 onClick={() => setMobileSidebarOpen(false)}
               />
+
+              <SidebarLink
+                link={{
+                  href: '#',
+                  label: 'Change Password',
+                  icon: <KeyRound className="w-6 h-6 text-amber-500" strokeWidth={1.8} />,
+                }}
+                isActive={false}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setPassError('');
+                  setPassSuccess('');
+                  setShowPasswordChangeModal(true);
+                  setMobileSidebarOpen(false);
+                }}
+              />
             </nav>
           </div>
 
@@ -962,53 +1147,28 @@ export default function TeamLeadDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Return to Landing Page */}
             <Link
               to="/"
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
+              className="px-3 sm:px-4 py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-semibold text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Return to Landing Page"
             >
               <Home className="w-3.5 h-3.5 text-slate-500" />
               <span className="hidden sm:inline">Landing Page</span>
+              <span className="sm:hidden">Home</span>
             </Link>
-
-            {/* Change Password (Hidden on mobile, available on sm+) */}
-            <button
-              type="button"
-              onClick={() => {
-                setPassError('');
-                setPassSuccess('');
-                setShowPasswordChangeModal(true);
-              }}
-              className="hidden sm:flex items-center justify-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
-              title="Change Password"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-              <span>Change Password</span>
-            </button>
-
-            {/* Refresh */}
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-medium text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors cursor-pointer shrink-0"
-              title="Refresh"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
 
             {/* Student Dashboard */}
             <button
               type="button"
               onClick={() => navigate('/student')}
-              className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs transition-colors cursor-pointer shrink-0"
+              className="px-3 sm:px-4 py-2 flex items-center justify-center gap-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Student Dashboard"
             >
               <GraduationCap className="w-4 h-4 text-blue-600" />
               <span className="hidden sm:inline">Student Dashboard</span>
+              <span className="sm:hidden">Student</span>
             </button>
           </div>
         </header>
@@ -1054,7 +1214,7 @@ export default function TeamLeadDashboard() {
                     <CardContent className="px-4 pb-4">
                       <Progress value={sprintStats.pct} className="h-1.5" />
                       <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
-                        {sprintStats.totalCompleted} of {sprintStats.totalExpected} completed
+                        {sprintStats.totalCompleted} of {sprintStats.totalExpected} tasks completed
                       </p>
                     </CardContent>
                   </Card>
@@ -1115,17 +1275,17 @@ export default function TeamLeadDashboard() {
                 {/* PERSON DIVISION & CHRONOLOGICAL FILTER CONTROLS BAR */}
                 {/* ========================================================= */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-                  {/* Row 1: Task Persona Tabs (All / Student Tasks / Team Lead Tasks) */}
+                  {/* Row 1: Task Category Tabs (All / Pending / Needs Review / Completed / My Tasks / Admin Tasks) */}
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 w-full sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 w-full sm:w-auto">
                       <button
                         onClick={() => {
                           setTaskAudienceFilter('all');
                           if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
                         }}
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'all'
-                            ? 'bg-white text-slate-900 shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                           }`}
                       >
                         <Layers className="w-3.5 h-3.5 text-slate-500 shrink-0" />
@@ -1137,35 +1297,88 @@ export default function TeamLeadDashboard() {
 
                       <button
                         onClick={() => {
-                          setTaskAudienceFilter('students');
+                          setTaskAudienceFilter('pending');
                           if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
                         }}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'students'
-                            ? 'bg-white text-blue-700 shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'pending'
+                          ? 'bg-white text-rose-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                           }`}
                       >
-                        <GraduationCap className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                        <span className="truncate">Student Tasks</span>
-                        <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px] shrink-0 font-mono">
-                          {sprintStats.studentTasksCount}
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <span className="truncate">Pending Works</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 text-[10px] shrink-0 font-mono">
+                          {sprintStats.pendingTasksCount}
                         </span>
                       </button>
 
                       <button
                         onClick={() => {
-                          setTaskAudienceFilter('team_lead');
+                          setTaskAudienceFilter('review_needed');
+                          if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'review_needed'
+                          ? 'bg-white text-amber-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                      >
+                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="truncate">In Review</span>
+                        {sprintStats.totalSubmitted > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 text-[10px] shrink-0 font-mono font-bold animate-pulse">
+                            {sprintStats.totalSubmitted}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setTaskAudienceFilter('completed');
+                          if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'completed'
+                          ? 'bg-white text-emerald-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="truncate">Completed</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[10px] shrink-0 font-mono">
+                          {sprintStats.completedTasksCount}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setTaskAudienceFilter('my_tasks');
+                          if (selectedPersonFilter === 'team_lead') setSelectedPersonFilter('all');
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'my_tasks'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="truncate">Assigned by Me</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px] shrink-0 font-mono">
+                          {sprintStats.leadCreatedCount}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setTaskAudienceFilter('admin_tasks');
                           setSelectedPersonFilter('team_lead');
                         }}
-                        className={`col-span-2 sm:col-span-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'team_lead'
-                            ? 'bg-white text-purple-700 shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${taskAudienceFilter === 'admin_tasks'
+                          ? 'bg-white text-purple-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                           }`}
                       >
                         <Crown className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                        <span>Team Lead (My Tasks)</span>
+                        <span className="truncate">Admin Tasks</span>
                         <span className="px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 text-[10px] shrink-0 font-mono">
-                          {sprintStats.leadTasksCount}
+                          {sprintStats.adminTasksCount}
                         </span>
                       </button>
                     </div>
@@ -1384,22 +1597,41 @@ export default function TeamLeadDashboard() {
                     )}
                   </Card>
                 ) : (
-                  <div className="space-y-4">
-                    {processedTasks.map((task) => {
+                  <>
+                    <div className="space-y-4">
+                    {paginatedLeadTasks.map((task) => {
                       const deadlineInfo = getDeadlineInfo(task.deadline);
-                      const isExpanded = expandedTaskIds.has(task._id) || selectedPersonFilter !== 'all';
+                      const isExpanded = taskExpandedMap[task._id] !== undefined
+                        ? taskExpandedMap[task._id]
+                        : (selectedPersonFilter !== 'all');
                       const isLeadTask =
                         task.audience === 'team_lead' ||
                         task.isCreatedByAdmin ||
                         (task.assignedTo && task.assignedTo.some((u) => (u._id || u).toString() === user?._id?.toString()));
 
-                      // Relevant members for this task
+                      // Relevant members for this task with 100% precision
                       const targetMembers = members.filter((m) => {
+                        const mIdStr = m._id.toString();
                         if (selectedPersonFilter !== 'all' && selectedPersonFilter !== 'team_lead') {
-                          return m._id === selectedPersonFilter;
+                          return mIdStr === selectedPersonFilter;
+                        }
+                        if (Array.isArray(task.eligibleMemberIds) && task.eligibleMemberIds.length > 0) {
+                          return task.eligibleMemberIds.includes(mIdStr);
                         }
                         if (Array.isArray(task.assignedTo) && task.assignedTo.length > 0) {
-                          return task.assignedTo.some((u) => (u._id || u).toString() === m._id.toString());
+                          return task.assignedTo.some((u) => (u._id || u).toString() === mIdStr);
+                        }
+                        if (task.targetGroup === 'junior_developers' || task.targetGroup === 'junior_developer') {
+                          return m.memberType === 'junior_developer';
+                        }
+                        if (task.targetGroup === 'developer_interns' || task.targetGroup === 'developer_intern') {
+                          return m.memberType === 'developer_intern';
+                        }
+                        if (task.targetGroup === 'senior_developers' || task.targetGroup === 'senior_developer') {
+                          return m.memberType === 'senior_developer';
+                        }
+                        if (Array.isArray(task.assignments) && task.assignments.length > 0) {
+                          return task.assignments.some((a) => (a.studentId?._id || a.studentId).toString() === mIdStr);
                         }
                         return true;
                       });
@@ -1414,10 +1646,10 @@ export default function TeamLeadDashboard() {
                         <Card
                           key={task._id}
                           className={`overflow-hidden border transition-all duration-200 ${deadlineInfo.status === 'overdue'
-                              ? 'border-rose-200 shadow-xs'
-                              : isLeadTask
-                                ? 'border-purple-200/80 shadow-2xs'
-                                : 'border-slate-200 shadow-2xs hover:border-slate-300'
+                            ? 'border-rose-200 shadow-xs'
+                            : isLeadTask
+                              ? 'border-purple-200/80 shadow-2xs'
+                              : 'border-slate-200 shadow-2xs hover:border-slate-300'
                             }`}
                         >
                           {/* Card Header */}
@@ -1456,8 +1688,8 @@ export default function TeamLeadDashboard() {
                                 {task.priority && task.priority !== 'Normal' && (
                                   <span
                                     className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase font-mono ${task.priority === 'Urgent'
-                                        ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                      ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                      : 'bg-amber-100 text-amber-800 border border-amber-200'
                                       }`}
                                   >
                                     {task.priority} Priority
@@ -1613,12 +1845,84 @@ export default function TeamLeadDashboard() {
                               {/* Expanded Member Submissions Table */}
                               {isExpanded && (
                                 <div className="mt-3 divide-y divide-slate-100 border border-slate-200/90 rounded-xl overflow-hidden bg-white shadow-2xs animate-in fade-in duration-150">
+                                  {/* Sub-filter tabs inside task card */}
+                                  <div className="p-2.5 bg-slate-50/90 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+                                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                      Assigned Members ({targetMembers.length})
+                                    </span>
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setTaskMemberSubFilter((prev) => ({ ...prev, [task._id]: 'all' }))}
+                                        className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${(taskMemberSubFilter[task._id] || 'all') === 'all'
+                                          ? 'bg-slate-900 text-white shadow-xs'
+                                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                                          }`}
+                                      >
+                                        All ({targetMembers.length})
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setTaskMemberSubFilter((prev) => ({ ...prev, [task._id]: 'pending' }))}
+                                        className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${taskMemberSubFilter[task._id] === 'pending'
+                                          ? 'bg-rose-700 text-white shadow-xs'
+                                          : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50'
+                                          }`}
+                                      >
+                                        Pending ({targetMembers.filter((m) => {
+                                          const a = task.assignments?.find(
+                                            (asg) => (asg.studentId?._id || asg.studentId).toString() === m._id.toString()
+                                          );
+                                          return !a || a.status === 'pending';
+                                        }).length})
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setTaskMemberSubFilter((prev) => ({ ...prev, [task._id]: 'review' }))}
+                                        className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${taskMemberSubFilter[task._id] === 'review'
+                                          ? 'bg-amber-700 text-white shadow-xs'
+                                          : 'bg-white text-amber-800 border border-amber-200 hover:bg-amber-50'
+                                          }`}
+                                      >
+                                        In Review ({unreviewedCount})
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setTaskMemberSubFilter((prev) => ({ ...prev, [task._id]: 'completed' }))}
+                                        className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${taskMemberSubFilter[task._id] === 'completed'
+                                          ? 'bg-emerald-700 text-white shadow-xs'
+                                          : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
+                                          }`}
+                                      >
+                                        Approved ({targetMembers.filter((m) => {
+                                          const a = task.assignments?.find(
+                                            (asg) => (asg.studentId?._id || asg.studentId).toString() === m._id.toString()
+                                          );
+                                          return a?.status === 'completed';
+                                        }).length})
+                                      </button>
+                                    </div>
+                                  </div>
+
                                   {targetMembers.length === 0 ? (
                                     <div className="p-4 text-center text-xs text-slate-400">
                                       No members assigned to this task.
                                     </div>
                                   ) : (
-                                    targetMembers.map((member) => {
+                                    targetMembers
+                                      .filter((member) => {
+                                        const subFilt = taskMemberSubFilter[task._id] || 'all';
+                                        if (subFilt === 'all') return true;
+                                        const assignment = task.assignments?.find(
+                                          (a) => (a.studentId?._id || a.studentId).toString() === member._id.toString()
+                                        );
+                                        const status = assignment?.status || 'pending';
+                                        if (subFilt === 'pending') return status === 'pending';
+                                        if (subFilt === 'review') return status === 'submitted';
+                                        if (subFilt === 'completed') return status === 'completed';
+                                        return true;
+                                      })
+                                      .map((member) => {
                                       const studentId = member._id;
                                       const assignment = task.assignments?.find(
                                         (a) =>
@@ -1667,6 +1971,12 @@ export default function TeamLeadDashboard() {
                                                 const isSlide =
                                                   sub.deliverableName?.toLowerCase().includes('demo') ||
                                                   sub.deliverableName?.toLowerCase().includes('presentation');
+                                                const isRepo =
+                                                  sub.deliverableName?.toLowerCase().includes('repo') ||
+                                                  sub.deliverableName?.toLowerCase().includes('git');
+                                                const isPR =
+                                                  sub.deliverableName?.toLowerCase().includes('pr') ||
+                                                  sub.deliverableName?.toLowerCase().includes('pull');
 
                                                 return (
                                                   <a
@@ -1676,7 +1986,10 @@ export default function TeamLeadDashboard() {
                                                     rel="noopener noreferrer"
                                                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-800 hover:text-blue-700 text-xs font-semibold border border-slate-200 transition-colors"
                                                   >
-                                                    <span>{isDoc ? '📄 Doc' : isSlide ? '📊 Slides' : '🔗 Drive Link'}</span>
+                                                    <span>
+                                                      {isDoc ? '📄 ' : isSlide ? '📊 ' : isRepo ? '💻 ' : isPR ? '🔀 ' : '🔗 '}
+                                                      {sub.deliverableName || 'Deliverable'}
+                                                    </span>
                                                     <ExternalLink className="w-3 h-3 text-slate-400" />
                                                   </a>
                                                 );
@@ -1752,6 +2065,74 @@ export default function TeamLeadDashboard() {
                       );
                     })}
                   </div>
+
+                  {/* Team Lead Tasks Pagination Bar */}
+                  {processedTasks.length > TEAMLEAD_TASKS_PER_PAGE && (
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div className="text-xs text-slate-500 font-medium">
+                        Showing <span className="font-bold text-slate-800">{(teamLeadTasksPage - 1) * TEAMLEAD_TASKS_PER_PAGE + 1}</span> to{' '}
+                        <span className="font-bold text-slate-800">{Math.min(teamLeadTasksPage * TEAMLEAD_TASKS_PER_PAGE, processedTasks.length)}</span> of{' '}
+                        <span className="font-bold text-slate-800">{processedTasks.length}</span> tasks
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={teamLeadTasksPage === 1}
+                          onClick={() => setTeamLeadTasksPage((prev) => Math.max(prev - 1, 1))}
+                          className="h-8 px-2.5 text-xs text-slate-700"
+                        >
+                          <ChevronLeft className="w-4 h-4 mr-0.5" />
+                          <span className="hidden sm:inline">Prev</span>
+                        </Button>
+
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: teamLeadTotalPages }, (_, i) => i + 1).map((pageNum) => {
+                            if (
+                              teamLeadTotalPages > 7 &&
+                              pageNum !== 1 &&
+                              pageNum !== teamLeadTotalPages &&
+                              Math.abs(pageNum - teamLeadTasksPage) > 1
+                            ) {
+                              if (pageNum === 2 || pageNum === teamLeadTotalPages - 1) {
+                                return <span key={pageNum} className="px-1 text-xs text-slate-400">…</span>;
+                              }
+                              return null;
+                            }
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={teamLeadTasksPage === pageNum ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setTeamLeadTasksPage(pageNum)}
+                                className={`w-8 h-8 p-0 text-xs font-mono ${
+                                  teamLeadTasksPage === pageNum
+                                    ? 'bg-slate-900 text-white font-bold'
+                                    : 'text-slate-600'
+                                }`}
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={teamLeadTasksPage === teamLeadTotalPages}
+                          onClick={() => setTeamLeadTasksPage((prev) => Math.min(prev + 1, teamLeadTotalPages))}
+                          className="h-8 px-2.5 text-xs text-slate-700"
+                        >
+                          <span className="hidden sm:inline">Next</span>
+                          <ChevronRight className="w-4 h-4 ml-0.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
             )}
@@ -1947,8 +2328,8 @@ export default function TeamLeadDashboard() {
                     <button
                       onClick={() => setResourceCategory('all')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'all'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       All ({hubResources.length})
@@ -1956,8 +2337,8 @@ export default function TeamLeadDashboard() {
                     <button
                       onClick={() => setResourceCategory('docs')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'docs'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       Docs & PDFs
@@ -1965,8 +2346,8 @@ export default function TeamLeadDashboard() {
                     <button
                       onClick={() => setResourceCategory('code')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'code'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       Repositories
@@ -1974,8 +2355,8 @@ export default function TeamLeadDashboard() {
                     <button
                       onClick={() => setResourceCategory('dsa')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${resourceCategory === 'dsa'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
                       DSA Problems
@@ -1997,7 +2378,7 @@ export default function TeamLeadDashboard() {
                 {/* Resources Grid */}
                 {loadingResources ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Array.from({ length: 6 }).map((_, idx) => (
+                    {Array.from({ length: leadResourcesPerPage }).map((_, idx) => (
                       <SkeletonResourceCard key={idx} />
                     ))}
                   </div>
@@ -2008,44 +2389,120 @@ export default function TeamLeadDashboard() {
                     <p className="text-xs text-slate-500 mt-1">Adjust search or upload a resource above.</p>
                   </Card>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredResources.map((resItem) => (
-                      <Card key={resItem._id} className="flex flex-col justify-between hover:border-slate-300 transition-colors">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <div className="p-2 rounded-lg bg-slate-100 shrink-0">
-                              {getResourceIcon(resItem.type)}
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {paginatedLeadResources.map((resItem) => (
+                        <Card key={resItem._id} className="flex flex-col justify-between hover:border-slate-300 transition-colors">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="p-2 rounded-lg bg-slate-100 shrink-0">
+                                {getResourceIcon(resItem.type, resItem.url)}
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-500">
+                                ⬇ {resItem.downloadsCount || 0}
+                              </span>
                             </div>
-                            <span className="text-[11px] font-mono text-slate-500">
-                              ⬇ {resItem.downloadsCount || 0}
+
+                            <CardTitle className="text-sm font-bold text-slate-900 mt-2 line-clamp-1">
+                              {resItem.title}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-500 line-clamp-2">
+                              {resItem.description || 'Study guide & practice reference.'}
+                            </CardDescription>
+                          </CardHeader>
+
+                          <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <span className="text-[11px] font-mono font-medium text-slate-500">
+                              {resItem.topic || 'General Track'}
                             </span>
-                          </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadResource(resItem)}
+                              className="text-xs h-8"
+                            >
+                              <Download className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                              <span>Open</span>
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      ))}
+                    </div>
 
-                          <CardTitle className="text-sm font-bold text-slate-900 mt-2 line-clamp-1">
-                            {resItem.title}
-                          </CardTitle>
-                          <CardDescription className="text-xs text-slate-500 line-clamp-2">
-                            {resItem.description || 'Study guide & practice reference.'}
-                          </CardDescription>
-                        </CardHeader>
+                    {/* Resources Pagination Controls */}
+                    {filteredResources.length > leadResourcesPerPage && (
+                      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3 mt-6">
+                        <div className="text-xs text-slate-500 font-medium order-2 sm:order-1">
+                          Showing <span className="font-bold text-slate-800">{(leadResourcesPage - 1) * leadResourcesPerPage + 1}</span> to{' '}
+                          <span className="font-bold text-slate-800">
+                            {Math.min(leadResourcesPage * leadResourcesPerPage, filteredResources.length)}
+                          </span> of{' '}
+                          <span className="font-bold text-slate-800">{filteredResources.length}</span> resources
+                        </div>
 
-                        <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-[11px] font-mono font-medium text-slate-500">
-                            {resItem.topic || 'General Track'}
-                          </span>
+                        <div className="flex items-center gap-1.5 order-1 sm:order-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDownloadResource(resItem)}
-                            className="text-xs h-8"
+                            disabled={leadResourcesPage === 1}
+                            onClick={() => setLeadResourcesPage((prev) => Math.max(prev - 1, 1))}
+                            className="h-8 px-2.5 text-xs text-slate-700"
                           >
-                            <Download className="w-3.5 h-3.5 mr-1 text-slate-500" />
-                            <span>Open</span>
+                            <ChevronLeft className="w-4 h-4 mr-0.5" />
+                            <span className="hidden sm:inline">Prev</span>
                           </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
-                  </div>
+
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: leadResourcesTotalPages }, (_, i) => i + 1).map((pageNum) => {
+                              if (
+                                pageNum === 1 ||
+                                pageNum === leadResourcesTotalPages ||
+                                (pageNum >= leadResourcesPage - 1 && pageNum <= leadResourcesPage + 1)
+                              ) {
+                                const isActive = pageNum === leadResourcesPage;
+                                return (
+                                  <button
+                                    key={pageNum}
+                                    type="button"
+                                    onClick={() => setLeadResourcesPage(pageNum)}
+                                    className={`w-8 h-8 flex items-center justify-center text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                                      isActive
+                                        ? 'bg-slate-900 text-white shadow-xs'
+                                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {pageNum}
+                                  </button>
+                                );
+                              }
+                              if (
+                                (pageNum === 2 && leadResourcesPage > 3) ||
+                                (pageNum === leadResourcesTotalPages - 1 && leadResourcesPage < leadResourcesTotalPages - 2)
+                              ) {
+                                return (
+                                  <span key={`dots-${pageNum}`} className="text-slate-400 px-1 text-xs select-none">
+                                    …
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })}
+                          </div>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={leadResourcesPage === leadResourcesTotalPages}
+                            onClick={() => setLeadResourcesPage((prev) => Math.min(leadResourcesTotalPages, prev + 1))}
+                            className="h-8 px-2.5 text-xs text-slate-700"
+                          >
+                            <span className="hidden sm:inline">Next</span>
+                            <ChevronRight className="w-4 h-4 ml-0.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -2082,18 +2539,18 @@ export default function TeamLeadDashboard() {
                 <label className="text-xs font-semibold text-slate-800">
                   Assign Task To: *
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => setTaskAssigneeType('all_students')}
                     className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${taskAssigneeType === 'all_students'
-                        ? 'border-blue-600 bg-blue-50/80 text-blue-900'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      ? 'border-blue-600 bg-blue-50/80 text-blue-900'
+                      : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                       }`}
                   >
                     <div className="flex items-center gap-1.5 font-bold text-xs">
                       <Users className="w-3.5 h-3.5 text-blue-600" />
-                      <span>All Students</span>
+                      <span>All Members</span>
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       All {members.length} team members
@@ -2102,18 +2559,52 @@ export default function TeamLeadDashboard() {
 
                   <button
                     type="button"
+                    onClick={() => setTaskAssigneeType('junior_developers')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${taskAssigneeType === 'junior_developers'
+                      ? 'border-blue-600 bg-blue-50/80 text-blue-900'
+                      : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Junior Devs</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {members.filter((m) => m.memberType === 'junior_developer').length} Junior members
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTaskAssigneeType('senior_developers')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${taskAssigneeType === 'senior_developers'
+                      ? 'border-blue-600 bg-blue-50/80 text-blue-900'
+                      : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Senior Devs</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {members.filter((m) => m.memberType === 'senior_developer').length} Senior members
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setTaskAssigneeType('specific_students')}
                     className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${taskAssigneeType === 'specific_students'
-                        ? 'border-blue-600 bg-blue-50/80 text-blue-900'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      ? 'border-blue-600 bg-blue-50/80 text-blue-900'
+                      : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                       }`}
                   >
                     <div className="flex items-center gap-1.5 font-bold text-xs">
                       <UserIcon className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Specific Student(s)</span>
+                      <span>Specific Members</span>
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
-                      Select individual members
+                      Pick individuals
                     </div>
                   </button>
                 </div>
@@ -2145,8 +2636,8 @@ export default function TeamLeadDashboard() {
                           <label
                             key={m._id}
                             className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${isChecked
-                                ? 'bg-blue-50/80 border-blue-300 text-blue-900 font-semibold'
-                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                              ? 'bg-blue-50/80 border-blue-300 text-blue-900 font-semibold'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                               }`}
                           >
                             <input
@@ -2213,35 +2704,59 @@ export default function TeamLeadDashboard() {
                 />
               </div>
 
-              {/* Deadline & Priority */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-800">Deadline Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={taskDeadlineDate}
-                    onChange={(e) => setTaskDeadlineDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  />
+              {/* Deadline & Priority - Clean Responsive Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                <div className="sm:col-span-6 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-800">Deadline Date *</label>
+                    <span className="text-[10px] text-slate-500 font-mono">Pick date or type days</span>
+                  </div>
+                  {/* Unified attractive container without gaps */}
+                  <div className="flex items-center rounded-xl border border-slate-200 bg-white hover:border-slate-300 focus-within:ring-2 focus-within:ring-slate-400 focus-within:border-transparent transition-all p-1 h-[38px]">
+                    <input
+                      type="date"
+                      required
+                      min={getTodayDateStr()}
+                      value={taskDeadlineDate}
+                      onChange={(e) => {
+                        setTaskDeadlineDate(e.target.value);
+                        syncDaysFromDate(e.target.value);
+                      }}
+                      className="flex-1 min-w-0 px-2 text-xs font-medium text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+                    />
+                    <div className="h-4 w-[1px] bg-slate-200 mx-1 shrink-0" />
+                    <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded-lg text-xs shrink-0">
+                      <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">In</span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="e.g. 1"
+                        value={taskDeadlineDaysInput}
+                        onChange={(e) => handleDaysInputChange(e.target.value)}
+                        className="w-11 h-5 text-center font-bold text-xs rounded border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                        title="Enter days from today"
+                      />
+                      <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">days</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-800">Deadline Time</label>
+                <div className="sm:col-span-3 space-y-1">
+                  <label className="text-xs font-semibold text-slate-800 truncate block">Deadline Time</label>
                   <input
                     type="time"
                     value={taskDeadlineTime}
                     onChange={(e) => setTaskDeadlineTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    className="w-full h-[38px] px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-800">Priority</label>
+                <div className="sm:col-span-3 space-y-1">
+                  <label className="text-xs font-semibold text-slate-800 truncate block">Priority</label>
                   <select
                     value={taskPriority}
                     onChange={(e) => setTaskPriority(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    className="w-full h-[38px] px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
                   >
                     <option value="Normal">Normal</option>
                     <option value="High">High</option>
@@ -2251,35 +2766,101 @@ export default function TeamLeadDashboard() {
               </div>
 
               {/* Deliverables Checklist */}
-              <div className="space-y-1.5 pt-1">
-                <label className="text-xs font-semibold text-slate-800">
-                  Required Student Deliverables (Google Drive / Doc / Repo Links)
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {taskDeliverables.map((d, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-medium border border-slate-200"
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-800">
+                      Required Student Deliverables (Optional)
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Choose which proof links students must submit. If none are selected, no links will be requested.
+                    </p>
+                  </div>
+                  {taskDeliverables.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTaskDeliverables([])}
+                      className="text-xs text-rose-600 hover:underline cursor-pointer"
                     >
-                      <span>📄 {d}</span>
-                      <button
-                        type="button"
-                        onClick={() => setTaskDeliverables((prev) => prev.filter((item) => item !== d))}
-                        className="text-slate-400 hover:text-slate-600"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
+                      Clear All
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2 mt-2">
+                {/* Selected Deliverable Chips */}
+                {taskDeliverables.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200/70">
+                    {taskDeliverables.map((d, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 text-xs font-medium border border-blue-200 shadow-2xs"
+                      >
+                        <span>📄 {d}</span>
+                        <button
+                          type="button"
+                          onClick={() => setTaskDeliverables((prev) => prev.filter((item) => item !== d))}
+                          className="text-blue-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60 text-xs text-slate-500">
+                    <em>No deliverables selected by default. Only deliverables you add below will be required.</em>
+                  </div>
+                )}
+
+                {/* Suggested Quick Add Chips */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Quick Add Suggested:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Source Code Repo', 'GitHub Pull Request', 'Documentation / Spec', 'Demo / Presentation', 'Live Deployment Link'].map((sug) => {
+                      const isSelected = taskDeliverables.includes(sug);
+                      return (
+                        <button
+                          key={sug}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setTaskDeliverables((prev) => prev.filter((item) => item !== sug));
+                            } else {
+                              setTaskDeliverables((prev) => [...prev, sug]);
+                            }
+                          }}
+                          className={`text-xs px-2.5 py-0.5 rounded-lg border transition-all cursor-pointer ${isSelected
+                              ? 'bg-slate-900 text-white border-slate-900 font-medium'
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
+                            }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '}
+                          {sug}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Deliverable Input */}
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={customDeliverableInput}
                     onChange={(e) => setCustomDeliverableInput(e.target.value)}
-                    placeholder="Add custom deliverable..."
-                    className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (customDeliverableInput.trim() && !taskDeliverables.includes(customDeliverableInput.trim())) {
+                          setTaskDeliverables((prev) => [...prev, customDeliverableInput.trim()]);
+                          setCustomDeliverableInput('');
+                        }
+                      }
+                    }}
+                    placeholder="Add custom deliverable (e.g. Design Figma Link)..."
+                    className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-400"
                   />
                   <Button
                     type="button"
@@ -2291,9 +2872,9 @@ export default function TeamLeadDashboard() {
                         setCustomDeliverableInput('');
                       }
                     }}
-                    className="text-xs h-8"
+                    className="text-xs h-8 cursor-pointer"
                   >
-                    Add
+                    + Add
                   </Button>
                 </div>
               </div>
@@ -2411,8 +2992,8 @@ export default function TeamLeadDashboard() {
                                 );
                               }}
                               className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-all ${isAttached
-                                  ? 'bg-blue-50/90 border-blue-300 text-blue-900 font-semibold'
-                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/80'
+                                ? 'bg-blue-50/90 border-blue-300 text-blue-900 font-semibold'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100/80'
                                 }`}
                             >
                               <div className="flex items-center gap-2 truncate pr-2">
@@ -2574,9 +3155,14 @@ export default function TeamLeadDashboard() {
         <ResourceUploadModal
           isOpen={isUploadModalOpen}
           onClose={() => setIsUploadModalOpen(false)}
-          onResourceUploaded={() => {
-            fetchHubResources();
-            showToast('Resource uploaded to Cloudinary successfully! ✓');
+          onResourceUploaded={(newRes) => {
+            if (newRes && newRes._id) {
+              setHubResources((prev) => [newRes, ...prev.filter((r) => r._id !== newRes._id)]);
+            } else {
+              fetchHubResources();
+            }
+            setLeadResourcesPage(1);
+            showToast('Resource shared successfully! ✓');
           }}
           apiBaseUrl={API_BASE_URL}
           token={token}
@@ -2594,12 +3180,11 @@ export default function TeamLeadDashboard() {
       {/* MANDATORY / VOLUNTARY PASSWORD CHANGE MODAL */}
       {isPasswordModalOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${isMandatoryPasswordChange
-              ? 'bg-black/85 backdrop-blur-md'
-              : 'bg-black/60 backdrop-blur-xs'
+          className={`fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 md:p-6 flex items-center justify-center min-h-screen ${isMandatoryPasswordChange
+            ? 'bg-black/85 backdrop-blur-md'
+            : 'bg-black/60 backdrop-blur-xs'
             }`}
           onClick={(e) => {
-            // Prevent dismissal if mandatory
             if (!isMandatoryPasswordChange && e.target === e.currentTarget) {
               setShowPasswordChangeModal(false);
               setPassError('');
@@ -2608,20 +3193,20 @@ export default function TeamLeadDashboard() {
           }}
         >
           <div
-            className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200"
+            className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-2xl sm:rounded-3xl max-w-md w-full p-4 sm:p-6 md:p-8 shadow-2xl space-y-4 sm:space-y-5 my-auto max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scroll animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-start justify-between pb-3 border-b border-[#E0DDD0]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
-                  <KeyRound className="w-5 h-5" />
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
+                  <KeyRound className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold tracking-tight text-xl text-[#1C1B1A]">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold tracking-tight text-base sm:text-xl text-[#1C1B1A] leading-tight truncate sm:whitespace-normal">
                     {isMandatoryPasswordChange ? 'Set Your New Password' : 'Change Account Password'}
                   </h3>
-                  <p className="text-xs text-[#66645E]">
+                  <p className="text-[11px] sm:text-xs text-[#66645E] truncate sm:whitespace-normal">
                     {isMandatoryPasswordChange
                       ? 'First-Time Login Security Requirement'
                       : 'Update Team Lead Login Password'}
@@ -2635,7 +3220,7 @@ export default function TeamLeadDashboard() {
                     setPassError('');
                     setPassSuccess('');
                   }}
-                  className="p-1.5 rounded-full hover:bg-[#EAE7DC] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-full hover:bg-[#EAE7DC] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2787,8 +3372,8 @@ export default function TeamLeadDashboard() {
                   type="submit"
                   disabled={isChangingPass || !currentPassword || newPassword.length < 6 || newPassword !== confirmPassword}
                   className={`px-5 py-2.5 rounded-full font-medium transition-all flex items-center gap-2 ${!isChangingPass && currentPassword && newPassword.length >= 6 && newPassword === confirmPassword
-                      ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md cursor-pointer'
-                      : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
+                    ? 'bg-[#1C1B1A] hover:bg-black text-white shadow-md cursor-pointer'
+                    : 'bg-[#C2BEAF] text-[#66645E] cursor-not-allowed opacity-60'
                     }`}
                 >
                   {isChangingPass ? (

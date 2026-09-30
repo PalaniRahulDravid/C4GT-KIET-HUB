@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, getRoleName } from '../../context/AuthContext';
-import { Users, GraduationCap, Award, ShieldCheck, Search, RefreshCw, CheckCircle2, ShieldAlert, ArrowRight, X } from 'lucide-react';
+import { Users, GraduationCap, Award, ShieldCheck, Search, RefreshCw, CheckCircle2, ShieldAlert, ArrowRight, X, Trash2 } from 'lucide-react';
 import UserAvatar from '../../components/UserAvatar';
 import { Skeleton, SkeletonTable } from '../../components/skeleton';
 
@@ -13,6 +13,12 @@ export default function ManageUsers() {
   const [updatingId, setUpdatingId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [pendingRoleChange, setPendingRoleChange] = useState(null);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const USERS_PER_PAGE = 10;
 
   const API_BASE_URL = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -113,6 +119,32 @@ export default function ManageUsers() {
     setPendingRoleChange(null);
   };
 
+  const handleDeleteUser = async (targetUser) => {
+    if (!targetUser) return;
+    try {
+      setIsDeletingUser(true);
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const res = await fetch(`${API_BASE_URL}/admin/users/${targetUser._id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUsers((prev) => prev.filter((u) => u._id !== targetUser._id));
+        showToast(data.message || `User ${targetUser.name} deleted successfully from database.`);
+        setUserToDelete(null);
+      } else {
+        showToast(data.message || 'Failed to delete user from database.', 'error');
+      }
+    } catch (err) {
+      console.error('Delete user error:', err);
+      showToast('Error deleting user from database.', 'error');
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
+
   const handleCancelRoleChange = () => {
     setPendingRoleChange(null);
   };
@@ -142,6 +174,24 @@ export default function ManageUsers() {
     }
     return true;
   });
+
+  // Reset to page 1 on filter or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedRole, searchQuery]);
+
+  const totalPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE) || 1;
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * USERS_PER_PAGE;
+    return filteredUsers.slice(start, start + USERS_PER_PAGE);
+  }, [filteredUsers, currentPage]);
 
   const getTableTitle = () => {
     switch (selectedRole) {
@@ -393,10 +443,11 @@ export default function ManageUsers() {
                   <th className="py-3.5 px-6 text-center">Status</th>
                   <th className="py-3.5 px-6">Current Role</th>
                   <th className="py-3.5 px-6">Assign Role</th>
+                  <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD0] text-xs text-[#1C1B1A]">
-                {filteredUsers.map((u, idx) => {
+                {paginatedUsers.map((u, idx) => {
                   const isSelf = currentUser && (currentUser._id === u._id || currentUser.email === u.email);
                   const isUpdating = updatingId === u._id;
                   const normalizedRole = getNormalizedRoleKey(u.role) === 'teamLead' ? 'teamlead' : getNormalizedRoleKey(u.role) === 'admin' ? 'admin' : 'user';
@@ -459,6 +510,21 @@ export default function ManageUsers() {
                           </select>
                         )}
                       </td>
+
+                      <td className="py-3.5 px-6 text-right">
+                        {isSelf ? (
+                          <span className="text-[10px] font-mono text-[#9E9C94] italic">Self</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setUserToDelete(u)}
+                            title={`Delete ${u.name || 'user'} permanently from database`}
+                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -466,6 +532,64 @@ export default function ManageUsers() {
             </table>
           )}
         </div>
+
+        {/* Pagination Footer */}
+        {filteredUsers.length > USERS_PER_PAGE && (
+          <div className="p-4 border-t border-[#E0DDD0] bg-[#FAF8F3] flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-xs text-[#66645E] font-medium">
+              Showing <span className="font-bold text-[#1C1B1A]">{(currentPage - 1) * USERS_PER_PAGE + 1}</span> to{' '}
+              <span className="font-bold text-[#1C1B1A]">
+                {Math.min(currentPage * USERS_PER_PAGE, filteredUsers.length)}
+              </span> of{' '}
+              <span className="font-bold text-[#1C1B1A]">{filteredUsers.length}</span> users
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                className="px-3 py-1.5 rounded-lg border border-[#E0DDD0] bg-white text-xs font-semibold text-[#1C1B1A] hover:bg-[#F2EFE9] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              >
+                Prev
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                  if (totalPages > 7 && pageNum !== 1 && pageNum !== totalPages && Math.abs(pageNum - currentPage) > 1) {
+                    if (pageNum === 2 || pageNum === totalPages - 1) {
+                      return <span key={pageNum} className="px-1 text-xs text-neutral-400">…</span>;
+                    }
+                    return null;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        currentPage === pageNum
+                          ? 'bg-[#1C1B1A] text-white shadow-2xs font-bold'
+                          : 'bg-white border border-[#E0DDD0] text-[#66645E] hover:text-[#1C1B1A] hover:bg-[#F2EFE9]'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                className="px-3 py-1.5 rounded-lg border border-[#E0DDD0] bg-white text-xs font-semibold text-[#1C1B1A] hover:bg-[#F2EFE9] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Role Change Confirmation Modal */}
@@ -580,6 +704,82 @@ export default function ManageUsers() {
                   </>
                 ) : (
                   <span>Confirm & Apply Role</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-[#FAF8F3] border border-[#E2DDD0] rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-[#E2DDD0] flex items-center justify-between bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-base text-[#1C1B1A]">Delete User Permanently?</h4>
+                  <p className="text-[11px] text-[#66645E]">Permanent database removal</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={isDeletingUser}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 rounded-xl bg-white border border-[#E2DDD0] flex items-center gap-3">
+                <UserAvatar user={userToDelete} size="w-10 h-10" rounded="rounded-full" />
+                <div className="min-w-0">
+                  <h5 className="font-bold text-sm text-[#1C1B1A] truncate">{userToDelete.name}</h5>
+                  <p className="text-xs text-[#66645E] font-mono truncate">{userToDelete.email}</p>
+                  {userToDelete.rollNumber && (
+                    <span className="text-[10px] font-mono text-[#8C897E]">Roll: {userToDelete.rollNumber}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 leading-relaxed space-y-1">
+                <p className="font-bold">⚠️ Warning: This action cannot be undone.</p>
+                <p>
+                  Permanently deleting this user will automatically remove them from all team rosters, delete their task assignments, progress, activities, and erase their account from MongoDB Atlas.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 px-5 bg-[#FAF8F3] border-t border-[#E2DDD0] flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={isDeletingUser}
+                className="px-3.5 py-2 text-xs font-semibold text-[#66645E] hover:text-[#1C1B1A] hover:bg-black/5 rounded-xl transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteUser(userToDelete)}
+                disabled={isDeletingUser}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeletingUser ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
                 )}
               </button>
             </div>

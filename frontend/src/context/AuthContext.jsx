@@ -79,26 +79,42 @@ export function AuthProvider({ children }) {
     const initAuth = async () => {
       try {
         const storedToken = (typeof window !== 'undefined' && localStorage.getItem('c4gt_token')) || token;
+        if (!storedToken) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
         const response = await fetch(`${API_BASE_URL}/auth/me`, {
           credentials: 'include', // Automatically sends HTTP cookie if allowed
-          headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
+          headers: { Authorization: `Bearer ${storedToken}` },
         });
 
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.user) {
-            setUser(data.user);
+            let isDemoStored = false;
+            try {
+              isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
+            } catch (e) {}
+            setUser({ ...data.user, isDemo: Boolean(data.isDemo || isDemoStored) });
             if (data.token) {
               updateToken(data.token);
             }
           } else {
             setUser(null);
             updateToken(null);
+            try {
+              localStorage.removeItem('c4gt_is_demo');
+            } catch (e) {}
           }
         } else {
           // Token invalid or expired
           setUser(null);
           updateToken(null);
+          try {
+            localStorage.removeItem('c4gt_is_demo');
+          } catch (e) {}
         }
       } catch (error) {
         console.error('Database unreachable during auth verification:', error);
@@ -116,6 +132,10 @@ export function AuthProvider({ children }) {
     if (!rollNumber || !password) {
       throw new Error('Please enter both Roll Number and Password.');
     }
+
+    try {
+      localStorage.removeItem('c4gt_is_demo');
+    } catch (e) {}
 
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
@@ -142,11 +162,43 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  // Instant Demo / Walkthrough Login for Project Mentors & Evaluators (Read-Only)
+  const loginAsDemo = async (role) => {
+    const response = await fetch(`${API_BASE_URL}/auth/demo-login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ role }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Demo login failed');
+    }
+
+    const demoUser = { ...data.user, isDemo: true };
+    setUser(demoUser);
+    if (data.token) {
+      updateToken(data.token);
+    }
+    try {
+      localStorage.setItem('c4gt_is_demo', 'true');
+    } catch (e) {}
+
+    return demoUser;
+  };
+
   // Strict Google Sign-In (Legacy fallback)
   const loginWithGoogle = async (credential) => {
     if (!credential) {
       throw new Error('Google credential is required. Real Google OAuth is mandatory.');
     }
+
+    try {
+      localStorage.removeItem('c4gt_is_demo');
+    } catch (e) {}
 
     const response = await fetch(`${API_BASE_URL}/auth/google`, {
       method: 'POST',
@@ -186,6 +238,9 @@ export function AuthProvider({ children }) {
     } finally {
       setUser(null);
       updateToken(null);
+      try {
+        localStorage.removeItem('c4gt_is_demo');
+      } catch (e) {}
     }
   };
 
@@ -193,14 +248,20 @@ export function AuthProvider({ children }) {
   const refreshUser = async () => {
     try {
       const storedToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      if (!storedToken) return;
+
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         credentials: 'include',
-        headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
+        headers: { Authorization: `Bearer ${storedToken}` },
       });
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.user) {
-          setUser(data.user);
+          let isDemoStored = false;
+          try {
+            isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
+          } catch (e) {}
+          setUser({ ...data.user, isDemo: Boolean(data.isDemo || isDemoStored) });
           if (data.token) {
             updateToken(data.token);
           }
@@ -233,7 +294,11 @@ export function AuthProvider({ children }) {
     }
 
     if (data.user) {
-      setUser(data.user);
+      let isDemoStored = false;
+      try {
+        isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
+      } catch (e) {}
+      setUser({ ...data.user, isDemo: Boolean(data.user.isDemo || isDemoStored) });
     }
     return data.user;
   };
@@ -258,7 +323,11 @@ export function AuthProvider({ children }) {
     }
 
     if (data.user) {
-      setUser(data.user);
+      let isDemoStored = false;
+      try {
+        isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
+      } catch (e) {}
+      setUser({ ...data.user, isDemo: Boolean(data.user.isDemo || isDemoStored) });
     }
     return data.user;
   };
@@ -270,10 +339,12 @@ export function AuthProvider({ children }) {
     token,
     loading,
     isAuthenticated: Boolean(user),
+    isDemo: Boolean(user?.isDemo),
     isProfileComplete,
     role: user?.role || null,
     loginWithRollNumber,
     loginWithGoogle,
+    loginAsDemo,
     logout,
     refreshUser,
     updateProfile,

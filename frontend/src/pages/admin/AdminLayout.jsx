@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, ChevronRight, Award, UploadCloud, KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X, Home } from 'lucide-react';
+import { Sparkles, ArrowRight, LogOut, LayoutDashboard, Users, Layers, CheckSquare, ChevronRight, Award, UploadCloud, KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X, Home, Plus } from 'lucide-react';
 import C4GTLogo from '../../components/C4GTLogo';
 import {
   Sidebar,
@@ -260,6 +260,7 @@ export default function AdminLayout() {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+
             {/* Return to Landing Page */}
             <Link
               to="/"

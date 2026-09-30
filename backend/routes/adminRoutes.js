@@ -2,6 +2,7 @@ const express = require('express');
 const {
   getUsers,
   updateUserRole,
+  deleteUser,
   getAdminStats,
   getTeams,
   updateTeam,
@@ -31,6 +32,7 @@ router.use(authorize('admin'));
 router.get('/stats', getAdminStats);
 router.get('/users', getUsers);
 router.patch('/users/:id/role', updateUserRole);
+router.delete('/users/:id', deleteUser);
 router.get('/teams/analytics', getTeamPerformanceAnalytics);
 router.get('/teams', getTeams);
 router.patch('/teams/:id/project', updateTeam);

@@ -44,6 +44,7 @@ import {
   User,
   GraduationCap,
   ChevronRight,
+  ChevronLeft,
   ShieldCheck,
   ArrowRight,
   Sparkles,
@@ -65,6 +66,7 @@ import {
   TrendingUp,
   BarChart3,
   Filter,
+  Video,
 } from 'lucide-react';
 import { Skeleton, SkeletonCard, SkeletonTaskCard, SkeletonResourceCard } from '../../components/skeleton';
 
@@ -275,7 +277,11 @@ export default function StudentDashboard() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.resources)) {
-          setHubResources(data.resources);
+          // Sort newest resources first
+          const sorted = [...data.resources].sort(
+            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+          );
+          setHubResources(sorted);
         }
       }
     } catch (err) {
@@ -300,6 +306,66 @@ export default function StudentDashboard() {
       }
     } catch (err) {
       console.error('Failed to load notifications:', err);
+    }
+  };
+
+  const handleMarkNotificationRead = async (notificationId) => {
+    if (!notificationId) return;
+
+    // Optimistically update local notification state
+    setNotificationsList((prevList) =>
+      prevList.map((item) =>
+        item._id === notificationId ? { ...item, isRead: true } : item
+      )
+    );
+    setUnreadNotificationsCount((prevCount) => Math.max(0, prevCount - 1));
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.unreadCount === 'number') {
+          setUnreadNotificationsCount(data.unreadCount);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    if (unreadNotificationsCount === 0) return;
+
+    // Optimistically mark all notifications as read
+    setNotificationsList((prevList) =>
+      prevList.map((item) => ({ ...item, isRead: true }))
+    );
+    setUnreadNotificationsCount(0);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/notifications/read-all`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.unreadCount === 'number') {
+          setUnreadNotificationsCount(data.unreadCount);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
     }
   };
 
@@ -346,15 +412,31 @@ export default function StudentDashboard() {
     if (e) e.preventDefault();
     if (!selectedTask) return;
 
+    if (isTaskOverdue(selectedTask)) {
+      alert('The deadline for this task has passed. Overdue tasks cannot be submitted.');
+      return;
+    }
+
     try {
-      setSubmittingDeliverables(true);
-      const reqDeliverables =
-        Array.isArray(selectedTask.deliverables) && selectedTask.deliverables.length > 0
-          ? selectedTask.deliverables
-          : ['Documentation / Spec', 'Demo / Presentation'];
+      const reqDeliverables = Array.isArray(selectedTask.deliverables)
+        ? selectedTask.deliverables.filter((d) => typeof d === 'string' ? d.trim().length > 0 : Boolean(d?.name))
+        : [];
+
+      if (reqDeliverables.length > 0) {
+        const missing = reqDeliverables.filter((dName) => {
+          const name = typeof dName === 'string' ? dName.trim() : dName.name || 'Deliverable';
+          return !(submissionDeliverables[name] || '').trim();
+        });
+        if (missing.length > 0) {
+          const missingNames = missing.map((d) => typeof d === 'string' ? d.trim() : d.name).join(', ');
+          alert(`Please fill in all required deliverables: ${missingNames}`);
+          setSubmittingDeliverables(false);
+          return;
+        }
+      }
 
       const submissionsPayload = reqDeliverables.map((dName) => {
-        const name = typeof dName === 'string' ? dName : dName.name || 'Deliverable';
+        const name = typeof dName === 'string' ? dName.trim() : dName.name || 'Deliverable';
         return {
           deliverableName: name,
           link: (submissionDeliverables[name] || '').trim(),
@@ -370,7 +452,7 @@ export default function StudentDashboard() {
         credentials: 'include',
         body: JSON.stringify({
           submissions: submissionsPayload,
-          submissionNotes,
+          submissionNotes: (submissionDeliverables['Remarks'] || submissionDeliverables['Notes'] || submissionNotes || '').trim(),
         }),
       });
 
@@ -559,6 +641,27 @@ export default function StudentDashboard() {
     });
   }, [activeSourceTasks, taskStatusFilter, taskSearchQuery]);
 
+  // Tasks Pagination State (6 per page)
+  const [studentTasksPage, setStudentTasksPage] = useState(1);
+  const STUDENT_TASKS_PER_PAGE = 6;
+
+  const studentTotalPages = Math.ceil(filteredTasks.length / STUDENT_TASKS_PER_PAGE) || 1;
+
+  useEffect(() => {
+    setStudentTasksPage(1);
+  }, [taskSourceTab, taskStatusFilter, taskSearchQuery]);
+
+  useEffect(() => {
+    if (studentTasksPage > studentTotalPages && studentTotalPages > 0) {
+      setStudentTasksPage(studentTotalPages);
+    }
+  }, [studentTotalPages, studentTasksPage]);
+
+  const paginatedStudentTasks = useMemo(() => {
+    const start = (studentTasksPage - 1) * STUDENT_TASKS_PER_PAGE;
+    return filteredTasks.slice(start, start + STUDENT_TASKS_PER_PAGE);
+  }, [filteredTasks, studentTasksPage]);
+
   // Filtered resources for "Resources"
   const filteredResources = useMemo(() => {
     return hubResources.filter((r) => {
@@ -580,6 +683,35 @@ export default function StudentDashboard() {
       return true;
     });
   }, [hubResources, resourceCategory, resourceSearch]);
+
+  // Student Learning Resources Responsive Pagination (9 on desktop, 6 on mobile)
+  const [isMobileResources, setIsMobileResources] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+  const [studentResourcesPage, setStudentResourcesPage] = useState(1);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobileResources(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const studentResourcesPerPage = isMobileResources ? 6 : 9;
+
+  useEffect(() => {
+    setStudentResourcesPage(1);
+  }, [resourceCategory, resourceSearch]);
+
+  const studentResourcesTotalPages = Math.ceil(filteredResources.length / studentResourcesPerPage) || 1;
+
+  useEffect(() => {
+    if (studentResourcesPage > studentResourcesTotalPages && studentResourcesTotalPages > 0) {
+      setStudentResourcesPage(studentResourcesTotalPages);
+    }
+  }, [studentResourcesTotalPages, studentResourcesPage]);
+
+  const paginatedStudentResources = useMemo(() => {
+    const start = (studentResourcesPage - 1) * studentResourcesPerPage;
+    return filteredResources.slice(start, start + studentResourcesPerPage);
+  }, [filteredResources, studentResourcesPage, studentResourcesPerPage]);
 
   // Team Progress Member Filtering & Counts
   const memberCounts = useMemo(() => {
@@ -636,20 +768,34 @@ export default function StudentDashboard() {
     return list;
   }, [teamProgressData, studentTeam, memberSearchQuery, memberFilterStatus]);
 
-  const getStatusBadge = (status) => {
+  const isTaskOverdue = (task) => {
+    if (!task || !task.deadline) return false;
+    const status = task.assignment?.status || task.status;
+    if (status === 'completed' || status === 'submitted') return false;
+    return new Date() > new Date(task.deadline);
+  };
+
+  const getStatusBadge = (status, task = null) => {
+    if (task && isTaskOverdue(task)) {
+      return <Badge variant="destructive" className="bg-rose-100 text-rose-800 border-rose-300 font-semibold">⚠️ Overdue (Closed)</Badge>;
+    }
     switch (status) {
       case 'completed':
         return <Badge variant="success">✓ Completed</Badge>;
       case 'submitted':
-        return <Badge variant="warning">⏳ Awaiting Review</Badge>;
+        return <Badge variant="warning">⏳ Under Review</Badge>;
       case 'revision_requested':
-        return <Badge variant="destructive">⚠️ Revision Needed</Badge>;
+      case 'revision_required':
+        return <Badge variant="destructive" className="bg-amber-100 text-amber-900 border-amber-300">⚠️ Revision Required</Badge>;
       default:
         return <Badge variant="secondary">To Do</Badge>;
     }
   };
 
-  const getResourceIcon = (type) => {
+  const getResourceIcon = (type, url = '') => {
+    if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+      return <Video className="w-5 h-5 text-rose-600" />;
+    }
     switch (type) {
       case 'doc':
       case 'pdf':
@@ -660,6 +806,8 @@ export default function StudentDashboard() {
         return <Code2 className="w-5 h-5 text-amber-600" />;
       case 'git_repo':
         return <GitBranch className="w-5 h-5 text-slate-800" />;
+      case 'note':
+        return <BookOpen className="w-5 h-5 text-amber-600" />;
       default:
         return <BookOpen className="w-5 h-5 text-indigo-600" />;
     }
@@ -892,18 +1040,54 @@ export default function StudentDashboard() {
                 <div className="absolute right-0 mt-2 w-[calc(100vw-32px)] sm:w-80 max-w-sm rounded-2xl border border-slate-200 bg-white p-3 shadow-xl z-50 animate-in fade-in">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                     <span className="text-xs font-bold text-slate-900">Notifications</span>
-                    <span className="text-[11px] text-slate-500">{unreadNotificationsCount} unread</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500">{unreadNotificationsCount} unread</span>
+                      {unreadNotificationsCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllNotificationsRead}
+                          className="text-[11px] font-medium text-amber-600 hover:text-amber-700 transition-colors cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 py-1">
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 py-1">
                     {notificationsList.length === 0 ? (
                       <div className="py-4 text-center text-xs text-slate-500">No new notifications</div>
                     ) : (
-                      notificationsList.map((n) => (
-                        <div key={n._id} className="py-2 text-xs">
-                          <p className="font-semibold text-slate-900">{n.title || 'Update'}</p>
-                          <p className="text-slate-500 text-[11px]">{n.message}</p>
-                        </div>
-                      ))
+                      notificationsList.map((n) => {
+                        const isUnread = !n.isRead;
+                        return (
+                          <div
+                            key={n._id}
+                            onClick={() => {
+                              if (isUnread) {
+                                handleMarkNotificationRead(n._id);
+                              }
+                            }}
+                            className={`py-2 px-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                              isUnread
+                                ? 'bg-amber-50/50 hover:bg-amber-100/60'
+                                : 'hover:bg-slate-50 text-slate-600'
+                            }`}
+                            title={isUnread ? 'Click to mark as read' : undefined}
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <p className={`truncate ${isUnread ? 'font-semibold text-slate-900' : 'font-medium text-slate-600'}`}>
+                                {n.title || 'Update'}
+                              </p>
+                              {isUnread && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                              )}
+                            </div>
+                            <p className={`text-[11px] mt-0.5 ${isUnread ? 'text-slate-600' : 'text-slate-400'}`}>
+                              {n.message}
+                            </p>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -1069,14 +1253,7 @@ export default function StudentDashboard() {
                             </span>
                           ))
                         ) : (
-                          <>
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
-                              Documentation (Google Doc)
-                            </span>
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
-                              Presentation (Google Slides)
-                            </span>
-                          </>
+                          <span className="text-xs text-slate-400 italic">None required</span>
                         )}
                       </div>
 
@@ -1103,12 +1280,29 @@ export default function StudentDashboard() {
                     <CardFooter className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-2 w-full sm:w-auto">
                         <span className="text-xs text-slate-500">Status:</span>
-                        {getStatusBadge(nextPriorityTask.assignment?.status || nextPriorityTask.status)}
+                        {getStatusBadge(nextPriorityTask.assignment?.status || nextPriorityTask.status, nextPriorityTask)}
                       </div>
-                      <Button onClick={() => setSelectedTask(nextPriorityTask)} size="sm" className="w-full sm:w-auto justify-center">
+                      <Button
+                        onClick={() => setSelectedTask(nextPriorityTask)}
+                        size="sm"
+                        variant={
+                          isTaskOverdue(nextPriorityTask)
+                            ? 'outline'
+                            : (nextPriorityTask.assignment?.status === 'revision_requested' || nextPriorityTask.assignment?.status === 'revision_required')
+                            ? 'destructive'
+                            : 'default'
+                        }
+                        className={`w-full sm:w-auto justify-center ${
+                          isTaskOverdue(nextPriorityTask) ? 'border-rose-300 text-rose-700 bg-rose-50/50 hover:bg-rose-100 font-semibold' : ''
+                        }`}
+                      >
                         {nextPriorityTask.assignment?.status === 'submitted'
                           ? 'View Submitted Links'
-                          : 'Submit Deliverables (Google Drive)'}
+                          : isTaskOverdue(nextPriorityTask)
+                            ? 'View Details (Overdue)'
+                            : (nextPriorityTask.assignment?.status === 'revision_requested' || nextPriorityTask.assignment?.status === 'revision_required')
+                            ? 'Revise & Resubmit'
+                            : 'Submit Deliverables'}
                       </Button>
                     </CardFooter>
                   </Card>
@@ -1149,6 +1343,7 @@ export default function StudentDashboard() {
                         const status = t.assignment?.status || t.status || 'pending';
                         const isCompleted = status === 'completed';
                         const isSubmitted = status === 'submitted';
+                        const isRevisionRequired = status === 'revision_requested' || status === 'revision_required';
                         return (
                           <Card key={t._id} className="p-4 hover:border-slate-300 transition-colors flex flex-col justify-between">
                             <div className="space-y-2">
@@ -1156,7 +1351,7 @@ export default function StudentDashboard() {
                                 <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-semibold border border-amber-200/60 uppercase">
                                   Team Lead Sprint
                                 </span>
-                                {getStatusBadge(status)}
+                                {getStatusBadge(status, t)}
                               </div>
                               <h4 className="text-sm font-bold text-slate-900 line-clamp-1">{t.title}</h4>
                               <p className="text-xs text-slate-600 line-clamp-2">{t.description}</p>
@@ -1169,11 +1364,25 @@ export default function StudentDashboard() {
                               </span>
                               <Button
                                 size="sm"
-                                variant={isCompleted ? 'outline' : 'default'}
+                                variant={isCompleted ? 'outline' : isTaskOverdue(t) ? 'outline' : 'default'}
                                 onClick={() => setSelectedTask(t)}
-                                className="h-7 text-xs"
+                                className={`h-7 text-xs ${
+                                  isTaskOverdue(t)
+                                    ? 'border-rose-300 text-rose-700 bg-rose-50 hover:bg-rose-100 font-semibold'
+                                    : isRevisionRequired
+                                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                                    : ''
+                                }`}
                               >
-                                {isCompleted ? 'View Work' : isSubmitted ? 'Under Review' : 'Submit Work'}
+                                {isCompleted
+                                  ? 'View Work'
+                                  : isSubmitted
+                                  ? 'Under Review'
+                                  : isTaskOverdue(t)
+                                  ? 'Overdue (Closed)'
+                                  : isRevisionRequired
+                                  ? 'Revise Work'
+                                  : 'Submit Work'}
                               </Button>
                             </div>
                           </Card>
@@ -1203,7 +1412,7 @@ export default function StudentDashboard() {
                       <Card key={r._id} className="p-4 hover:border-slate-300 transition-colors">
                         <div className="flex items-start gap-3">
                           <div className="p-2 rounded-lg bg-slate-50 shrink-0">
-                            {getResourceIcon(r.type)}
+                            {getResourceIcon(r.type, r.url)}
                           </div>
                           <div className="min-w-0 flex-1">
                             <h4 className="text-xs font-bold text-slate-900 truncate">{r.title}</h4>
@@ -1395,11 +1604,13 @@ export default function StudentDashboard() {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {filteredTasks.map((task) => {
+                  <>
+                    <div className="space-y-4">
+                    {paginatedStudentTasks.map((task) => {
                       const status = task.assignment?.status || task.status || 'pending';
                       const isCompleted = status === 'completed';
                       const isSubmitted = status === 'submitted';
+                      const isRevisionRequired = status === 'revision_requested' || status === 'revision_required';
 
                       return (
                         <Card key={task._id} className="hover:border-slate-300 transition-colors">
@@ -1427,7 +1638,7 @@ export default function StudentDashboard() {
                                 <span className="text-xs font-mono text-slate-500">
                                   Due: {new Date(task.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
                                 </span>
-                                {getStatusBadge(status)}
+                                {getStatusBadge(status, task)}
                               </div>
                             </div>
 
@@ -1455,14 +1666,9 @@ export default function StudentDashboard() {
                                     </span>
                                   ))
                                 ) : (
-                                  <>
-                                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs">
-                                      📄 Documentation (Google Doc)
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs">
-                                      📊 Presentation (Google Slides)
-                                    </span>
-                                  </>
+                                  <span className="text-xs text-slate-400 italic">
+                                    None specified
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -1500,29 +1706,109 @@ export default function StudentDashboard() {
                                 ? isTaskAdmin(task)
                                   ? '✓ Work reviewed and accepted by Admin'
                                   : '✓ Work reviewed and accepted by Team Lead'
-                                : isSubmitted
+                                : isRevisionRequired
                                   ? isTaskAdmin(task)
-                                    ? '⏳ Work submitted — Admin review in progress'
-                                    : '⏳ Work submitted — Team Lead review in progress'
-                                  : 'Google Drive links required for review'}
+                                    ? '⚠️ Revision requested by Admin — please update and resubmit'
+                                    : '⚠️ Revision requested by Team Lead — please update and resubmit'
+                                  : isSubmitted
+                                    ? isTaskAdmin(task)
+                                      ? '⏳ Work submitted — Admin review in progress'
+                                      : '⏳ Work submitted — Team Lead review in progress'
+                                    : (Array.isArray(task.deliverables) && task.deliverables.length > 0)
+                                      ? 'Proof links required for review'
+                                      : 'No specific proof links required'}
                             </span>
                             <Button
                               onClick={() => setSelectedTask(task)}
-                              variant={isCompleted ? 'outline' : 'default'}
+                              variant={isCompleted ? 'outline' : isTaskOverdue(task) ? 'outline' : isRevisionRequired ? 'destructive' : 'default'}
                               size="sm"
-                              className="w-full sm:w-auto justify-center"
+                              className={`w-full sm:w-auto justify-center ${
+                                isTaskOverdue(task) ? 'border-rose-300 text-rose-700 bg-rose-50 hover:bg-rose-100 font-semibold' : ''
+                              }`}
                             >
                               {isCompleted
                                 ? 'View Details'
-                                : isSubmitted
-                                  ? 'Submission Status'
-                                  : 'Submit Work'}
+                                : isTaskOverdue(task)
+                                  ? 'Overdue (Closed)'
+                                  : isRevisionRequired
+                                  ? 'Revise & Resubmit'
+                                  : isSubmitted
+                                    ? 'Submission Status'
+                                    : 'Submit Work'}
                             </Button>
                           </CardFooter>
                         </Card>
                       );
                     })}
                   </div>
+
+                  {/* Student Tasks Pagination Bar */}
+                  {filteredTasks.length > STUDENT_TASKS_PER_PAGE && (
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div className="text-xs text-slate-500 font-medium">
+                        Showing <span className="font-bold text-slate-800">{(studentTasksPage - 1) * STUDENT_TASKS_PER_PAGE + 1}</span> to{' '}
+                        <span className="font-bold text-slate-800">{Math.min(studentTasksPage * STUDENT_TASKS_PER_PAGE, filteredTasks.length)}</span> of{' '}
+                        <span className="font-bold text-slate-800">{filteredTasks.length}</span> tasks
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={studentTasksPage === 1}
+                          onClick={() => setStudentTasksPage((prev) => Math.max(prev - 1, 1))}
+                          className="h-8 px-2.5 text-xs text-slate-700"
+                        >
+                          <ChevronLeft className="w-4 h-4 mr-0.5" />
+                          <span className="hidden sm:inline">Prev</span>
+                        </Button>
+
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: studentTotalPages }, (_, i) => i + 1).map((pageNum) => {
+                            if (
+                              studentTotalPages > 7 &&
+                              pageNum !== 1 &&
+                              pageNum !== studentTotalPages &&
+                              Math.abs(pageNum - studentTasksPage) > 1
+                            ) {
+                              if (pageNum === 2 || pageNum === studentTotalPages - 1) {
+                                return <span key={pageNum} className="px-1 text-xs text-slate-400">…</span>;
+                              }
+                              return null;
+                            }
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={studentTasksPage === pageNum ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setStudentTasksPage(pageNum)}
+                                className={`w-8 h-8 p-0 text-xs font-mono ${
+                                  studentTasksPage === pageNum
+                                    ? 'bg-slate-900 text-white font-bold'
+                                    : 'text-slate-600'
+                                }`}
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={studentTasksPage === studentTotalPages}
+                          onClick={() => setStudentTasksPage((prev) => Math.min(prev + 1, studentTotalPages))}
+                          className="h-8 px-2.5 text-xs text-slate-700"
+                        >
+                          <span className="hidden sm:inline">Next</span>
+                          <ChevronRight className="w-4 h-4 ml-0.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
             )}
@@ -1599,7 +1885,7 @@ export default function StudentDashboard() {
                 {/* Resources Grid */}
                 {loadingHubResources ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Array.from({ length: 6 }).map((_, idx) => (
+                    {Array.from({ length: studentResourcesPerPage }).map((_, idx) => (
                       <SkeletonResourceCard key={idx} />
                     ))}
                   </div>
@@ -1610,53 +1896,124 @@ export default function StudentDashboard() {
                     <p className="text-xs text-slate-500 mt-1">Adjust your search or category filter.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredResources.map((resItem) => (
-                      <Card key={resItem._id} className="flex flex-col justify-between hover:border-slate-300 transition-colors">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <div className="p-2 rounded-lg bg-slate-100 shrink-0">
-                              {getResourceIcon(resItem.type)}
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {paginatedStudentResources.map((resItem) => (
+                        <Card key={resItem._id} className="flex flex-col justify-between hover:border-slate-300 transition-colors">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="p-2 rounded-lg bg-slate-100 shrink-0">
+                                {getResourceIcon(resItem.type, resItem.url)}
+                              </div>
+                              <button
+                                onClick={() => handleToggleResourceComplete(resItem)}
+                                disabled={togglingResourceId === resItem._id}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${resItem.isCompleted
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                  }`}
+                                title={resItem.isCompleted ? 'Mark as incomplete' : 'Mark as completed'}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>{resItem.isCompleted ? 'Completed ✓' : 'Mark Done'}</span>
+                              </button>
                             </div>
-                            <button
-                              onClick={() => handleToggleResourceComplete(resItem)}
-                              disabled={togglingResourceId === resItem._id}
-                              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${resItem.isCompleted
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
-                              title={resItem.isCompleted ? 'Mark as incomplete' : 'Mark as completed'}
+
+                            <CardTitle className="text-sm font-bold text-slate-900 mt-2 line-clamp-1">
+                              {resItem.title}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-slate-500 line-clamp-2">
+                              {resItem.description || 'Practice guide & reference material.'}
+                            </CardDescription>
+                          </CardHeader>
+
+                          <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <span className="text-[11px] font-mono font-medium text-slate-500">
+                              {resItem.topic || 'General Track'}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadResource(resItem)}
+                              className="text-xs h-8"
                             >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>{resItem.isCompleted ? 'Completed ✓' : 'Mark Done'}</span>
-                            </button>
-                          </div>
+                              <Download className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                              <span>Open</span>
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      ))}
+                    </div>
 
-                          <CardTitle className="text-sm font-bold text-slate-900 mt-2 line-clamp-1">
-                            {resItem.title}
-                          </CardTitle>
-                          <CardDescription className="text-xs text-slate-500 line-clamp-2">
-                            {resItem.description || 'Practice guide & reference material.'}
-                          </CardDescription>
-                        </CardHeader>
+                    {/* Resources Pagination Bar */}
+                    {filteredResources.length > studentResourcesPerPage && (
+                      <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3 mt-6">
+                        <div className="text-xs text-slate-500 font-medium">
+                          Showing <span className="font-bold text-slate-800">{(studentResourcesPage - 1) * studentResourcesPerPage + 1}</span> to{' '}
+                          <span className="font-bold text-slate-800">
+                            {Math.min(studentResourcesPage * studentResourcesPerPage, filteredResources.length)}
+                          </span> of{' '}
+                          <span className="font-bold text-slate-800">{filteredResources.length}</span> resources
+                        </div>
 
-                        <CardFooter className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                          <span className="text-[11px] font-mono font-medium text-slate-500">
-                            {resItem.topic || 'General Track'}
-                          </span>
+                        <div className="flex items-center gap-1.5">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDownloadResource(resItem)}
-                            className="text-xs h-8"
+                            disabled={studentResourcesPage === 1}
+                            onClick={() => setStudentResourcesPage((prev) => Math.max(prev - 1, 1))}
+                            className="h-8 px-2.5 text-xs text-slate-700"
                           >
-                            <Download className="w-3.5 h-3.5 mr-1 text-slate-500" />
-                            <span>Open</span>
+                            <ChevronLeft className="w-4 h-4 mr-0.5" />
+                            <span className="hidden sm:inline">Prev</span>
                           </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
-                  </div>
+
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: studentResourcesTotalPages }, (_, i) => i + 1).map((pageNum) => {
+                              if (
+                                studentResourcesTotalPages > 7 &&
+                                pageNum !== 1 &&
+                                pageNum !== studentResourcesTotalPages &&
+                                Math.abs(pageNum - studentResourcesPage) > 1
+                              ) {
+                                if (pageNum === 2 || pageNum === studentResourcesTotalPages - 1) {
+                                  return <span key={pageNum} className="px-1 text-xs text-slate-400">…</span>;
+                                }
+                                return null;
+                              }
+
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={studentResourcesPage === pageNum ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => setStudentResourcesPage(pageNum)}
+                                  className={`w-8 h-8 p-0 text-xs font-mono ${
+                                    studentResourcesPage === pageNum
+                                      ? 'bg-slate-900 text-white font-bold'
+                                      : 'text-slate-600'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })}
+                          </div>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={studentResourcesPage === studentResourcesTotalPages}
+                            onClick={() => setStudentResourcesPage((prev) => Math.min(prev + 1, studentResourcesTotalPages))}
+                            className="h-8 px-2.5 text-xs text-slate-700"
+                          >
+                            <span className="hidden sm:inline">Next</span>
+                            <ChevronRight className="w-4 h-4 ml-0.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -2318,7 +2675,7 @@ export default function StudentDashboard() {
                       Team Lead Task • Reviewed by Team Lead
                     </Badge>
                   )}
-                  {getStatusBadge(selectedTask.assignment?.status || selectedTask.status)}
+                  {getStatusBadge(selectedTask.assignment?.status || selectedTask.status, selectedTask)}
                 </div>
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 break-words leading-snug">
                   {selectedTask.title}
@@ -2333,37 +2690,76 @@ export default function StudentDashboard() {
               </button>
             </div>
 
-            {/* Reviewer Notice */}
-            {isTaskAdmin(selectedTask) ? (
-              <div className="p-3 rounded-xl bg-purple-50/90 border border-purple-200 text-xs text-purple-900 flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                <span className="leading-relaxed">
-                  <strong>Admin Task:</strong> Your submission deliverables and proofs will be sent directly to the <strong>Admin Dashboard</strong> for official review and grading.
-                </span>
-              </div>
-            ) : (
-              <div className="p-3 rounded-xl bg-blue-50/90 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
-                <Users className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <span className="leading-relaxed">
-                  <strong>Team Lead Task:</strong> Your submission deliverables will be reviewed by your <strong>Team Lead</strong>.
-                </span>
-              </div>
-            )}
+            {/* Status Banners */}
+            {(() => {
+              const currentAssignmentStatus = selectedTask.assignment?.status || selectedTask.status || 'pending';
+              const isTaskCompleted = currentAssignmentStatus === 'completed';
+              const isTaskSubmitted = currentAssignmentStatus === 'submitted';
+              const isTaskRevisionRequired =
+                currentAssignmentStatus === 'revision_requested' || currentAssignmentStatus === 'revision_required';
+              const reviewerName = isTaskAdmin(selectedTask) ? 'Admin' : 'Team Lead';
 
-            {/* Fresher Guidance Box */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-1.5">
-              <p className="font-semibold text-slate-900 flex items-center gap-1.5">
-                <span>📋</span>
-                <span>Submission Instructions for Students:</span>
-              </p>
-              <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-slate-600 leading-relaxed">
-                <li>Upload your report/document to Google Docs or Google Drive.</li>
-                <li>Upload your presentation slides to Google Slides or Google Drive.</li>
-                <li>
-                  Ensure sharing access is set to <strong className="text-slate-900">"Anyone with the link can view"</strong>.
-                </li>
-              </ul>
-            </div>
+              if (isTaskCompleted) {
+                return (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Task Completed & Approved</p>
+                      <p className="text-[11px] text-emerald-700 mt-0.5">
+                        Your submission was verified and approved by {reviewerName}. This milestone is finalized and cannot be modified.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isTaskSubmitted) {
+                return (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Submission Under Review</p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        Your deliverables were submitted and are currently awaiting review from {reviewerName}. Editing and resubmission are disabled.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isTaskRevisionRequired) {
+                return (
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 space-y-1.5">
+                    <p className="font-bold flex items-center gap-1.5 text-rose-800">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Revision Required by {reviewerName}:</span>
+                    </p>
+                    <p className="text-rose-900 bg-white/80 p-2.5 rounded-xl border border-rose-200 font-mono text-[11px]">
+                      {selectedTask.assignment?.reviewNotes || 'Please update your deliverables according to feedback and resubmit.'}
+                    </p>
+                    <p className="text-[11px] text-rose-700">
+                      Editing is re-enabled. Update your deliverable links below and click <strong>Resubmit Revision for Review</strong>.
+                    </p>
+                  </div>
+                );
+              }
+
+              return isTaskAdmin(selectedTask) ? (
+                <div className="p-3 rounded-xl bg-purple-50/90 border border-purple-200 text-xs text-purple-900 flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <strong>Admin Task:</strong> Your deliverables will be sent directly to the <strong>Admin Dashboard</strong> for official review.
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-blue-50/90 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
+                  <Users className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <strong>Team Lead Task:</strong> Your deliverables will be reviewed by your <strong>Team Lead</strong>.
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Attached Reference & Learning Resources for Task */}
             {Array.isArray(selectedTask.relatedResources) && selectedTask.relatedResources.length > 0 && (
@@ -2392,127 +2788,244 @@ export default function StudentDashboard() {
               </div>
             )}
 
-            {/* Review Feedback if Revision Requested */}
-            {selectedTask.assignment?.reviewNotes && (
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
-                <p className="font-bold flex items-center gap-1 text-amber-800">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  <span>{isTaskAdmin(selectedTask) ? 'Admin Feedback / Revision Note:' : 'Team Lead Feedback / Revision Note:'}</span>
-                </p>
-                <p className="text-amber-800">{selectedTask.assignment.reviewNotes}</p>
-              </div>
-            )}
+            {/* Dynamic Deliverables Submission Form */}
+            {(() => {
+              const currentAssignmentStatus = selectedTask.assignment?.status || selectedTask.status || 'pending';
+              const isTaskCompleted = currentAssignmentStatus === 'completed';
+              const isTaskSubmitted = currentAssignmentStatus === 'submitted';
+              const isTaskRevisionRequired =
+                currentAssignmentStatus === 'revision_requested' || currentAssignmentStatus === 'revision_required';
+              const isOverdue = isTaskOverdue(selectedTask);
+              const canEditAndSubmit = (isTaskRevisionRequired || (!isTaskSubmitted && !isTaskCompleted)) && !isOverdue;
 
-            {/* Submission Form */}
-            <form onSubmit={handleSubmitDeliverables} className="space-y-4 pt-1">
-              {(Array.isArray(selectedTask.deliverables) && selectedTask.deliverables.length > 0
-                ? selectedTask.deliverables
-                : ['Documentation / Spec', 'Demo / Presentation']
-              ).map((deliv, idx) => {
-                const name = typeof deliv === 'string' ? deliv : deliv.name || 'Deliverable';
-                const isDoc = name.toLowerCase().includes('doc') || name.toLowerCase().includes('spec');
-                const isSlide = name.toLowerCase().includes('demo') || name.toLowerCase().includes('presentation');
+              const taskDeliverables = Array.isArray(selectedTask.deliverables)
+                ? selectedTask.deliverables.filter((d) => (typeof d === 'string' ? d.trim().length > 0 : Boolean(d?.name)))
+                : [];
+              const hasDeliverables = taskDeliverables.length > 0;
 
-                return (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex flex-wrap items-center justify-between gap-1.5">
-                      <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                        <span>{isDoc ? '📄' : isSlide ? '📊' : '🔗'}</span>
-                        <span>{name} Link</span>
-                      </label>
-                      {submissionDeliverables[name] && (
-                        <a
-                          href={submissionDeliverables[name]}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/60 transition-colors"
-                        >
-                          <span>Preview Drive Link</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
+              return (
+                <form onSubmit={handleSubmitDeliverables} className="space-y-4 pt-1">
+                  {/* Overdue alert banner if deadline has passed */}
+                  {isOverdue && (
+                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-rose-900">Deadline Passed — Submissions Closed (Overdue)</p>
+                        <p className="text-[11px] text-rose-700 mt-0.5 leading-relaxed">
+                          The deadline for this milestone was {new Date(selectedTask.deadline).toLocaleString('en-IN', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}. Submissions are permanently closed for overdue tasks and impact team performance.
+                        </p>
+                      </div>
                     </div>
-                    <input
-                      type="url"
-                      required
-                      value={submissionDeliverables[name] || ''}
-                      onChange={(e) =>
-                        setSubmissionDeliverables({
-                          ...submissionDeliverables,
-                          [name]: e.target.value,
-                        })
-                      }
-                      placeholder={
-                        isDoc
-                          ? 'https://docs.google.com/document/d/...'
-                          : isSlide
-                            ? 'https://docs.google.com/presentation/d/...'
-                            : 'https://github.com/... or Google Drive link'
-                      }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    />
-                  </div>
-                );
-              })}
+                  )}
 
-              {/* Remarks */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-800">
-                  {isTaskAdmin(selectedTask)
-                    ? 'Remarks / Notes for Admin (Optional)'
-                    : 'Remarks / Notes for Team Lead (Optional)'}
-                </label>
-                <textarea
-                  value={submissionNotes}
-                  onChange={(e) => setSubmissionNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Mention what you completed or any questions..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                />
-              </div>
+                  {/* Instructions only if deliverables are required and user can edit */}
+                  {hasDeliverables && canEditAndSubmit && !isOverdue && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-1">
+                      <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                        <span>📋</span>
+                        <span>Submission Instructions:</span>
+                      </p>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Please provide valid public or sharing links for all required deliverables below.
+                      </p>
+                    </div>
+                  )}
 
-              {submissionSuccessMessage && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{submissionSuccessMessage}</span>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedTask(null)}
-                  className="w-full sm:w-auto cursor-pointer"
-                >
-                  Close
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={submittingDeliverables}
-                  className="gap-1.5 w-full sm:w-auto justify-center cursor-pointer"
-                >
-                  {submittingDeliverables ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Submitting...</span>
-                    </>
+                  {/* If NO deliverables are selected for this task, show clean empty state */}
+                  {!hasDeliverables ? (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
+                      <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                        <span>📋</span>
+                        <span>No specific deliverable links required</span>
+                      </p>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        {isTaskCompleted
+                          ? 'This task has already been completed and verified.'
+                          : isTaskSubmitted
+                          ? 'Your task has been submitted and is currently awaiting review.'
+                          : 'No proof links or documents were requested for this milestone. Complete the objectives and click submit below.'}
+                      </p>
+                    </div>
                   ) : (
                     <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>
-                        {isTaskAdmin(selectedTask)
-                          ? 'Submit for Admin Review'
-                          : 'Submit for Team Lead Review'}
-                      </span>
+                      {/* Render ONLY the explicitly required deliverable fields */}
+                      {taskDeliverables.map((deliv, idx) => {
+                        const name = typeof deliv === 'string' ? deliv.trim() : deliv.name || 'Deliverable';
+                        const isDoc = name.toLowerCase().includes('doc') || name.toLowerCase().includes('spec');
+                        const isSlide = name.toLowerCase().includes('demo') || name.toLowerCase().includes('presentation');
+                        const isRepo =
+                          name.toLowerCase().includes('repo') ||
+                          name.toLowerCase().includes('git') ||
+                          name.toLowerCase().includes('code');
+                        const isPR = name.toLowerCase().includes('pr') || name.toLowerCase().includes('pull');
+                        const isRemarks =
+                          name.toLowerCase().includes('remark') ||
+                          name.toLowerCase().includes('note') ||
+                          name.toLowerCase().includes('feedback');
+
+                        if (isRemarks) {
+                          return (
+                            <div key={idx} className="space-y-1.5">
+                              <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                                <span>📝</span>
+                                <span>
+                                  {name} {canEditAndSubmit && <span className="text-rose-500">*</span>}
+                                </span>
+                              </label>
+                              <textarea
+                                required={canEditAndSubmit}
+                                disabled={!canEditAndSubmit}
+                                value={submissionDeliverables[name] || ''}
+                                onChange={(e) =>
+                                  setSubmissionDeliverables({
+                                    ...submissionDeliverables,
+                                    [name]: e.target.value,
+                                  })
+                                }
+                                rows={2}
+                                placeholder="Enter your remarks or notes..."
+                                className={`w-full px-3 py-2 rounded-xl border text-xs transition-all ${
+                                  !canEditAndSubmit
+                                    ? 'border-slate-200 bg-slate-50 text-slate-600 cursor-not-allowed'
+                                    : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400'
+                                }`}
+                              />
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={idx} className="space-y-1.5">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                              <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                                <span>{isDoc ? '📄' : isSlide ? '📊' : isRepo ? '💻' : isPR ? '🔀' : '🔗'}</span>
+                                <span>
+                                  {name} {canEditAndSubmit && <span className="text-rose-500">*</span>}
+                                </span>
+                              </label>
+                              {submissionDeliverables[name] && (
+                                <a
+                                  href={submissionDeliverables[name]}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/60 transition-colors"
+                                >
+                                  <span>Preview Link</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
+                            <input
+                              type="url"
+                              required={canEditAndSubmit}
+                              disabled={!canEditAndSubmit}
+                              value={submissionDeliverables[name] || ''}
+                              onChange={(e) =>
+                                setSubmissionDeliverables({
+                                  ...submissionDeliverables,
+                                  [name]: e.target.value,
+                                })
+                              }
+                              placeholder={
+                                isDoc
+                                  ? 'https://docs.google.com/document/d/...'
+                                  : isSlide
+                                  ? 'https://docs.google.com/presentation/d/...'
+                                  : isRepo
+                                  ? 'https://github.com/org/repo'
+                                  : isPR
+                                  ? 'https://github.com/org/repo/pull/1'
+                                  : 'https://...'
+                              }
+                              className={`w-full px-3 py-2 rounded-xl border text-xs transition-all ${
+                                !canEditAndSubmit
+                                  ? 'border-slate-200 bg-slate-50 text-slate-600 cursor-not-allowed'
+                                  : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400'
+                              }`}
+                            />
+                          </div>
+                        );
+                      })}
                     </>
                   )}
-                </Button>
-              </div>
-            </form>
+
+                  {submissionSuccessMessage && (
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{submissionSuccessMessage}</span>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedTask(null)}
+                      className="w-full sm:w-auto cursor-pointer"
+                    >
+                      Close
+                    </Button>
+
+                    {isTaskCompleted ? (
+                      <span className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Completed (Finalized)</span>
+                      </span>
+                    ) : isTaskSubmitted ? (
+                      <span className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                        <Clock className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Under Review</span>
+                      </span>
+                    ) : isOverdue ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={true}
+                        className="gap-1.5 w-full sm:w-auto justify-center bg-rose-100 text-rose-700 border border-rose-300 cursor-not-allowed opacity-90 font-semibold"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Submission Closed (Overdue)</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={submittingDeliverables}
+                        className={`gap-1.5 w-full sm:w-auto justify-center cursor-pointer ${
+                          isTaskRevisionRequired
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                            : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
+                        }`}
+                      >
+                        {submittingDeliverables ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Submitting...</span>
+                          </>
+                        ) : (
+                          <>
+                            {isTaskRevisionRequired ? (
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            )}
+                            <span>
+                              {isTaskRevisionRequired
+                                ? 'Resubmit Revision for Review'
+                                : isTaskAdmin(selectedTask)
+                                ? 'Submit for Admin Review'
+                                : 'Submit for Team Lead Review'}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -2533,12 +3046,11 @@ export default function StudentDashboard() {
       {/* MANDATORY / VOLUNTARY PASSWORD CHANGE MODAL */}
       {isPasswordModalOpen && (
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${isMandatoryPasswordChange
+          className={`fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 md:p-6 flex items-center justify-center min-h-screen ${isMandatoryPasswordChange
             ? 'bg-black/85 backdrop-blur-md'
             : 'bg-black/60 backdrop-blur-xs'
             }`}
           onClick={(e) => {
-            // Prevent dismissal if mandatory
             if (!isMandatoryPasswordChange && e.target === e.currentTarget) {
               setShowPasswordChangeModal(false);
               setPassError('');
@@ -2547,20 +3059,20 @@ export default function StudentDashboard() {
           }}
         >
           <div
-            className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200"
+            className="bg-[#F9F8F3] border border-[#E0DDD0] rounded-2xl sm:rounded-3xl max-w-md w-full p-4 sm:p-6 md:p-8 shadow-2xl space-y-4 sm:space-y-5 my-auto max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scroll animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-start justify-between pb-3 border-b border-[#E0DDD0]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
-                  <KeyRound className="w-5 h-5" />
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
+                  <KeyRound className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold tracking-tight text-xl text-[#1C1B1A]">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold tracking-tight text-base sm:text-xl text-[#1C1B1A] leading-tight truncate sm:whitespace-normal">
                     {isMandatoryPasswordChange ? 'Set Your New Password' : 'Change Account Password'}
                   </h3>
-                  <p className="text-xs text-[#66645E]">
+                  <p className="text-[11px] sm:text-xs text-[#66645E] truncate sm:whitespace-normal">
                     {isMandatoryPasswordChange
                       ? 'First-Time Login Security Requirement'
                       : 'Update Student Login Password'}
@@ -2574,7 +3086,7 @@ export default function StudentDashboard() {
                     setPassError('');
                     setPassSuccess('');
                   }}
-                  className="p-1.5 rounded-full hover:bg-[#EAE7DC] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-full hover:bg-[#EAE7DC] text-[#66645E] hover:text-[#1C1B1A] transition-colors cursor-pointer shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
