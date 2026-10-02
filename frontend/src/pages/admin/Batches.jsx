@@ -451,8 +451,11 @@ export default function Batches() {
         setUsers([]);
       }
 
-      // 4. Fetch Tasks from Atlas
-      const tasksRes = await fetch(`${API_BASE_URL}/admin/tasks`, {
+      // 4. Fetch Tasks from Atlas for current batch
+      const tasksUrl = currentBatchId
+        ? `${API_BASE_URL}/admin/tasks?batch=${encodeURIComponent(currentBatchId)}`
+        : `${API_BASE_URL}/admin/tasks`;
+      const tasksRes = await fetch(tasksUrl, {
         credentials: 'include',
         headers: authHeaders,
       });
@@ -883,8 +886,16 @@ export default function Batches() {
   // Tasks Tab Data dynamically resolved from live Atlas database
   const filteredTeamTasks = useMemo(() => {
     if (!selectedTeam) return [];
-    const teamNum = selectedTeam.teamNumber;
     const teamTasksList = tasks.filter((t) => {
+      // Ensure task belongs to the currently active/selected batch
+      if (currentBatchId && t.batch) {
+        const matchesBatch =
+          t.batch === currentBatchId ||
+          t.batch === selectedBatch?.id ||
+          t.batch === selectedBatch?.batchId ||
+          t.batch === selectedBatch?.year;
+        if (!matchesBatch) return false;
+      }
       const inAssignedTeams = Array.isArray(t.assignedTeams) && t.assignedTeams.includes(teamNum);
       const leadIdStr = selectedTeam.teamLeadId?._id ? selectedTeam.teamLeadId._id.toString() : selectedTeam.teamLeadId?.toString();
       const isLeadCreator = leadIdStr && t.createdBy && (t.createdBy._id || t.createdBy).toString() === leadIdStr;

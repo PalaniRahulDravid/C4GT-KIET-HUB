@@ -105,11 +105,17 @@ export default function TeamTasks() {
     }, 3500);
   };
 
-  const fetchTasks = async () => {
+  const [batches, setBatches] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState('all');
+
+  const fetchTasks = async (batchToQuery = selectedBatch) => {
     try {
       setLoading(true);
       const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
-      const res = await fetch(`${API_BASE_URL}/admin/tasks`, {
+      const url = batchToQuery && batchToQuery !== 'all'
+        ? `${API_BASE_URL}/admin/tasks?batch=${encodeURIComponent(batchToQuery)}`
+        : `${API_BASE_URL}/admin/tasks`;
+      const res = await fetch(url, {
         credentials: 'include',
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
@@ -134,6 +140,32 @@ export default function TeamTasks() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchBatches = async () => {
+    try {
+      const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('c4gt_token') : null);
+      const res = await fetch(`${API_BASE_URL}/admin/batches`, {
+        credentials: 'include',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.batches)) {
+          setBatches(data.batches);
+          const active = data.batches.find((b) => b.status === 'Active Batch');
+          if (active) {
+            const defaultBatchId = active.id || active.year;
+            setSelectedBatch(defaultBatchId);
+            fetchTasks(defaultBatchId);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load batches:', err);
+    }
+    fetchTasks('all');
   };
 
   const handleAdminReview = async (taskId, studentId, action, reviewNotes = '') => {
@@ -217,14 +249,14 @@ export default function TeamTasks() {
   };
 
   useEffect(() => {
-    fetchTasks();
+    fetchBatches();
     fetchResources();
     fetchTeamsData();
   }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([fetchTasks(), fetchResources(), fetchTeamsData()]);
+    await Promise.all([fetchTasks(selectedBatch), fetchResources(), fetchTeamsData()]);
     setTimeout(() => {
       setIsRefreshing(false);
     }, 400);
@@ -381,8 +413,10 @@ export default function TeamTasks() {
 
     try {
       setSubmitting(true);
+      const chosenBatch = form.batch || (selectedBatch !== 'all' ? selectedBatch : (batches[0]?.id || '2026-2027'));
       const payload = {
         ...form,
+        batch: chosenBatch,
         relatedResources: selectedResources.map((r) => r._id).filter(Boolean),
       };
 
@@ -400,7 +434,7 @@ export default function TeamTasks() {
       const data = await res.json();
       if (res.ok && data.success && data.task) {
         setTasks((prev) => [data.task, ...prev]);
-        fetchTasks();
+        fetchTasks(selectedBatch);
         showToast('Task published successfully!', 'success');
         // Reset form
         setForm({
@@ -880,20 +914,45 @@ export default function TeamTasks() {
             <p className="text-xs text-[#66645E] mt-0.5">Tasks published to student dashboards.</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {['all', 'junior_developers', 'developer_interns'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setActiveFilter(f)}
-                className={`px-3 py-1.5 text-xs font-mono rounded-full capitalize transition-all cursor-pointer ${
-                  activeFilter === f
-                    ? 'bg-[#1C1B1A] text-white shadow-2xs'
-                    : 'bg-[#EEECDF] text-[#66645E] hover:text-[#1C1B1A]'
-                }`}
-              >
-                {f.replace('_', ' ')}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-3">
+            {batches.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#8C887B] font-mono">Batch:</span>
+                <select
+                  value={selectedBatch}
+                  onChange={(e) => {
+                    const newBatch = e.target.value;
+                    setSelectedBatch(newBatch);
+                    setCurrentPage(1);
+                    fetchTasks(newBatch);
+                  }}
+                  className="px-3 py-1.5 text-xs font-mono font-medium rounded-full bg-white border border-[#E0DDD0] text-[#1C1B1A] focus:outline-none focus:border-[#1C1B1A] cursor-pointer"
+                >
+                  <option value="all">All Batches</option>
+                  {batches.map((b) => (
+                    <option key={b.id || b._id} value={b.id || b.year}>
+                      {b.year || b.name || b.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              {['all', 'junior_developers', 'developer_interns'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setActiveFilter(f)}
+                  className={`px-3 py-1.5 text-xs font-mono rounded-full capitalize transition-all cursor-pointer ${
+                    activeFilter === f
+                      ? 'bg-[#1C1B1A] text-white shadow-2xs'
+                      : 'bg-[#EEECDF] text-[#66645E] hover:text-[#1C1B1A]'
+                  }`}
+                >
+                  {f.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

@@ -93,28 +93,18 @@ export function AuthProvider({ children }) {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.user) {
-            let isDemoStored = false;
-            try {
-              isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
-            } catch (e) {}
-            setUser({ ...data.user, isDemo: Boolean(data.isDemo || isDemoStored) });
+            setUser(data.user);
             if (data.token) {
               updateToken(data.token);
             }
           } else {
             setUser(null);
             updateToken(null);
-            try {
-              localStorage.removeItem('c4gt_is_demo');
-            } catch (e) {}
           }
         } else {
           // Token invalid or expired
           setUser(null);
           updateToken(null);
-          try {
-            localStorage.removeItem('c4gt_is_demo');
-          } catch (e) {}
         }
       } catch (error) {
         console.error('Database unreachable during auth verification:', error);
@@ -132,10 +122,6 @@ export function AuthProvider({ children }) {
     if (!rollNumber || !password) {
       throw new Error('Please enter both Roll Number and Password.');
     }
-
-    try {
-      localStorage.removeItem('c4gt_is_demo');
-    } catch (e) {}
 
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
@@ -162,43 +148,11 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  // Instant Demo / Walkthrough Login for Project Mentors & Evaluators (Read-Only)
-  const loginAsDemo = async (role) => {
-    const response = await fetch(`${API_BASE_URL}/auth/demo-login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ role }),
-    });
-
-    const data = await response.json();
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || 'Demo login failed');
-    }
-
-    const demoUser = { ...data.user, isDemo: true };
-    setUser(demoUser);
-    if (data.token) {
-      updateToken(data.token);
-    }
-    try {
-      localStorage.setItem('c4gt_is_demo', 'true');
-    } catch (e) {}
-
-    return demoUser;
-  };
-
   // Strict Google Sign-In (Legacy fallback)
   const loginWithGoogle = async (credential) => {
     if (!credential) {
       throw new Error('Google credential is required. Real Google OAuth is mandatory.');
     }
-
-    try {
-      localStorage.removeItem('c4gt_is_demo');
-    } catch (e) {}
 
     const response = await fetch(`${API_BASE_URL}/auth/google`, {
       method: 'POST',
@@ -257,11 +211,7 @@ export function AuthProvider({ children }) {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.user) {
-          let isDemoStored = false;
-          try {
-            isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
-          } catch (e) {}
-          setUser({ ...data.user, isDemo: Boolean(data.isDemo || isDemoStored) });
+          setUser(data.user);
           if (data.token) {
             updateToken(data.token);
           }
@@ -294,11 +244,7 @@ export function AuthProvider({ children }) {
     }
 
     if (data.user) {
-      let isDemoStored = false;
-      try {
-        isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
-      } catch (e) {}
-      setUser({ ...data.user, isDemo: Boolean(data.user.isDemo || isDemoStored) });
+      setUser(data.user);
     }
     return data.user;
   };
@@ -323,11 +269,7 @@ export function AuthProvider({ children }) {
     }
 
     if (data.user) {
-      let isDemoStored = false;
-      try {
-        isDemoStored = localStorage.getItem('c4gt_is_demo') === 'true';
-      } catch (e) {}
-      setUser({ ...data.user, isDemo: Boolean(data.user.isDemo || isDemoStored) });
+      setUser(data.user);
     }
     return data.user;
   };
@@ -339,12 +281,10 @@ export function AuthProvider({ children }) {
     token,
     loading,
     isAuthenticated: Boolean(user),
-    isDemo: Boolean(user?.isDemo),
     isProfileComplete,
     role: user?.role || null,
     loginWithRollNumber,
     loginWithGoogle,
-    loginAsDemo,
     logout,
     refreshUser,
     updateProfile,

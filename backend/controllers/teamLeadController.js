@@ -7,6 +7,7 @@ const Task = require('../models/Task');
 const TaskAssignment = require('../models/TaskAssignment');
 const StudentActivity = require('../models/StudentActivity');
 const StudentResourceProgress = require('../models/StudentResourceProgress');
+const Batch = require('../models/Batch');
 const { syncUserTaskAssignmentsOnRoleChange } = require('../services/taskSyncService');
 
 /**
@@ -653,14 +654,31 @@ const getTeamTasks = async (req, res) => {
       .select('name rollNumber email memberType avatar')
       .lean();
 
-    const tasks = await Task.find({
+    const leadBatch = team.batch || req.user.batch;
+    const taskQuery = {
       $or: [
         { assignedTeams: team.teamNumber },
         { createdBy: req.user._id },
         { assignedTo: req.user._id },
         { assignedTo: { $in: memberIds } },
       ],
-    })
+    };
+
+    if (leadBatch) {
+      const bDoc = await Batch.findOne({
+        $or: [{ id: leadBatch }, { batchId: leadBatch }, { year: leadBatch }, { name: leadBatch }],
+      });
+      const matchKeys = [leadBatch];
+      if (bDoc) {
+        if (bDoc.id) matchKeys.push(bDoc.id);
+        if (bDoc.batchId) matchKeys.push(bDoc.batchId);
+        if (bDoc.year) matchKeys.push(bDoc.year);
+        if (bDoc.name) matchKeys.push(bDoc.name);
+      }
+      taskQuery.batch = { $in: Array.from(new Set(matchKeys)) };
+    }
+
+    const tasks = await Task.find(taskQuery)
       .sort({ deadline: 1 })
       .populate('createdBy', 'name email avatar role')
       .populate('assignedTo', 'name rollNumber email memberType avatar')

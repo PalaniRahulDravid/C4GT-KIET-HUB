@@ -999,7 +999,17 @@ const getTasks = async (req, res) => {
       ],
     };
     if (req.query.batch) {
-      taskFilter.batch = req.query.batch;
+      const bDoc = await Batch.findOne({
+        $or: [{ id: req.query.batch }, { batchId: req.query.batch }, { year: req.query.batch }, { name: req.query.batch }],
+      });
+      const matchKeys = [req.query.batch];
+      if (bDoc) {
+        if (bDoc.id) matchKeys.push(bDoc.id);
+        if (bDoc.batchId) matchKeys.push(bDoc.batchId);
+        if (bDoc.year) matchKeys.push(bDoc.year);
+        if (bDoc.name) matchKeys.push(bDoc.name);
+      }
+      taskFilter.batch = { $in: Array.from(new Set(matchKeys)) };
     } else {
       taskFilter.batch = { $in: validBatchIdentifiers };
     }
@@ -1014,8 +1024,12 @@ const getTasks = async (req, res) => {
       .populate('studentId', 'name rollNumber email avatar memberType teamId')
       .populate('reviewedBy', 'name email avatar role');
 
-    // Fetch team map to associate each student with their team number
-    const teams = await Team.find().select('teamNumber name members teamLeadId');
+    // Fetch team map to associate each student with their team number (scoped to batch if filtered)
+    const teamQuery = {};
+    if (req.query.batch && taskFilter.batch) {
+      teamQuery.batch = taskFilter.batch;
+    }
+    const teams = await Team.find(teamQuery).select('teamNumber name members teamLeadId');
     const userTeamMap = {};
     teams.forEach((tm) => {
       if (tm.teamLeadId) userTeamMap[tm.teamLeadId.toString()] = tm.teamNumber;
@@ -1151,9 +1165,19 @@ const createTask = async (req, res) => {
 
     const populatedTask = await Task.findById(task._id).populate('createdBy', 'name email avatar role');
 
-    // Create initial TaskAssignment records ONLY for students matching targetGroup in assigned teams
+    // Create initial TaskAssignment records ONLY for students matching targetGroup in assigned teams FOR THIS BATCH
     try {
-      const assignedTeamDocs = await Team.find({ teamNumber: { $in: task.assignedTeams } })
+      const teamFilter = { teamNumber: { $in: task.assignedTeams } };
+      if (task.batch) {
+        const batchKeys = [task.batch];
+        if (targetBatch) {
+          if (targetBatch.id) batchKeys.push(targetBatch.id);
+          if (targetBatch.batchId) batchKeys.push(targetBatch.batchId);
+          if (targetBatch.year) batchKeys.push(targetBatch.year);
+        }
+        teamFilter.batch = { $in: Array.from(new Set(batchKeys)) };
+      }
+      const assignedTeamDocs = await Team.find(teamFilter)
         .populate('members', 'role memberType')
         .populate('teamLeadId', 'role memberType');
 

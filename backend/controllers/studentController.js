@@ -8,6 +8,7 @@ const Notification = require('../models/Notification');
 const StudentActivity = require('../models/StudentActivity');
 const StudentResourceProgress = require('../models/StudentResourceProgress');
 const Resource = require('../models/Resource');
+const Batch = require('../models/Batch');
 
 /**
  * Helper to format Date objects to 'YYYY-MM-DD'
@@ -143,9 +144,26 @@ const getStudentTasks = async (req, res) => {
       });
     }
 
-    const query = { $or: queryParts };
+    const studentBatch = req.user.batch || (studentTeamDoc ? studentTeamDoc.batch : null);
+    const finalQuery = { $and: [{ $or: queryParts }] };
 
-    const tasks = await Task.find(query)
+    if (studentBatch) {
+      const bDoc = await Batch.findOne({
+        $or: [{ id: studentBatch }, { batchId: studentBatch }, { year: studentBatch }, { name: studentBatch }],
+      });
+      const matchKeys = [studentBatch];
+      if (bDoc) {
+        if (bDoc.id) matchKeys.push(bDoc.id);
+        if (bDoc.batchId) matchKeys.push(bDoc.batchId);
+        if (bDoc.year) matchKeys.push(bDoc.year);
+        if (bDoc.name) matchKeys.push(bDoc.name);
+      }
+      finalQuery.$and.push({
+        batch: { $in: Array.from(new Set(matchKeys)) },
+      });
+    }
+
+    const tasks = await Task.find(finalQuery)
       .sort({ deadline: 1 })
       .populate('createdBy', 'name email avatar role')
       .populate('relatedResources', 'title type description url topic fileSize fileFormat originalFilename cloudinaryPublicId difficulty completedBy downloadsCount');

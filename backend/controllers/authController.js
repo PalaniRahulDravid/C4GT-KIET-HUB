@@ -215,100 +215,13 @@ const getMe = async (req, res) => {
     });
   }
 
-  const token = req.user.isDemo
-    ? jwt.sign(
-        {
-          id: req.user._id,
-          role: req.user.role,
-          email: req.user.email,
-          isDemo: true,
-        },
-        config.jwtSecret,
-        { expiresIn: '2h' }
-      )
-    : generateToken(req.user);
-
-  const formattedUser = formatUserResponse(req.user);
-  if (req.user.isDemo) {
-    formattedUser.isDemo = true;
-  }
+  const token = generateToken(req.user);
 
   res.status(200).json({
     success: true,
     token,
-    user: formattedUser,
+    user: formatUserResponse(req.user),
   });
-};
-
-/**
- * @desc    Instant Demo / Walkthrough Login for Project Mentors & HR Evaluators
- * @route   POST /api/auth/demo-login
- * @access  Public
- */
-const demoLogin = async (req, res) => {
-  try {
-    const { role } = req.body;
-    let targetUser = null;
-
-    if (role === 'admin') {
-      targetUser = await User.findOne({ role: 'admin' });
-    } else if (role === 'teamlead') {
-      // Find Team 6 lead (Rahul) or any active team lead
-      targetUser =
-        (await User.findOne({ role: 'teamlead', rollNumber: '23B21A4546' })) ||
-        (await User.findOne({ role: 'teamlead' }));
-    } else {
-      // Student (Junior Developer or student with assigned team)
-      targetUser =
-        (await User.findOne({ role: 'user', memberType: 'junior_developer', teamId: { $ne: null } })) ||
-        (await User.findOne({ role: 'user', teamId: { $ne: null } })) ||
-        (await User.findOne({ role: 'user' }));
-    }
-
-    if (!targetUser) {
-      return res.status(404).json({
-        success: false,
-        message: `No active account found for demo role '${role}'.`,
-      });
-    }
-
-    // Sign a temporary 2-hour JWT token with isDemo: true
-    const token = jwt.sign(
-      {
-        id: targetUser._id,
-        role: targetUser.role,
-        email: targetUser.email,
-        isDemo: true,
-      },
-      config.jwtSecret,
-      { expiresIn: '2h' }
-    );
-
-    // Set cookie
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 2 * 60 * 60 * 1000,
-    });
-
-    const userObj = formatUserResponse(targetUser);
-    userObj.isDemo = true;
-
-    return res.status(200).json({
-      success: true,
-      token,
-      isDemo: true,
-      user: userObj,
-      message: `Signed in as Demo ${targetUser.role.toUpperCase()} (Read-Only Mode for Mentor Walkthrough)`,
-    });
-  } catch (error) {
-    console.error('Demo Login Error:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Demo login failed.',
-    });
-  }
 };
 
 /**
@@ -431,28 +344,22 @@ const loginWithRollNumber = async (req, res) => {
       });
     }
 
-    // For admin, strictly only admin@ / ADMIN@ is accepted as the special identifier
-    const isSpecialAdminId = loginId.toLowerCase() === 'admin@';
-
-    // Find user by rollNumber (uppercase) or email (lowercase)
+    // Strictly match exact rollNumber or exact email in database (case-sensitive)
     const user = await User.findOne({
       $or: [
-        { rollNumber: loginId.toUpperCase() },
         { rollNumber: loginId },
-        { rollNumber: loginId.toLowerCase() },
-        { email: loginId.toLowerCase() },
-        ...(isSpecialAdminId ? [{ rollNumber: 'ADMIN@' }] : []),
+        { email: loginId },
       ],
     }).select('+password');
 
-    if (!user) {
+    if (!user || (user.rollNumber && user.rollNumber !== loginId)) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials. No user found with this Roll Number.',
+        message: 'Invalid Roll Number or Password. Please check your credentials and try again.',
       });
     }
 
-    // Verify password
+    // Verify password (case-sensitive)
     let isMatch = false;
 
     if (user.role === 'admin') {
@@ -461,25 +368,22 @@ const loginWithRollNumber = async (req, res) => {
         isMatch = await user.matchPassword(loginPassword);
       } else {
         // Default fixed password for admin is strictly admin@
-        isMatch = loginPassword.toLowerCase() === 'admin@' || (user.password && await user.matchPassword(loginPassword));
+        isMatch = loginPassword === 'admin@' || (user.password && await user.matchPassword(loginPassword));
       }
     } else {
       // Regular user / student
       if (user.isPasswordChanged && user.password) {
         isMatch = await user.matchPassword(loginPassword);
       } else if (user.rollNumber) {
-        isMatch = loginPassword.toUpperCase() === user.rollNumber.toUpperCase();
+        // Default student password strictly matches exact roll number
+        isMatch = loginPassword === user.rollNumber;
       }
     }
 
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: user.isPasswordChanged
-          ? 'Invalid password. Please enter your updated password.'
-          : user.role === 'admin'
-          ? 'Invalid password. Current admin password is admin@.'
-          : 'Invalid password. Default password is your Roll Number.',
+        message: 'Invalid Roll Number or Password. Please check your credentials and try again.',
       });
     }
 
@@ -639,7 +543,6 @@ module.exports = {
   updateProfile,
   logout,
   changePassword,
-  demoLogin,
 };
 
 

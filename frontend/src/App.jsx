@@ -16,13 +16,11 @@ import TeamLeadDashboard from './pages/teamlead/TeamLeadDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
 import CompleteProfile from './pages/CompleteProfile';
 import NotFound from './pages/NotFound';
-import DemoModeBanner from './components/DemoModeBanner';
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <DemoModeBanner />
         <Routes>
           {/* Main Website / Public & Common Routes with standard Header */}
           <Route path="/" element={<RootLayout />}>
